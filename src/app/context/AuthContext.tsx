@@ -1,12 +1,11 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 
-const ADMIN_USERNAME = 'admin';
-const ADMIN_PASSWORD = 'molino2024';
 const STORAGE_KEY = 'el-molino-admin-auth';
+const API_URL = 'http://localhost:5001';
 
 interface AuthContextType {
   isAdminAuthenticated: boolean;
-  login: (username: string, password: string) => boolean;
+  login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
 }
 
@@ -17,13 +16,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => localStorage.getItem(STORAGE_KEY) === 'true'
   );
 
-  const login = (username: string, password: string): boolean => {
-    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-      localStorage.setItem(STORAGE_KEY, 'true');
-      setIsAdminAuthenticated(true);
-      return true;
+  const login = async (username: string, password: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`${API_URL}/auth/admin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ user: username, password }),
+      });
+
+      if (response.ok) {
+        localStorage.setItem(STORAGE_KEY, 'true');
+        setIsAdminAuthenticated(true);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Login error:', error);
+      return false;
     }
-    return false;
   };
 
   const logout = () => {

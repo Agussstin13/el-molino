@@ -1,8 +1,8 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Minus, ShoppingCart, Star, Truck } from 'lucide-react';
-import { useState } from 'react';
-import { getProductById, getRelatedProducts } from '@/lib/mockData';
-import { formatARS, getEffectivePrice, isWholesaleActive } from '@/lib/price';
+import { useState, useEffect } from 'react';
+import type { Product } from '../../lib/types';
+import { formatARS, getEffectivePrice, isWholesaleActive } from '../../lib/price';
 import { useCart } from '../context/CartContext';
 import { ProductSection } from '../components/ProductSection';
 import { Header } from '../components/Header';
@@ -16,7 +16,60 @@ export function ProductDetailPage() {
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
 
-  const product = getProductById(id ?? '');
+  const [product, setProduct] = useState<Product | null>(null);
+  const [related, setRelated] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    
+    // Fetch product details
+    fetch(`http://localhost:5001/api/products/${id}`)
+      .then(res => {
+        if (!res.ok) throw new Error('Not found');
+        return res.json();
+      })
+      .then(p => {
+        setProduct({
+          id: p.id.toString(),
+          name: p.nombre,
+          price: p.precio,
+          stock: p.stock,
+          category: p.descripcion,
+          image: p.imagenNombre ? `http://localhost:5001/images/${p.imagenNombre}` : '',
+        } as Product);
+        
+        // Fetch related products (for simplicity just getting all and filtering)
+        return fetch(`http://localhost:5001/api/products`);
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (!product) return;
+        const mappedRelated = data
+          .filter((p: any) => p.id.toString() !== id && p.descripcion === product.category)
+          .map((p: any) => ({
+            id: p.id.toString(),
+            name: p.nombre,
+            price: p.precio,
+            stock: p.stock,
+            category: p.descripcion,
+            image: p.imagenNombre ? `http://localhost:5001/images/${p.imagenNombre}` : '',
+          }))
+          .slice(0, 5);
+        setRelated(mappedRelated);
+      })
+      .catch(err => console.error("Error fetching product:", err))
+      .finally(() => setLoading(false));
+  }, [id, product?.category]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-xl text-muted-foreground animate-pulse">Cargando...</p>
+      </div>
+    );
+  }
 
   if (!product) {
     return (
@@ -32,7 +85,6 @@ export function ProductDetailPage() {
     );
   }
 
-  const related = getRelatedProducts(product);
   const effectivePrice = getEffectivePrice(product, quantity);
   const wholesale = isWholesaleActive(product, quantity);
   const isDiscounted = !!product.discount && !wholesale;

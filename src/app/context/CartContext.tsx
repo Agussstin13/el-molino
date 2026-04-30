@@ -1,11 +1,11 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
-import type { CartItem, Product } from '@/lib/types';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import type { CartItem, Product } from '../../lib/types';
 import {
   getEffectivePrice,
   isWholesaleActive,
   FREE_SHIPPING_THRESHOLD,
   SHIPPING_COST,
-} from '@/lib/price';
+} from '../../lib/price';
 
 interface CartContextType {
   items: CartItem[];
@@ -28,8 +28,22 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | null>(null);
 
+const CART_STORAGE_KEY = 'el-molino-cart';
+
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([]);
+  const [items, setItems] = useState<CartItem[]>(() => {
+    try {
+      const stored = localStorage.getItem(CART_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+      console.error("Error loading cart from local storage", e);
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+  }, [items]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X, MapPin, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
-import { formatARS, getEffectivePrice } from '@/lib/price';
+import { formatARS, getEffectivePrice } from '../../lib/price';
 
 interface FormData {
   nombre: string;
@@ -68,10 +68,36 @@ export function Checkout() {
   };
 
   const handleConfirm = async () => {
-    // TODO: POST /api/pedidos con form + items cuando el backend esté listo
-    // El backend devuelve link de Mercado Pago si metodo_pago === 'mercadopago'
-    setStep('confirmado');
-    clearCart();
+    const backendOrder = {
+      usuarioId: null,
+      nombreComprador: form.nombre,
+      apellidoComprador: form.apellido,
+      telefonoComprador: form.telefono,
+      dniComprador: form.dni,
+      direccionEnvio: `${form.calle} ${form.nro_calle}, ${form.ciudad}, ${form.codigo_postal} ${form.info_adicional ? '- ' + form.info_adicional : ''}`.trim(),
+      total: finalTotal,
+      metodoPago: form.metodo_pago,
+      estadoPago: 'pendiente',
+      estadoPedido: 'pendiente',
+      informacionPedido: items.map(i => `${i.name} (x${i.quantity})`).join(', ')
+    };
+
+    try {
+      const res = await fetch('http://localhost:5001/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(backendOrder)
+      });
+      if (res.ok) {
+        setStep('confirmado');
+        clearCart();
+      } else {
+        alert('Error al confirmar el pedido. Intente nuevamente.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error de red al confirmar el pedido.');
+    }
   };
 
   const handleClose = () => {

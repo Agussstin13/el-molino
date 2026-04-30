@@ -7,6 +7,7 @@ export interface Product {
   wholesalePrice?: { quantity: number; price: number };
   description?: string;
   category?: string;
+  stock: number;
 }
 
 export interface CartItem extends Product {

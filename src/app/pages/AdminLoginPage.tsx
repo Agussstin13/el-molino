@@ -17,10 +17,9 @@ export function AdminLoginPage() {
     setError('');
     setLoading(true);
 
-    // Simular delay de red
-    await new Promise(r => setTimeout(r, 600));
+    // Simular delay de red (removido, ahora esperamos a la red real)
 
-    const ok = login(username.trim(), password);
+    const ok = await login(username.trim(), password);
     setLoading(false);
 
     if (ok) {

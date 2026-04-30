@@ -1,25 +1,11 @@
 import { Package, Tag, ShoppingBag, Edit, Trash2, LogOut, Plus, X } from 'lucide-react';
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { formatARS } from '@/lib/price';
-import type { Coupon, Order } from '@/lib/types';
+import { formatARS } from '../../lib/price';
+import type { Coupon, Order, Product } from '../../lib/types';
 
 type AdminView = 'products' | 'promotions' | 'orders';
-
-const MOCK_PRODUCTS = [
-  { id: '1', name: 'Proteína Whey Chocolate 1kg', price: 4500, stock: 45, category: 'Suplementos', image: 'https://images.unsplash.com/photo-1579722820308-d74e571900a9?w=80&q=80' },
-  { id: '2', name: 'Mix de Frutos Secos 500g', price: 1200, stock: 120, category: 'Frutos Secos', image: 'https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=80&q=80' },
-  { id: '3', name: 'Harina de Almendras 500g', price: 2800, stock: 8, category: 'Harinas', image: 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=80&q=80' },
-  { id: '4', name: 'Mantequilla de Maní 350g', price: 980, stock: 55, category: 'Snacks', image: 'https://images.unsplash.com/photo-1588214190835-4b706d71f2e4?w=80&q=80' },
-];
-
-const MOCK_ORDERS: Order[] = [
-  { id: '#1001', customer: 'Juan Pérez', total: 7500, status: 'procesando', date: '28/04/2026', metodo_pago: 'mercadopago' },
-  { id: '#1002', customer: 'María González', total: 3200, status: 'enviado', date: '27/04/2026', metodo_pago: 'transferencia' },
-  { id: '#1003', customer: 'Carlos Rodríguez', total: 12000, status: 'entregado', date: '25/04/2026', metodo_pago: 'mercadopago' },
-  { id: '#1004', customer: 'Ana Martínez', total: 1680, status: 'pendiente', date: '28/04/2026', metodo_pago: 'mercadopago' },
-];
 
 const STATUS_LABELS: Record<Order['status'], string> = {
   pendiente: 'Pendiente',
@@ -53,34 +39,203 @@ export function AdminPanel() {
   const { logout } = useAuth();
   const navigate = useNavigate();
   const [currentView, setCurrentView] = useState<AdminView>('products');
-  const [coupons, setCoupons] = useState<Coupon[]>([
-    { id: '1', nombre: 'Descuento Bienvenida', detalle: 'Descuento del 15% para nuevos clientes', codigo: 'BIENVENIDA15', monto: null, porcentaje: 15, tope: 2000, compra_minima: 3000, activo: true, valido_mayorista: false },
-    { id: '2', nombre: 'Envío Gratis Extra', detalle: 'Cupón de monto fijo para envío', codigo: 'ENVIOGRATIS', monto: 500, porcentaje: null, tope: null, compra_minima: null, activo: true, valido_mayorista: true },
-  ]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [showCouponForm, setShowCouponForm] = useState(false);
   const [couponForm, setCouponForm] = useState<Omit<Coupon, 'id'>>(EMPTY_COUPON);
   const [tipoDescuento, setTipoDescuento] = useState<'monto' | 'porcentaje'>('porcentaje');
+
+  const [products, setProducts] = useState<Product[]>([]);
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [productForm, setProductForm] = useState<Partial<Product>>({ name: '', price: 0, stock: 0, category: '', image: '' });
+  const [isUploading, setIsUploading] = useState(false);
+
+  React.useEffect(() => {
+    fetch('http://localhost:5001/api/products')
+      .then(res => res.json())
+      .then(data => {
+        const mappedProducts = data.map((p: any) => ({
+          id: p.id.toString(),
+          name: p.nombre,
+          price: p.precio,
+          stock: p.stock,
+          category: p.descripcion,
+          image: p.imagenNombre ? `http://localhost:5001/images/${p.imagenNombre}` : '',
+        }));
+        setProducts(mappedProducts);
+      })
+      .catch(err => console.error("Error fetching products:", err));
+
+    fetch('http://localhost:5001/api/coupons')
+      .then(res => res.json())
+      .then(data => {
+        const mappedCoupons = data.map((c: any) => ({
+          ...c,
+          id: c.id.toString(),
+          compra_minima: c.compraMinima,
+          valido_mayorista: c.validoMayorista
+        }));
+        setCoupons(mappedCoupons);
+      })
+      .catch(err => console.error("Error fetching coupons:", err));
+
+    fetch('http://localhost:5001/api/orders')
+      .then(res => res.json())
+      .then(data => {
+        const mappedOrders = data.map((o: any) => ({
+          id: o.id.toString(),
+          customer: o.nombreComprador + ' ' + o.apellidoComprador,
+          total: o.total,
+          status: o.estadoPedido,
+          date: new Date(o.fechaCreacion).toLocaleDateString(),
+          metodo_pago: o.metodoPago
+        }));
+        setOrders(mappedOrders);
+      })
+      .catch(err => console.error("Error fetching orders:", err));
+  }, []);
 
   const handleLogout = () => {
     logout();
     navigate('/admin/login');
   };
 
-  const handleSaveCoupon = () => {
-    const newCoupon: Coupon = {
-      ...couponForm,
-      id: Date.now().toString(),
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('http://localhost:5001/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProductForm(prev => ({ ...prev, image: data.url }));
+      } else {
+        alert('Error al subir la imagen');
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Error de conexión al subir la imagen');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSaveProduct = async () => {
+    const backendProduct = {
+      nombre: productForm.name,
+      precio: productForm.price,
+      stock: productForm.stock,
+      descripcion: productForm.category, // Using description as category
+      imagenNombre: productForm.image?.split('/').pop(), // extract filename
+      activo: true
+    };
+
+    try {
+      const res = await fetch('http://localhost:5001/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(backendProduct),
+      });
+
+      if (res.ok) {
+        const created = await res.json();
+        const newProduct = {
+          id: created.id.toString(),
+          name: created.nombre,
+          price: created.precio,
+          stock: created.stock,
+          category: created.descripcion,
+          image: created.imagenNombre ? `http://localhost:5001/images/${created.imagenNombre}` : '',
+        } as Product;
+        
+        setProducts(prev => [newProduct, ...prev]);
+        setShowProductForm(false);
+        setProductForm({ name: '', price: 0, stock: 0, category: '', image: '' });
+      } else {
+        alert('Error al guardar el producto en la base de datos');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error de red al guardar el producto');
+    }
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar este producto?')) return;
+    try {
+      const res = await fetch(`http://localhost:5001/api/products/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        setProducts(prev => prev.filter(p => p.id !== id));
+      } else {
+        alert('Error al eliminar el producto');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error de red al eliminar');
+    }
+  };
+
+  const handleSaveCoupon = async () => {
+    const backendCoupon = {
+      nombre: couponForm.nombre,
+      detalle: couponForm.detalle,
+      codigo: couponForm.codigo,
       monto: tipoDescuento === 'monto' ? Number(couponForm.monto) : null,
       porcentaje: tipoDescuento === 'porcentaje' ? Number(couponForm.porcentaje) : null,
       tope: tipoDescuento === 'porcentaje' && couponForm.tope ? Number(couponForm.tope) : null,
+      compraMinima: couponForm.compra_minima ? Number(couponForm.compra_minima) : null,
+      activo: couponForm.activo,
+      validoMayorista: couponForm.valido_mayorista
     };
-    setCoupons(prev => [...prev, newCoupon]);
-    setCouponForm(EMPTY_COUPON);
-    setShowCouponForm(false);
+
+    try {
+      const res = await fetch('http://localhost:5001/api/coupons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(backendCoupon),
+      });
+
+      if (res.ok) {
+        const created = await res.json();
+        const newCoupon: Coupon = {
+          ...couponForm,
+          id: created.id.toString(),
+          monto: created.monto,
+          porcentaje: created.porcentaje,
+          tope: created.tope,
+          compra_minima: created.compraMinima,
+          activo: created.activo,
+          valido_mayorista: created.validoMayorista
+        };
+        setCoupons(prev => [newCoupon, ...prev]);
+        setCouponForm(EMPTY_COUPON);
+        setShowCouponForm(false);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error de red al guardar el cupón');
+    }
   };
 
-  const handleDeleteCoupon = (id: string) => {
-    setCoupons(prev => prev.filter(c => c.id !== id));
+  const handleDeleteCoupon = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar este cupón?')) return;
+    try {
+      const res = await fetch(`http://localhost:5001/api/coupons/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setCoupons(prev => prev.filter(c => c.id !== id));
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const setCF = (field: keyof Omit<Coupon, 'id'>, value: unknown) => {
@@ -152,11 +307,49 @@ export function AdminPanel() {
                 <h1 style={{ fontFamily: 'Georgia, serif' }}>Gestión de Productos</h1>
                 <button
                   id="new-product-btn"
+                  onClick={() => setShowProductForm(v => !v)}
                   className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg transition-colors shadow-sm text-sm"
                 >
-                  <Plus className="w-4 h-4" /> Nuevo Producto
+                  {showProductForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                  {showProductForm ? 'Cancelar' : 'Nuevo Producto'}
                 </button>
               </div>
+
+              {showProductForm && (
+                <div className="bg-card border-2 border-primary/30 rounded-xl p-6 mb-6 shadow-sm">
+                  <h3 className="mb-5 text-base" style={{ fontFamily: 'Georgia, serif' }}>Crear producto</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm mb-1.5">Nombre *</label>
+                      <input value={productForm.name || ''} onChange={e => setProductForm(p => ({ ...p, name: e.target.value }))} placeholder="Ej: Alfajor" className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-1.5">Categoría *</label>
+                      <input value={productForm.category || ''} onChange={e => setProductForm(p => ({ ...p, category: e.target.value }))} placeholder="Ej: Dulces" className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-1.5">Precio ($) *</label>
+                      <input type="number" value={productForm.price || ''} onChange={e => setProductForm(p => ({ ...p, price: Number(e.target.value) }))} className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-1.5">Stock *</label>
+                      <input type="number" value={productForm.stock || ''} onChange={e => setProductForm(p => ({ ...p, stock: Number(e.target.value) }))} className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm mb-1.5">Imagen *</label>
+                      <div className="flex items-center gap-4">
+                        {productForm.image && <img src={productForm.image} alt="Preview" className="w-16 h-16 object-cover rounded-lg border border-border" />}
+                        <input type="file" accept="image/*" onChange={handleImageUpload} className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-secondary file:text-foreground hover:file:bg-secondary/80 cursor-pointer" />
+                        {isUploading && <span className="text-sm text-primary font-medium animate-pulse">Subiendo...</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3 mt-5 pt-4 border-t border-border">
+                    <button onClick={() => setShowProductForm(false)} className="px-4 py-2 border border-border rounded-lg hover:bg-secondary transition-colors text-sm">Cancelar</button>
+                    <button onClick={handleSaveProduct} disabled={!productForm.name || !productForm.price || !productForm.image || isUploading} className="px-6 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-lg transition-colors text-sm">Guardar producto</button>
+                  </div>
+                </div>
+              )}
 
               <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
                 <table className="w-full">
@@ -169,7 +362,7 @@ export function AdminPanel() {
                     </tr>
                   </thead>
                   <tbody>
-                    {MOCK_PRODUCTS.map(product => (
+                    {products.map(product => (
                       <tr key={product.id} className="border-t border-border hover:bg-secondary/20 transition-colors">
                         <td className="p-4">
                           <div className="flex items-center gap-3">
@@ -197,7 +390,7 @@ export function AdminPanel() {
                             <button className="p-2 hover:bg-secondary rounded-lg transition-colors" title="Editar">
                               <Edit className="w-4 h-4" />
                             </button>
-                            <button className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors" title="Eliminar">
+                            <button onClick={() => handleDeleteProduct(product.id)} className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors" title="Eliminar">
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
@@ -363,7 +556,7 @@ export function AdminPanel() {
                     </tr>
                   </thead>
                   <tbody>
-                    {MOCK_ORDERS.map(order => (
+                    {orders.map(order => (
                       <tr key={order.id} className="border-t border-border hover:bg-secondary/20 transition-colors">
                         <td className="p-4 text-sm font-mono">{order.id}</td>
                         <td className="p-4 text-sm">{order.customer}</td>
