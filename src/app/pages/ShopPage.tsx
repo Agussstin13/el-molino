@@ -28,8 +28,7 @@ export function ShopPage() {
   }, []);
 
   const featuredProducts = products.slice(0, 5);
-  const bestSellers = products.slice(5, 10);
-  const dailyDeals = products.slice(10, 15);
+  const dailyDeals = products.slice(5, 10);
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -37,7 +36,7 @@ export function ShopPage() {
         <HeroSection />
         <CategoryGrid />
         <ProductSection title="Productos Destacados" products={featuredProducts} id="productos-destacados" />
-        <ProductSection title="Más Vendidos" products={bestSellers} />
+
         <ProductSection
           title="Ofertas del Día 🔥"
           products={dailyDeals}

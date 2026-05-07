@@ -1,11 +1,15 @@
-import { Search, ShoppingCart } from "lucide-react";
+import { Search, ShoppingCart, User } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useCart } from "../context/CartContext";
+import { useAuth } from "../context/AuthContext";
+import { ClientLoginModal } from "./ClientLoginModal";
 
 export function Header() {
   const { cartCount, openCart } = useCart();
+  const { isClientAuthenticated } = useAuth();
   const [search, setSearch] = useState("");
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,22 +53,39 @@ export function Header() {
             </div>
           </form>
 
-          {/* Cart */}
-          <button
-            id="cart-btn"
-            onClick={openCart}
-            className="relative p-2 hover:bg-secondary rounded-lg transition-colors flex-shrink-0"
-            aria-label="Abrir carrito"
-          >
-            <ShoppingCart className="w-6 h-6 text-foreground" />
-            {cartCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-accent text-white rounded-full flex items-center justify-center text-xs font-bold">
-                {cartCount > 9 ? "9+" : cartCount}
-              </span>
-            )}
-          </button>
+          {/* User and Cart Group */}
+          <div className="flex items-center gap-2">
+            {/* Client Auth */}
+            <button
+              onClick={() => setIsLoginModalOpen(true)}
+              className={`p-2 rounded-lg transition-colors flex-shrink-0 ${isClientAuthenticated ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-foreground'}`}
+              aria-label="Mi Perfil"
+            >
+              <User className="w-6 h-6" />
+            </button>
+
+            {/* Cart */}
+            <button
+              id="cart-btn"
+              onClick={openCart}
+              className="relative p-2 hover:bg-secondary rounded-lg transition-colors flex-shrink-0"
+              aria-label="Abrir carrito"
+            >
+              <ShoppingCart className="w-6 h-6 text-foreground" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-accent text-white rounded-full flex items-center justify-center text-xs font-bold">
+                  {cartCount > 9 ? "9+" : cartCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
+      
+      <ClientLoginModal 
+        isOpen={isLoginModalOpen} 
+        onClose={() => setIsLoginModalOpen(false)} 
+      />
     </header>
   );
 }

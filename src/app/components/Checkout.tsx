@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, MapPin, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 import { formatARS, getEffectivePrice } from '../../lib/price';
 
 interface FormData {
@@ -29,10 +30,37 @@ const EMPTY_FORM: FormData = {
   metodo_pago: 'mercadopago',
 };
 
+const FORM_STORAGE_KEY = 'el-molino-checkout-form';
+
 export function Checkout() {
   const { items, isCheckoutOpen, closeCheckout, total, subtotal, shipping, clearCart } = useCart();
+  const { clientUser } = useAuth();
   const [step, setStep] = useState<'datos' | 'pago' | 'confirmado'>('datos');
-  const [form, setForm] = useState<FormData>(EMPTY_FORM);
+  const [form, setForm] = useState<FormData>(() => {
+    try {
+      const stored = localStorage.getItem(FORM_STORAGE_KEY);
+      const parsed = stored ? JSON.parse(stored) : null;
+      return parsed ? { ...EMPTY_FORM, ...parsed } : EMPTY_FORM;
+    } catch {
+      return EMPTY_FORM;
+    }
+  });
+
+  useEffect(() => {
+    if (clientUser) {
+      setForm(f => {
+        const newForm = { ...f };
+        let changed = false;
+        if (!newForm.nombre) { newForm.nombre = clientUser.nombre; changed = true; }
+        if (!newForm.apellido) { newForm.apellido = clientUser.apellido; changed = true; }
+        if (changed) {
+          localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(newForm));
+        }
+        return newForm;
+      });
+    }
+  }, [clientUser]);
+
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
   const [shippingCost, setShippingCost] = useState<number | null>(null);
   const [calculatingShipping, setCalculatingShipping] = useState(false);
@@ -40,7 +68,11 @@ export function Checkout() {
   if (!isCheckoutOpen) return null;
 
   const set = (field: keyof FormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    setForm(f => ({ ...f, [field]: e.target.value }));
+    setForm(f => {
+      const newForm = { ...f, [field]: e.target.value };
+      localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(newForm));
+      return newForm;
+    });
     if (errors[field]) setErrors(err => ({ ...err, [field]: '' }));
   };
 
@@ -91,6 +123,7 @@ export function Checkout() {
       if (res.ok) {
         setStep('confirmado');
         clearCart();
+        localStorage.removeItem(FORM_STORAGE_KEY);
       } else {
         alert('Error al confirmar el pedido. Intente nuevamente.');
       }
@@ -102,8 +135,12 @@ export function Checkout() {
 
   const handleClose = () => {
     closeCheckout();
-    setStep('datos');
-    setForm(EMPTY_FORM);
+    if (step === 'confirmado') {
+      setStep('datos');
+      setForm(EMPTY_FORM);
+    } else {
+      setStep('datos');
+    }
     setErrors({});
     setShippingCost(null);
   };

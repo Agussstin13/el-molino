@@ -31,7 +31,7 @@ export interface Order {
   id: string;
   customer: string;
   total: number;
-  status: 'pendiente' | 'procesando' | 'enviado' | 'entregado' | 'cancelado';
+  status: "pendiente" | "procesando" | "enviado" | "entregado" | "cancelado";
   date: string;
   metodo_pago: string;
 }
