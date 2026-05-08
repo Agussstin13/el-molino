@@ -6,6 +6,7 @@ import { Cart } from '../components/Cart';
 import { Checkout } from '../components/Checkout';
 import { useState, useEffect } from 'react';
 import type { Product } from '../../lib/types';
+import logo from "../../imports/image.png"
 
 export function ShopPage() {
   const [products, setProducts] = useState<Product[]>([]);
