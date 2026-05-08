@@ -49,7 +49,7 @@ export function ShopPage() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <img
-                src="/src/imports/image.png"
+                src={logo}
                 alt="El Molino"
                 className="h-10 w-10 object-contain"
               />
