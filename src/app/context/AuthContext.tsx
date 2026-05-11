@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
+import { API_BASE } from '../../lib/config';
 
 const STORAGE_KEY = 'el-molino-admin-auth';
-const API_URL = 'http://localhost:5001';
+const API_URL = API_BASE;
 
 interface ClientUser {
   nombre: string;

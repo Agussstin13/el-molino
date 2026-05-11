@@ -1,8 +1,9 @@
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { API_BASE } from "../../lib/config";
 
-const API_BASE = "http://localhost:5001";
+
 
 interface CarouselSlide {
   id: number;
@@ -20,6 +21,13 @@ export function HeroSection() {
   const [slides, setSlides] = useState<
     { id: number; image: string; titulo: string; subtitulo: string }[]
   >([]);
+
+  const DEFAULT_SLIDE = {
+    id: -1,
+    image: "",
+    titulo: "Bienvenidos a El Molino",
+    subtitulo: "Descubrí la mejor calidad en productos naturales y artesanales.",
+  };
 
   useEffect(() => {
     fetch(`${API_BASE}/api/carousel`)
@@ -67,7 +75,8 @@ export function HeroSection() {
     return () => clearInterval(timer);
   }, [slides.length]);
 
-  const slide = slides[currentSlide];
+  const displaySlides = slides.length > 0 ? slides : [DEFAULT_SLIDE];
+  const slide = displaySlides[currentSlide] || DEFAULT_SLIDE;
 
   if (loading) {
     return (
@@ -75,15 +84,11 @@ export function HeroSection() {
     );
   }
 
-  if (slides.length === 0) {
-    return null;
-  }
-
   return (
     <section className="relative h-[440px] md:h-[520px] overflow-hidden">
       {/* Slides container */}
       <div className="relative w-full h-full">
-        {slides.map((banner, idx) => (
+        {displaySlides.map((banner, idx) => (
           <div
             key={banner.id}
             className={`absolute inset-0 transition-opacity duration-1000 ${
@@ -143,7 +148,7 @@ export function HeroSection() {
       </div>
 
       {/* Navigation buttons */}
-      {slides.length > 1 && (
+      {displaySlides.length > 1 && (
         <>
           <button
             onClick={prevSlide}
@@ -163,9 +168,9 @@ export function HeroSection() {
       )}
 
       {/* Dots indicator */}
-      {slides.length > 1 && (
+      {displaySlides.length > 1 && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex gap-2">
-          {slides.map((_, idx) => (
+          {displaySlides.map((_, idx) => (
             <button
               key={idx}
               onClick={() => setCurrentSlide(idx)}

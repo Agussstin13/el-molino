@@ -18,11 +18,12 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { formatARS } from "../../lib/price";
 import type { Coupon, Order, Product } from "../../lib/types";
+import { API_BASE } from "../../lib/config";
 import logo from "../../imports/image.png"
 
 type AdminView = "products" | "promotions" | "orders" | "carousel" | "categories";
 
-const API_BASE = "http://localhost:5001";
+
 
 interface CarouselImage {
   id: number;

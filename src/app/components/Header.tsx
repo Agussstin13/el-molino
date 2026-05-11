@@ -1,16 +1,34 @@
-import { Search, ShoppingCart, User } from "lucide-react";
-import { useState } from "react";
+import { Search, ShoppingCart, User, Menu, X, Home, Instagram, Facebook, Mail, Phone, ChevronRight } from "lucide-react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { ClientLoginModal } from "./ClientLoginModal";
 import logo from "../../imports/image.png";
+import { API_BASE } from "../../lib/config";
+
+interface Category {
+  id: number;
+  nombre: string;
+}
 
 export function Header() {
   const { cartCount, openCart } = useCart();
   const { isClientAuthenticated } = useAuth();
   const [search, setSearch] = useState("");
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/categories?onlyActive=true`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setCategories(data);
+      })
+      .catch(err => console.error("Error fetching categories for menu:", err));
+  }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,23 +36,32 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-card border-b-2 border-border shadow-sm">
+    <header className="sticky top-0 z-50 bg-secondary/50 backdrop-blur-md border-b-2 border-border shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-4">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-3 flex-shrink-0">
-            <img
-              src={logo}
-              alt="El Molino"
-              className="h-12 w-12 object-contain"
-            />
-            <span
-              className="hidden sm:block text-xl text-primary font-medium"
-              style={{ fontFamily: "Georgia, serif" }}
+          {/* Hamburger + Logo */}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <button
+              onClick={() => setIsMenuOpen(true)}
+              className="p-2 -ml-2 rounded-lg hover:bg-secondary text-foreground transition-colors"
+              aria-label="Abrir menú"
             >
-              El Molino
-            </span>
-          </Link>
+              <Menu className="w-6 h-6" />
+            </button>
+            <Link to="/" className="flex items-center gap-3">
+              <img
+                src={logo}
+                alt="El Molino"
+                className="h-12 w-12 object-contain"
+              />
+              <span
+                className="hidden sm:block text-xl text-primary font-medium"
+                style={{ fontFamily: "Georgia, serif" }}
+              >
+                El Molino
+              </span>
+            </Link>
+          </div>
 
           {/* Search */}
           <form
@@ -87,6 +114,90 @@ export function Header() {
         isOpen={isLoginModalOpen} 
         onClose={() => setIsLoginModalOpen(false)} 
       />
+
+      {/* Mobile Menu Overlay */}
+      {isMenuOpen && createPortal(
+        <div className="fixed inset-0 z-[100] flex">
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" 
+            onClick={() => setIsMenuOpen(false)}
+          />
+          <div className="relative w-full max-w-xs bg-background h-full shadow-2xl flex flex-col animate-in slide-in-from-left">
+            <div className="flex items-center justify-between p-4 border-b border-border bg-secondary/30">
+              <span className="text-xl font-bold text-primary" style={{ fontFamily: "Georgia, serif" }}>Menú</span>
+              <button 
+                onClick={() => setIsMenuOpen(false)}
+                className="p-2 rounded-lg hover:bg-secondary transition-colors"
+              >
+                <X className="w-6 h-6 text-foreground" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto py-4">
+              <nav className="space-y-1 px-3">
+                <Link 
+                  to="/" 
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-secondary transition-colors text-foreground font-medium"
+                >
+                  <Home className="w-5 h-5 text-primary" />
+                  Inicio
+                </Link>
+                
+                <div className="pt-4 pb-2 px-3">
+                  <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Categorías</p>
+                  {categories.length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic py-2">No hay categorías</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {categories.map(cat => (
+                        <Link 
+                          key={cat.id} 
+                          to={`/?categoria=${cat.id}`}
+                          onClick={() => setIsMenuOpen(false)}
+                          className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-primary/5 hover:text-primary transition-colors text-sm"
+                        >
+                          {cat.nombre}
+                          <ChevronRight className="w-4 h-4 opacity-50" />
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </nav>
+            </div>
+
+            <div className="p-4 border-t border-border bg-secondary/10 space-y-4">
+              <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Contacto</p>
+              
+              <div className="space-y-3">
+                <a href="mailto:contacto@elmolino.com.ar" className="flex items-center gap-3 text-sm text-foreground hover:text-primary transition-colors">
+                  <div className="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center flex-shrink-0">
+                    <Mail className="w-4 h-4 text-primary" />
+                  </div>
+                  contacto@elmolino.com.ar
+                </a>
+                <a href="tel:+5491112345678" className="flex items-center gap-3 text-sm text-foreground hover:text-primary transition-colors">
+                  <div className="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center flex-shrink-0">
+                    <Phone className="w-4 h-4 text-primary" />
+                  </div>
+                  +54 9 11 1234-5678
+                </a>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <a href="#" className="w-10 h-10 rounded-full bg-background border border-border flex items-center justify-center text-foreground hover:text-primary hover:border-primary transition-colors">
+                  <Instagram className="w-5 h-5" />
+                </a>
+                <a href="#" className="w-10 h-10 rounded-full bg-background border border-border flex items-center justify-center text-foreground hover:text-[#1877F2] hover:border-[#1877F2] transition-colors">
+                  <Facebook className="w-5 h-5" />
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </header>
   );
 }

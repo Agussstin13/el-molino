@@ -7,13 +7,14 @@ import { Checkout } from '../components/Checkout';
 import { Footer } from '../components/Footer';
 import { useState, useEffect } from 'react';
 import type { Product } from '../../lib/types';
+import { API_BASE } from '../../lib/config';
 import logo from "../../imports/image.png"
 
 export function ShopPage() {
   const [products, setProducts] = useState<Product[]>([]);
 
   useEffect(() => {
-    fetch('http://localhost:5001/api/products')
+    fetch(`${API_BASE}/api/products`)
       .then(res => res.json())
       .then(data => {
         const mappedProducts = data.map((p: any) => ({
@@ -22,7 +23,7 @@ export function ShopPage() {
           price: p.precio,
           stock: p.stock,
           category: p.descripcion,
-          image: p.imagenNombre ? `http://localhost:5001/images/${p.imagenNombre}` : '',
+          image: p.imagenNombre ? `${API_BASE}/images/${p.imagenNombre}` : '',
         }));
         setProducts(mappedProducts);
       })

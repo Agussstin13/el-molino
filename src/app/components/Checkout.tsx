@@ -3,6 +3,7 @@ import { X, MapPin, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { formatARS, getEffectivePrice } from '../../lib/price';
+import { API_BASE } from '../../lib/config';
 
 interface FormData {
   nombre: string;
@@ -115,7 +116,7 @@ export function Checkout() {
     };
 
     try {
-      const res = await fetch('http://localhost:5001/api/orders', {
+      const res = await fetch(`${API_BASE}/api/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(backendOrder)

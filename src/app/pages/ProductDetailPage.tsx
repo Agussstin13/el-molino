@@ -8,8 +8,9 @@ import { Header } from '../components/Header';
 import { Cart } from '../components/Cart';
 import { Checkout } from '../components/Checkout';
 import { Footer } from '../components/Footer';
+import { API_BASE } from '../../lib/config';
 
-const API_BASE = 'http://localhost:5001';
+
 const RECENT_KEY = 'el-molino-recently-viewed';
 
 /* ─── Íconos SVG ─────────────────────────────────────────────────────────── */
