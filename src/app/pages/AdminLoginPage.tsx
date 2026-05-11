@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Lock, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import logo from "../../imports/image.png"
 
 export function AdminLoginPage() {
   const { login } = useAuth();
@@ -35,7 +36,7 @@ export function AdminLoginPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <img
-            src="/src/imports/image.png"
+            src={logo}
             alt="El Molino"
             className="h-20 w-20 object-contain mx-auto mb-4"
           />

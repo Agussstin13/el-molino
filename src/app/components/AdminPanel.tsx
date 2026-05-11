@@ -18,6 +18,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { formatARS } from "../../lib/price";
 import type { Coupon, Order, Product } from "../../lib/types";
+import logo from "../../imports/image.png"
 
 type AdminView = "products" | "promotions" | "orders" | "carousel" | "categories";
 
@@ -569,7 +570,7 @@ export function AdminPanel() {
       <aside className="w-60 bg-sidebar border-r border-sidebar-border p-4 flex flex-col flex-shrink-0">
         <div className="flex items-center gap-3 mb-8">
           <img
-            src="/src/imports/image.png"
+            src={logo}
             alt="El Molino"
             className="h-10 w-10 object-contain"
           />

@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { ClientLoginModal } from "./ClientLoginModal";
+import logo from "../../imports/image.png";
 
 export function Header() {
   const { cartCount, openCart } = useCart();
@@ -23,7 +24,7 @@ export function Header() {
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3 flex-shrink-0">
             <img
-              src="/src/imports/image.png"
+              src={logo}
               alt="El Molino"
               className="h-12 w-12 object-contain"
             />

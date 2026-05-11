@@ -1,5 +1,6 @@
 import { MapPin, Phone, Mail, Instagram, Facebook, Send } from "lucide-react";
 import React, { useState } from "react";
+import logo from "../../imports/image.png";
 
 export function Footer() {
   const [formData, setFormData] = useState({
@@ -30,7 +31,7 @@ export function Footer() {
           <div className="space-y-6">
             <div className="flex items-center gap-3">
               <img
-                src="/src/imports/image.png"
+                src={logo}
                 alt="El Molino"
                 className="h-12 w-12 object-contain"
               />
