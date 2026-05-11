@@ -1,31 +1,57 @@
-const categories = [
-  {
-    name: 'Harinas',
-    image: 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=400&q=80',
-  },
-  {
-    name: 'Suplementos',
-    image: 'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=400&q=80',
-  },
-  {
-    name: 'Frutos Secos',
-    image: 'https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=400&q=80',
-  },
-  {
-    name: 'Granos y Cereales',
-    image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
-  },
-  {
-    name: 'Endulzantes',
-    image: 'https://images.unsplash.com/photo-1471943311424-646960669fbc?w=400&q=80',
-  },
-  {
-    name: 'Snacks',
-    image: 'https://images.unsplash.com/photo-1599490659213-e2b9527bd087?w=400&q=80',
-  },
-];
+import { useState, useEffect } from 'react';
+
+const API_BASE = 'http://localhost:5001';
+
+interface Category {
+  id: number;
+  nombre: string;
+  imagenNombre: string | null;
+  orden: number;
+  activo: boolean;
+}
 
 export function CategoryGrid() {
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/categories?onlyActive=true`)
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        if (Array.isArray(data)) {
+          setCategories(data);
+        } else {
+          console.error("API did not return an array of categories:", data);
+          setCategories([]);
+        }
+      })
+      .catch(err => {
+        console.error("Error fetching categories:", err);
+        setCategories([]);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <section className="py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="mb-8" style={{ fontFamily: 'Georgia, serif' }}>Nuestras Categorías</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <div key={i} className="aspect-square rounded-md bg-secondary animate-pulse" />
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (categories.length === 0) return null;
+
   return (
     <section className="py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -33,18 +59,24 @@ export function CategoryGrid() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {categories.map((category) => (
             <button
-              key={category.name}
+              key={category.id}
               className="group relative aspect-square rounded-md overflow-hidden border-2 border-border hover:border-primary hover:shadow-xl transition-all bg-card"
             >
               <div className="absolute inset-0 bg-gradient-to-t from-primary/70 to-transparent z-10" />
-              <img
-                src={category.image}
-                alt={category.name}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              />
+              {category.imagenNombre ? (
+                <img
+                  src={`${API_BASE}/images/${category.imagenNombre}`}
+                  alt={category.nombre}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-secondary">
+                  📦
+                </div>
+              )}
               <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-                <span className="text-white drop-shadow-md text-center px-2" style={{ fontFamily: 'Georgia, serif' }}>
-                  {category.name}
+                <span className="text-white drop-shadow-md text-center px-2 font-medium" style={{ fontFamily: 'Georgia, serif' }}>
+                  {category.nombre}
                 </span>
               </div>
             </button>

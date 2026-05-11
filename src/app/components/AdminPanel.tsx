@@ -11,6 +11,7 @@ import {
   ToggleLeft,
   ToggleRight,
   GripVertical,
+  Layers,
 } from "lucide-react";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -18,7 +19,7 @@ import { useAuth } from "../context/AuthContext";
 import { formatARS } from "../../lib/price";
 import type { Coupon, Order, Product } from "../../lib/types";
 
-type AdminView = "products" | "promotions" | "orders" | "carousel";
+type AdminView = "products" | "promotions" | "orders" | "carousel" | "categories";
 
 const API_BASE = "http://localhost:5001";
 
@@ -27,6 +28,14 @@ interface CarouselImage {
   imagenNombre: string;
   titulo: string | null;
   subtitulo: string | null;
+  orden: number;
+  activo: boolean;
+}
+
+interface Category {
+  id: number;
+  nombre: string;
+  imagenNombre: string | null;
   orden: number;
   activo: boolean;
 }
@@ -67,6 +76,13 @@ const EMPTY_COUPON: Omit<Coupon, "id"> = {
   valido_mayorista: false,
 };
 
+const EMPTY_CATEGORY: Omit<Category, "id"> = {
+  nombre: "",
+  imagenNombre: "",
+  orden: 0,
+  activo: true,
+};
+
 export function AdminPanel() {
   const { logout } = useAuth();
   const navigate = useNavigate();
@@ -98,56 +114,85 @@ export function AdminPanel() {
   const [isUploadingCarousel, setIsUploadingCarousel] = useState(false);
   const [editingCarouselId, setEditingCarouselId] = useState<number | null>(null);
 
+  // Category state
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [showCategoryForm, setShowCategoryForm] = useState(false);
+  const [categoryForm, setCategoryForm] = useState<Omit<Category, "id">>(EMPTY_CATEGORY);
+  const [isUploadingCategory, setIsUploadingCategory] = useState(false);
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
+
   React.useEffect(() => {
-    fetch(`${API_BASE}/api/carousel/all`)
-      .then((res) => res.json())
-      .then((data: CarouselImage[]) => setCarouselImages(data))
-      .catch((err) => console.error("Error fetching carousel:", err));
+    const fetchData = async () => {
+      try {
+        // Carousel
+        const carouselRes = await fetch(`${API_BASE}/api/carousel/all`);
+        if (carouselRes.ok) {
+          const data = await carouselRes.json();
+          setCarouselImages(data);
+        } else {
+          const errorData = await carouselRes.json().catch(() => ({}));
+          console.error("Error fetching carousel:", carouselRes.status, errorData);
+        }
 
-    fetch(`${API_BASE}/api/products`)
-      .then((res) => res.json())
-      .then((data) => {
-        const mappedProducts = data.map((p: any) => ({
-          id: p.id.toString(),
-          name: p.nombre,
-          price: p.precio,
-          stock: p.stock,
-          category: p.descripcion,
-          image: p.imagenNombre
-            ? `${API_BASE}/images/${p.imagenNombre}`
-            : "",
-        }));
-        setProducts(mappedProducts);
-      })
-      .catch((err) => console.error("Error fetching products:", err));
+        // Categories
+        const categoriesRes = await fetch(`${API_BASE}/api/categories/all`);
+        if (categoriesRes.ok) {
+          const data = await categoriesRes.json();
+          setCategories(Array.isArray(data) ? data : []);
+        } else {
+          const errorData = await categoriesRes.json().catch(() => ({}));
+          console.error("Error fetching categories:", categoriesRes.status, errorData);
+          setCategories([]);
+        }
 
-    fetch(`${API_BASE}/api/coupons`)
-      .then((res) => res.json())
-      .then((data) => {
-        const mappedCoupons = data.map((c: any) => ({
-          ...c,
-          id: c.id.toString(),
-          compra_minima: c.compraMinima,
-          valido_mayorista: c.validoMayorista,
-        }));
-        setCoupons(mappedCoupons);
-      })
-      .catch((err) => console.error("Error fetching coupons:", err));
+        // Products
+        const productsRes = await fetch(`${API_BASE}/api/products`);
+        if (productsRes.ok) {
+          const data = await productsRes.json();
+          const mappedProducts = data.map((p: any) => ({
+            id: p.id.toString(),
+            name: p.nombre,
+            price: p.precio,
+            stock: p.stock,
+            category: p.descripcion,
+            image: p.imagenNombre ? `${API_BASE}/images/${p.imagenNombre}` : "",
+          }));
+          setProducts(mappedProducts);
+        }
 
-    fetch(`${API_BASE}/api/orders`)
-      .then((res) => res.json())
-      .then((data) => {
-        const mappedOrders = data.map((o: any) => ({
-          id: o.id.toString(),
-          customer: o.nombreComprador + " " + o.apellidoComprador,
-          total: o.total,
-          status: o.estadoPedido,
-          date: new Date(o.fechaCreacion).toLocaleDateString(),
-          metodo_pago: o.metodoPago,
-        }));
-        setOrders(mappedOrders);
-      })
-      .catch((err) => console.error("Error fetching orders:", err));
+        // Coupons
+        const couponsRes = await fetch(`${API_BASE}/api/coupons`);
+        if (couponsRes.ok) {
+          const data = await couponsRes.json();
+          const mappedCoupons = data.map((c: any) => ({
+            ...c,
+            id: c.id.toString(),
+            compra_minima: c.compraMinima,
+            valido_mayorista: c.validoMayorista,
+          }));
+          setCoupons(mappedCoupons);
+        }
+
+        // Orders
+        const ordersRes = await fetch(`${API_BASE}/api/orders`);
+        if (ordersRes.ok) {
+          const data = await ordersRes.json();
+          const mappedOrders = data.map((o: any) => ({
+            id: o.id.toString(),
+            customer: o.nombreComprador + " " + o.apellidoComprador,
+            total: o.total,
+            status: o.estadoPedido,
+            date: new Date(o.fechaCreacion).toLocaleDateString(),
+            metodo_pago: o.metodoPago,
+          }));
+          setOrders(mappedOrders);
+        }
+      } catch (err) {
+        console.error("Critical error fetching admin data:", err);
+      }
+    };
+
+    fetchData();
   }, []);
 
   const handleLogout = () => {
@@ -387,7 +432,6 @@ export function AdminPanel() {
     // Scroll to form
     document.getElementById("new-carousel-btn")?.scrollIntoView({ behavior: "smooth" });
   };
-
   const handleDeleteCarouselImage = async (id: number) => {
     if (!confirm("¿Eliminar esta imagen del carousel?")) return;
     try {
@@ -417,11 +461,106 @@ export function AdminPanel() {
     }
   };
 
+  // Category handlers
+  const handleCategoryImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingCategory(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await fetch(`${API_BASE}/api/upload`, { method: "POST", body: formData });
+      if (res.ok) {
+        const data = await res.json();
+        setCategoryForm((prev) => ({ ...prev, imagenNombre: data.fileName }));
+      } else {
+        alert("Error al subir la imagen");
+      }
+    } catch {
+      alert("Error de conexión");
+    } finally {
+      setIsUploadingCategory(false);
+    }
+  };
+
+  const handleSaveCategory = async () => {
+    try {
+      const url = editingCategoryId 
+        ? `${API_BASE}/api/categories/${editingCategoryId}`
+        : `${API_BASE}/api/categories`;
+      
+      const method = editingCategoryId ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(categoryForm),
+      });
+
+      if (res.ok) {
+        // Refresh list
+        const allRes = await fetch(`${API_BASE}/api/categories/all`);
+        const data = await allRes.json();
+        setCategories(data);
+        
+        setCategoryForm(EMPTY_CATEGORY);
+        setShowCategoryForm(false);
+        setEditingCategoryId(null);
+      } else {
+        alert("Error al guardar la categoría");
+      }
+    } catch {
+      alert("Error de red");
+    }
+  };
+
+  const handleEditCategory = (cat: Category) => {
+    setCategoryForm({
+      nombre: cat.nombre,
+      imagenNombre: cat.imagenNombre ?? "",
+      orden: cat.orden,
+      activo: cat.activo,
+    });
+    setEditingCategoryId(cat.id);
+    setShowCategoryForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleDeleteCategory = async (id: number) => {
+    if (!confirm("¿Eliminar esta categoría?")) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/categories/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setCategories((prev) => prev.filter((c) => c.id !== id));
+      }
+    } catch {
+      console.error("Error al eliminar");
+    }
+  };
+
+  const handleToggleCategory = async (cat: Category) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/categories/${cat.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...cat, activo: !cat.activo }),
+      });
+      if (res.ok) {
+        setCategories((prev) =>
+          prev.map((c) => (c.id === cat.id ? { ...c, activo: !cat.activo } : c))
+        );
+      }
+    } catch {
+      console.error("Error al cambiar estado");
+    }
+  };
+
   const navItems = [
     { id: "products" as AdminView, icon: Package, label: "Productos" },
     { id: "promotions" as AdminView, icon: Tag, label: "Cupones" },
     { id: "orders" as AdminView, icon: ShoppingBag, label: "Pedidos" },
     { id: "carousel" as AdminView, icon: ImageIcon, label: "Carousel" },
+    { id: "categories" as AdminView, icon: Layers, label: "Categorías" },
   ];
 
   return (
@@ -529,10 +668,8 @@ export function AdminPanel() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm mb-1.5">
-                        Categoría *
-                      </label>
-                      <input
+                      <label className="block text-sm mb-1.5">Categoría *</label>
+                      <select
                         value={productForm.category || ""}
                         onChange={(e) =>
                           setProductForm((p) => ({
@@ -540,9 +677,15 @@ export function AdminPanel() {
                             category: e.target.value,
                           }))
                         }
-                        placeholder="Ej: Dulces"
                         className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                      />
+                      >
+                        <option value="">Seleccionar categoría</option>
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={cat.nombre}>
+                            {cat.nombre}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-sm mb-1.5">
@@ -1254,6 +1397,187 @@ export function AdminPanel() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+          {/* CATEGORIAS */}
+          {currentView === "categories" && (
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <h1 style={{ fontFamily: "Georgia, serif" }}>
+                  Gestión de Categorías
+                </h1>
+                <button
+                  id="new-category-btn"
+                  onClick={() => {
+                    if (showCategoryForm) {
+                      setCategoryForm(EMPTY_CATEGORY);
+                      setEditingCategoryId(null);
+                    }
+                    setShowCategoryForm(!showCategoryForm);
+                  }}
+                  className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg transition-colors shadow-sm text-sm"
+                >
+                  {showCategoryForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                  {showCategoryForm ? "Cancelar" : "Nueva Categoría"}
+                </button>
+              </div>
+
+              {showCategoryForm && (
+                <div className="bg-card border-2 border-primary/30 rounded-xl p-6 mb-6 shadow-sm">
+                  <h3 className="mb-5 text-base" style={{ fontFamily: "Georgia, serif" }}>
+                    {editingCategoryId ? "Editar categoría" : "Crear categoría"}
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2 md:col-span-1">
+                      <label className="block text-sm mb-1.5 font-medium">Nombre de la categoría *</label>
+                      <input
+                        value={categoryForm.nombre}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, nombre: e.target.value })}
+                        placeholder="Ej: Harinas, Frutos Secos..."
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                      />
+                    </div>
+                    <div className="col-span-2 md:col-span-1">
+                      <label className="block text-sm mb-1.5 font-medium">Orden de visualización</label>
+                      <input
+                        type="number"
+                        value={categoryForm.orden}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, orden: Number(e.target.value) })}
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm mb-2 font-medium">Imagen de la categoría *</label>
+                      <div className="flex items-start gap-6 p-4 bg-secondary/20 rounded-xl border border-border/50">
+                        {categoryForm.imagenNombre ? (
+                          <div className="relative group">
+                            <img
+                              src={`${API_BASE}/images/${categoryForm.imagenNombre}`}
+                              alt="Preview"
+                              className="w-32 h-32 object-cover rounded-lg border border-border shadow-md"
+                            />
+                            <button 
+                              onClick={() => setCategoryForm({ ...categoryForm, imagenNombre: "" })}
+                              className="absolute -top-2 -right-2 bg-destructive text-white p-1 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="w-32 h-32 rounded-lg border-2 border-dashed border-border flex flex-col items-center justify-center text-muted-foreground bg-background">
+                            <ImageIcon className="w-8 h-8 opacity-20 mb-1" />
+                            <span className="text-[10px] uppercase tracking-wider font-semibold">Sin imagen</span>
+                          </div>
+                        )}
+                        <div className="flex-1 space-y-3">
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            Sube una imagen representativa para esta categoría. Se mostrará en el grid de la página principal.
+                          </p>
+                          <div className="relative">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleCategoryImageUpload}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                            />
+                            <button className="flex items-center gap-2 px-4 py-2 bg-background border border-border rounded-lg text-sm hover:bg-secondary transition-colors w-full md:w-auto">
+                              <ImageIcon className="w-4 h-4" />
+                              {isUploadingCategory ? "Subiendo..." : "Seleccionar imagen"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-border">
+                    <button
+                      onClick={() => {
+                        setShowCategoryForm(false);
+                        setEditingCategoryId(null);
+                        setCategoryForm(EMPTY_CATEGORY);
+                      }}
+                      className="px-5 py-2 text-sm font-medium hover:bg-secondary rounded-lg transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleSaveCategory}
+                      disabled={!categoryForm.nombre || !categoryForm.imagenNombre || isUploadingCategory}
+                      className="px-8 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-all shadow-md shadow-primary/20"
+                    >
+                      {editingCategoryId ? "Actualizar" : "Crear Categoría"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {categories.length === 0 ? (
+                  <div className="col-span-full py-12 text-center bg-card rounded-xl border border-dashed border-border">
+                    <Layers className="w-12 h-12 mx-auto text-muted-foreground opacity-20 mb-3" />
+                    <p className="text-muted-foreground">No hay categorías creadas aún.</p>
+                  </div>
+                ) : (
+                  categories.map((cat) => (
+                    <div 
+                      key={cat.id} 
+                      className={`group bg-card rounded-2xl border border-border overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 ${!cat.activo && 'opacity-70 grayscale-[0.5]'}`}
+                    >
+                      <div className="relative aspect-[16/10] bg-secondary overflow-hidden">
+                        {cat.imagenNombre ? (
+                          <img
+                            src={`${API_BASE}/images/${cat.imagenNombre}`}
+                            alt={cat.nombre}
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <ImageIcon className="w-10 h-10 opacity-10" />
+                          </div>
+                        )}
+                        <div className="absolute top-3 left-3 flex gap-2">
+                          <span className="bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-tighter">
+                            Orden {cat.orden}
+                          </span>
+                          {!cat.activo && (
+                            <span className="bg-destructive/90 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-tighter">
+                              Inactiva
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="p-5">
+                        <h3 className="text-lg font-medium mb-4" style={{ fontFamily: "Georgia, serif" }}>{cat.nombre}</h3>
+                        <div className="flex items-center justify-between pt-4 border-t border-border/50">
+                          <button
+                            onClick={() => handleToggleCategory(cat)}
+                            className={`flex items-center gap-2 text-xs font-semibold transition-colors ${cat.activo ? 'text-accent hover:text-accent/80' : 'text-muted-foreground hover:text-foreground'}`}
+                          >
+                            {cat.activo ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
+                            {cat.activo ? 'ACTIVA' : 'INACTIVA'}
+                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleEditCategory(cat)}
+                              className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                              title="Editar"
+                            >
+                              <Edit className="w-4 h-4 text-muted-foreground" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCategory(cat.id)}
+                              className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
         </div>

@@ -5,6 +5,7 @@ import { ShopPage } from './pages/ShopPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { AdminLoginPage } from './pages/AdminLoginPage';
 import { AdminPanel } from './components/AdminPanel';
+import { WhatsAppFloatingButton } from './components/WhatsAppFloatingButton';
 import type { ReactNode } from 'react';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -35,6 +36,7 @@ export default function App() {
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          <WhatsAppFloatingButton />
         </CartProvider>
       </AuthProvider>
     </BrowserRouter>
