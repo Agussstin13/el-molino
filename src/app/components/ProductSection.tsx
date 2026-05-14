@@ -1,7 +1,5 @@
 import { ProductCard } from './ProductCard';
 import type { Product } from '../../lib/types';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useRef } from 'react';
 
 interface ProductSectionProps {
   title: string;
@@ -11,42 +9,18 @@ interface ProductSectionProps {
 }
 
 export function ProductSection({ title, products, highlightDeals, id }: ProductSectionProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const scroll = (direction: 'left' | 'right') => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollBy({
-        left: direction === 'left' ? -320 : 320,
-        behavior: 'smooth',
-      });
-    }
-  };
 
   return (
     <section className="py-8" id={id}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between mb-6">
-          <h2
-            className={`text-2xl ${highlightDeals ? 'text-destructive' : 'text-foreground'}`}
-            style={{ fontFamily: 'Georgia, serif' }}
-          >
-            {title}
-          </h2>
-          <div className="hidden md:flex gap-2">
-            <button
-              onClick={() => scroll('left')}
-              className="p-2 border border-border rounded-lg hover:bg-secondary transition-colors"
-              aria-label="Anterior"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => scroll('right')}
-              className="p-2 border border-border rounded-lg hover:bg-secondary transition-colors"
-              aria-label="Siguiente"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
+        <div className="relative flex items-center justify-center mb-10">
+          <div className="absolute inset-0 flex items-center" aria-hidden="true">
+            <div className="w-full border-t border-border/80"></div>
+          </div>
+          <div className="relative flex justify-center">
+            <h2 className="bg-background px-6 text-xl md:text-2xl font-semibold text-[#4a7c59] uppercase tracking-wider">
+              {title}
+            </h2>
           </div>
         </div>
 
@@ -56,14 +30,10 @@ export function ProductSection({ title, products, highlightDeals, id }: ProductS
           </div>
         ) : (
           <div
-            ref={scrollRef}
-            className="flex gap-4 overflow-x-auto pb-4 scroll-smooth"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
           >
             {products.map(product => (
-              <div key={product.id} className="flex-none w-64">
-                <ProductCard product={product} />
-              </div>
+              <ProductCard key={product.id} product={product} />
             ))}
           </div>
         )}

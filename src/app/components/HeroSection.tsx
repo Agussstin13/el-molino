@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { API_BASE } from "../../lib/config";
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 
 

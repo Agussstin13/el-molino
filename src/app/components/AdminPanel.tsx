@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from "react";
 import {
   Package,
   Tag,
@@ -11,36 +12,31 @@ import {
   ToggleLeft,
   ToggleRight,
   GripVertical,
+  AlertCircle,
+  Info,
   Layers,
 } from "lucide-react";
-import React, { useState } from "react";
+import { motion, Reorder } from "motion/react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useAlert } from "../context/AlertContext";
 import { formatARS } from "../../lib/price";
-import type { Coupon, Order, Product } from "../../lib/types";
-import { API_BASE } from "../../lib/config";
-import logo from "../../imports/image.png"
+import type {
+  CarouselImage,
+  Category,
+  Coupon,
+  Order,
+  Product,
+} from "../../lib/types";
+const API_BASE = import.meta.env.VITE_API_BASE;
+import logo from "../../imports/image.png";
 
-type AdminView = "products" | "promotions" | "orders" | "carousel" | "categories";
-
-
-
-interface CarouselImage {
-  id: number;
-  imagenNombre: string;
-  titulo: string | null;
-  subtitulo: string | null;
-  orden: number;
-  activo: boolean;
-}
-
-interface Category {
-  id: number;
-  nombre: string;
-  imagenNombre: string | null;
-  orden: number;
-  activo: boolean;
-}
+type AdminView =
+  | "products"
+  | "promotions"
+  | "orders"
+  | "carousel"
+  | "categories";
 
 const EMPTY_CAROUSEL: Omit<CarouselImage, "id"> = {
   imagenNombre: "",
@@ -86,7 +82,7 @@ const EMPTY_CATEGORY: Omit<Category, "id"> = {
 };
 
 export function AdminPanel() {
-  const { logout } = useAuth();
+  const { logout, adminToken } = useAuth();
   const navigate = useNavigate();
   const [currentView, setCurrentView] = useState<AdminView>("products");
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -112,58 +108,95 @@ export function AdminPanel() {
   // Carousel state
   const [carouselImages, setCarouselImages] = useState<CarouselImage[]>([]);
   const [showCarouselForm, setShowCarouselForm] = useState(false);
-  const [carouselForm, setCarouselForm] = useState<Omit<CarouselImage, "id">>(EMPTY_CAROUSEL);
+  const [carouselForm, setCarouselForm] =
+    useState<Omit<CarouselImage, "id">>(EMPTY_CAROUSEL);
   const [isUploadingCarousel, setIsUploadingCarousel] = useState(false);
-  const [editingCarouselId, setEditingCarouselId] = useState<number | null>(null);
+  const [editingCarouselId, setEditingCarouselId] = useState<number | null>(
+    null,
+  );
 
   // Category state
   const [categories, setCategories] = useState<Category[]>([]);
+  const { showError, showSuccess, showConfirm } = useAlert();
   const [showCategoryForm, setShowCategoryForm] = useState(false);
-  const [categoryForm, setCategoryForm] = useState<Omit<Category, "id">>(EMPTY_CATEGORY);
+  const [categoryForm, setCategoryForm] =
+    useState<Omit<Category, "id">>(EMPTY_CATEGORY);
   const [isUploadingCategory, setIsUploadingCategory] = useState(false);
-  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(
+    null,
+  );
+
+  const handleSessionExpired = () => {
+    logout();
+    showError(
+      "Sesión expirada",
+      "Tu sesión ha vencido. Por favor, inicia sesión nuevamente.",
+    );
+    navigate("/login");
+  };
 
   React.useEffect(() => {
     const fetchData = async () => {
+      const authHeader: Record<string, string> = adminToken
+        ? { Authorization: `Bearer ${adminToken}` }
+        : {};
+
       try {
         // Carousel
-        const carouselRes = await fetch(`${API_BASE}/api/carousel/all`);
+        const carouselRes = await fetch(`${API_BASE}/api/carousel/all`, {
+          headers: authHeader,
+        });
+        if (carouselRes.status === 401) return handleSessionExpired();
+
         if (carouselRes.ok) {
           const data = await carouselRes.json();
           setCarouselImages(data);
-        } else {
-          const errorData = await carouselRes.json().catch(() => ({}));
-          console.error("Error fetching carousel:", carouselRes.status, errorData);
         }
 
         // Categories
-        const categoriesRes = await fetch(`${API_BASE}/api/categories/all`);
+        const categoriesRes = await fetch(`${API_BASE}/api/categories/all`, {
+          headers: authHeader,
+        });
+        if (categoriesRes.status === 401) return handleSessionExpired();
+
         if (categoriesRes.ok) {
           const data = await categoriesRes.json();
           setCategories(Array.isArray(data) ? data : []);
         } else {
-          const errorData = await categoriesRes.json().catch(() => ({}));
-          console.error("Error fetching categories:", categoriesRes.status, errorData);
           setCategories([]);
         }
 
         // Products
-        const productsRes = await fetch(`${API_BASE}/api/products`);
+        const productsRes = await fetch(`${API_BASE}/api/products`, {
+          headers: authHeader,
+        });
+        if (productsRes.status === 401) return handleSessionExpired();
+
         if (productsRes.ok) {
           const data = await productsRes.json();
           const mappedProducts = data.map((p: any) => ({
             id: p.id.toString(),
-            name: p.nombre,
-            price: p.precio,
+            name: p.name ?? p.nombre,
+            price: p.price ?? p.precio,
             stock: p.stock,
-            category: p.descripcion,
-            image: p.imagenNombre ? `${API_BASE}/images/${p.imagenNombre}` : "",
+            category: p.description ?? p.descripcion,
+            image: p.imageUrl ? `${API_BASE}/images/${p.imageUrl}` : "",
+            wholesalePrice: p.wholesalePrice
+              ? {
+                  quantity: p.wholesaleMinimumAmount ?? 10,
+                  price: p.wholesalePrice,
+                }
+              : undefined,
           }));
           setProducts(mappedProducts);
         }
 
         // Coupons
-        const couponsRes = await fetch(`${API_BASE}/api/coupons`);
+        const couponsRes = await fetch(`${API_BASE}/api/coupons`, {
+          headers: authHeader,
+        });
+        if (couponsRes.status === 401) return handleSessionExpired();
+
         if (couponsRes.ok) {
           const data = await couponsRes.json();
           const mappedCoupons = data.map((c: any) => ({
@@ -176,7 +209,11 @@ export function AdminPanel() {
         }
 
         // Orders
-        const ordersRes = await fetch(`${API_BASE}/api/orders`);
+        const ordersRes = await fetch(`${API_BASE}/api/orders`, {
+          headers: authHeader,
+        });
+        if (ordersRes.status === 401) return handleSessionExpired();
+
         if (ordersRes.ok) {
           const data = await ordersRes.json();
           const mappedOrders = data.map((o: any) => ({
@@ -195,7 +232,14 @@ export function AdminPanel() {
     };
 
     fetchData();
-  }, []);
+  }, [adminToken]);
+
+  const getAuthHeaders = (contentType: string | null = "application/json") => {
+    const headers: Record<string, string> = {};
+    if (adminToken) headers["Authorization"] = `Bearer ${adminToken}`;
+    if (contentType) headers["Content-Type"] = contentType;
+    return headers;
+  };
 
   const handleLogout = () => {
     logout();
@@ -214,35 +258,51 @@ export function AdminPanel() {
       const res = await fetch(`${API_BASE}/api/upload`, {
         method: "POST",
         body: formData,
+        headers: getAuthHeaders(null),
       });
       if (res.ok) {
         const data = await res.json();
-        setProductForm((prev) => ({ ...prev, image: `${API_BASE}/images/${data.fileName}` }));
+        setProductForm((prev) => ({
+          ...prev,
+          image: `${API_BASE}/images/${data.fileName}`,
+        }));
       } else {
-        alert("Error al subir la imagen");
+        showError(
+          "¡Ups!",
+          "No pudimos subir la imagen. Probá con otra o intentá más tarde.",
+        );
       }
     } catch (error) {
       console.error(error);
-      alert("Error de conexión al subir la imagen");
+      showError(
+        "Problema de conexión",
+        "Parece que hay un problema con internet y no pudimos subir la imagen.",
+      );
     } finally {
       setIsUploading(false);
     }
   };
 
   const handleSaveProduct = async () => {
+    const selectedCategory = categories.find(
+      (c) => c.nombre === productForm.category,
+    );
     const backendProduct = {
-      nombre: productForm.name,
-      precio: productForm.price,
-      stock: productForm.stock,
-      descripcion: productForm.category, // Using description as category
-      imagenNombre: productForm.image?.split("/").pop(), // extract filename
-      activo: true,
+      Name: productForm.name,
+      Price: productForm.price,
+      Stock: productForm.stock,
+      Description: productForm.name, // O una descripción real si la tienes
+      ImagePath: productForm.image ? productForm.image.split("/").pop() : null, // Solo el nombre del archivo
+      WholesalePrice: (productForm.price ?? 0) * 0.8,
+      MinimumWholesaleAmount: 10,
+      CategoryId: selectedCategory?.id ?? 0,
+      Active: true,
     };
 
     try {
       const res = await fetch(`${API_BASE}/api/products`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify(backendProduct),
       });
 
@@ -250,13 +310,19 @@ export function AdminPanel() {
         const created = await res.json();
         const newProduct = {
           id: created.id.toString(),
-          name: created.nombre,
-          price: created.precio,
+          name: created.name ?? created.nombre,
+          price: created.price ?? created.precio,
           stock: created.stock,
-          category: created.descripcion,
-          image: created.imagenNombre
-            ? `${API_BASE}/images/${created.imagenNombre}`
+          category: created.description ?? created.descripcion,
+          image: created.imageUrl
+            ? `${API_BASE}/images/${created.imageUrl}`
             : "",
+          wholesalePrice: created.wholesalePrice
+            ? {
+                quantity: created.wholesaleMinimumAmount ?? 10,
+                price: created.wholesalePrice,
+              }
+            : undefined,
         } as Product;
 
         setProducts((prev) => [newProduct, ...prev]);
@@ -268,30 +334,51 @@ export function AdminPanel() {
           category: "",
           image: "",
         });
+        showSuccess("¡Listo!", "El producto se guardó correctamente.");
       } else {
-        alert("Error al guardar el producto en la base de datos");
+        const err = await res.json().catch(() => ({}));
+        showError(
+          "No se pudo guardar",
+          err.title ||
+            "Hubo un problema al intentar guardar el producto. Por favor, revisá los datos.",
+        );
       }
     } catch (e) {
       console.error(e);
-      alert("Error de red al guardar el producto");
+      showError(
+        "Problema de red",
+        "No pudimos conectar con el servidor. Revisá tu conexión.",
+      );
     }
   };
 
   const handleDeleteProduct = async (id: string) => {
-    if (!confirm("¿Estás seguro de eliminar este producto?")) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/products/${id}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        setProducts((prev) => prev.filter((p) => p.id !== id));
-      } else {
-        alert("Error al eliminar el producto");
-      }
-    } catch (e) {
-      console.error(e);
-      alert("Error de red al eliminar");
-    }
+    showConfirm(
+      "¿Borrar producto?",
+      "¿Estás seguro de que querés borrar este producto? Esta acción no se puede deshacer.",
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/api/products/${id}`, {
+            method: "DELETE",
+            headers: getAuthHeaders(null),
+          });
+          if (res.ok) {
+            setProducts((prev) => prev.filter((p) => p.id !== id));
+            showSuccess("¡Borrado!", "El producto ya no está en la lista.");
+          } else {
+            const errorData = await res.json().catch(() => ({}));
+            showError(
+              "No se pudo borrar",
+              errorData.title ||
+                "Hubo un problema al intentar eliminar el producto.",
+            );
+          }
+        } catch (e) {
+          console.error(e);
+          showError("Problema de red", "No pudimos conectar con el servidor.");
+        }
+      },
+    );
   };
 
   const handleSaveCoupon = async () => {
@@ -316,7 +403,7 @@ export function AdminPanel() {
     try {
       const res = await fetch(`${API_BASE}/api/coupons`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify(backendCoupon),
       });
 
@@ -335,25 +422,43 @@ export function AdminPanel() {
         setCoupons((prev) => [newCoupon, ...prev]);
         setCouponForm(EMPTY_COUPON);
         setShowCouponForm(false);
+        showSuccess("¡Listo!", "El cupón se guardó correctamente.");
       }
     } catch (e) {
       console.error(e);
-      alert("Error de red al guardar el cupón");
+      showError(
+        "Problema de red",
+        "No pudimos guardar el cupón. Revisá tu conexión.",
+      );
     }
   };
 
   const handleDeleteCoupon = async (id: string) => {
-    if (!confirm("¿Estás seguro de eliminar este cupón?")) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/coupons/${id}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        setCoupons((prev) => prev.filter((c) => c.id !== id));
-      }
-    } catch (e) {
-      console.error(e);
-    }
+    showConfirm(
+      "¿Borrar cupón?",
+      "¿Estás seguro de que querés eliminar este cupón?",
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/api/coupons/${id}`, {
+            method: "DELETE",
+            headers: getAuthHeaders(null),
+          });
+          if (res.ok) {
+            setCoupons((prev) => prev.filter((c) => c.id !== id));
+            showSuccess("¡Listo!", "El cupón fue eliminado.");
+          } else {
+            const errorData = await res.json().catch(() => ({}));
+            showError(
+              "No se pudo borrar",
+              errorData.title || "Hubo un problema al borrar el cupón.",
+            );
+          }
+        } catch (e) {
+          console.error(e);
+          showError("Problema de red", "No pudimos conectar con el servidor.");
+        }
+      },
+    );
   };
 
   const setCF = (field: keyof Omit<Coupon, "id">, value: unknown) => {
@@ -361,22 +466,28 @@ export function AdminPanel() {
   };
 
   // Carousel handlers
-  const handleCarouselImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCarouselImageUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setIsUploadingCarousel(true);
     const formData = new FormData();
     formData.append("file", file);
     try {
-      const res = await fetch(`${API_BASE}/api/upload`, { method: "POST", body: formData });
+      const res = await fetch(`${API_BASE}/api/upload`, {
+        method: "POST",
+        body: formData,
+        headers: getAuthHeaders(null),
+      });
       if (res.ok) {
         const data = await res.json();
         setCarouselForm((prev) => ({ ...prev, imagenNombre: data.fileName }));
       } else {
-        alert("Error al subir la imagen");
+        showError("¡Ups!", "No pudimos subir la imagen.");
       }
     } catch {
-      alert("Error de conexión al subir la imagen");
+      showError("Problema de conexión", "No se pudo subir la imagen.");
     } finally {
       setIsUploadingCarousel(false);
     }
@@ -384,40 +495,91 @@ export function AdminPanel() {
 
   const handleSaveCarouselImage = async () => {
     try {
-      const url = editingCarouselId 
+      const url = editingCarouselId
         ? `${API_BASE}/api/carousel/${editingCarouselId}`
         : `${API_BASE}/api/carousel`;
-      
+
       const method = editingCarouselId ? "PUT" : "POST";
 
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
-          imagenNombre: carouselForm.imagenNombre,
-          titulo: carouselForm.titulo || null,
-          subtitulo: carouselForm.subtitulo || null,
-          orden: carouselForm.orden,
-          activo: carouselForm.activo,
+          Id: editingCarouselId || 0,
+          Titulo: carouselForm.titulo || null,
+          Subtitulo: carouselForm.subtitulo || null,
+          ImagenNombre: carouselForm.imagenNombre,
+          Orden: carouselForm.orden,
+          Activo: carouselForm.activo,
         }),
       });
       if (res.ok) {
         const saved: CarouselImage = await res.json();
+
+        // Actualizamos la lista y re-normalizamos
+        let updatedCarousel: CarouselImage[];
         if (editingCarouselId) {
-          setCarouselImages((prev) => 
-            prev.map(img => img.id === editingCarouselId ? saved : img).sort((a, b) => a.orden - b.orden)
+          updatedCarousel = carouselImages.map((img) =>
+            img.id === editingCarouselId ? saved : img,
           );
         } else {
-          setCarouselImages((prev) => [...prev, saved].sort((a, b) => a.orden - b.orden));
+          updatedCarousel = [...carouselImages, saved];
         }
+
+        const normalized = updatedCarousel
+          .sort((a, b) => a.orden - b.orden)
+          .map((img, i) => ({ ...img, orden: i + 1 }));
+
+        setCarouselImages(normalized);
+
+        // Sincronizar si hubo cambios en otros
+        if (
+          !editingCarouselId ||
+          normalized.some((img, i) => updatedCarousel[i]?.orden !== img.orden)
+        ) {
+          fetch(`${API_BASE}/api/carousel/reorder`, {
+            method: "PATCH",
+            headers: getAuthHeaders(),
+            body: JSON.stringify(normalized),
+          });
+        }
+
         setCarouselForm(EMPTY_CAROUSEL);
         setShowCarouselForm(false);
         setEditingCarouselId(null);
+        showSuccess(
+          "¡Listo!",
+          "La imagen del carousel se guardó correctamente.",
+        );
       } else {
-        alert("Error al guardar la imagen");
+        showError(
+          "No se pudo guardar",
+          "Hubo un problema al guardar la imagen.",
+        );
       }
     } catch {
-      alert("Error de red al guardar la imagen");
+      showError("Problema de red", "No pudimos conectar con el servidor.");
+    }
+  };
+
+  const handleReorderCarousel = async (newOrder: CarouselImage[]) => {
+    const updatedWithOrder = newOrder.map((img, index) => ({
+      ...img,
+      orden: index + 1,
+    }));
+    setCarouselImages(updatedWithOrder);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/carousel/reorder`, {
+        method: "PATCH",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(updatedWithOrder),
+      });
+      if (!res.ok) {
+        showError("Error", "No se pudo guardar el nuevo orden del carousel.");
+      }
+    } catch {
+      showError("Error de red", "No se pudo conectar con el servidor.");
     }
   };
 
@@ -431,31 +593,68 @@ export function AdminPanel() {
     });
     setEditingCarouselId(img.id);
     setShowCarouselForm(true);
-    // Scroll to form
-    document.getElementById("new-carousel-btn")?.scrollIntoView({ behavior: "smooth" });
+
+    // Scroll al inicio del panel de contenido
+    setTimeout(() => {
+      document
+        .getElementById("admin-main-content")
+        ?.scrollTo({ top: 0, behavior: "smooth" });
+    }, 100);
   };
+
   const handleDeleteCarouselImage = async (id: number) => {
-    if (!confirm("¿Eliminar esta imagen del carousel?")) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/carousel/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        setCarouselImages((prev) => prev.filter((img) => img.id !== id));
-      }
-    } catch {
-      console.error("Error al eliminar");
-    }
+    showConfirm(
+      "¿Borrar imagen?",
+      "¿Estás seguro de que querés quitar esta imagen del carousel?",
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/api/carousel/${id}`, {
+            method: "DELETE",
+            headers: getAuthHeaders(null),
+          });
+          if (res.ok) {
+            setCarouselImages((prev) => {
+              const filtered = prev.filter((img) => img.id !== id);
+              const normalized = filtered
+                .sort((a, b) => a.orden - b.orden)
+                .map((img, i) => ({ ...img, orden: i + 1 }));
+
+              // Sincronizar
+              fetch(`${API_BASE}/api/carousel/reorder`, {
+                method: "PATCH",
+                headers: getAuthHeaders(),
+                body: JSON.stringify(normalized),
+              });
+
+              return normalized;
+            });
+            showSuccess("¡Listo!", "La imagen fue quitada del carousel.");
+          } else {
+            const errorData = await res.json().catch(() => ({}));
+            showError(
+              "No se pudo borrar",
+              errorData.title || "Hubo un problema al eliminar la imagen.",
+            );
+          }
+        } catch {
+          showError("Problema de red", "No pudimos conectar con el servidor.");
+        }
+      },
+    );
   };
 
   const handleToggleCarousel = async (id: number, current: boolean) => {
     try {
       const res = await fetch(`${API_BASE}/api/carousel/${id}/toggle`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ activo: !current }),
       });
       if (res.ok) {
         setCarouselImages((prev) =>
-          prev.map((img) => (img.id === id ? { ...img, activo: !current } : img))
+          prev.map((img) =>
+            img.id === id ? { ...img, activo: !current } : img,
+          ),
         );
       }
     } catch {
@@ -464,22 +663,31 @@ export function AdminPanel() {
   };
 
   // Category handlers
-  const handleCategoryImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCategoryImageUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setIsUploadingCategory(true);
     const formData = new FormData();
     formData.append("file", file);
     try {
-      const res = await fetch(`${API_BASE}/api/upload`, { method: "POST", body: formData });
+      const res = await fetch(`${API_BASE}/api/upload`, {
+        method: "POST",
+        body: formData,
+        headers: getAuthHeaders(null),
+      });
       if (res.ok) {
         const data = await res.json();
         setCategoryForm((prev) => ({ ...prev, imagenNombre: data.fileName }));
       } else {
-        alert("Error al subir la imagen");
+        showError("¡Ups!", "No pudimos subir la imagen de la categoría.");
       }
     } catch {
-      alert("Error de conexión");
+      showError(
+        "Problema de conexión",
+        "No se pudo conectar para subir la imagen.",
+      );
     } finally {
       setIsUploadingCategory(false);
     }
@@ -487,32 +695,62 @@ export function AdminPanel() {
 
   const handleSaveCategory = async () => {
     try {
-      const url = editingCategoryId 
+      const url = editingCategoryId
         ? `${API_BASE}/api/categories/${editingCategoryId}`
         : `${API_BASE}/api/categories`;
-      
+
       const method = editingCategoryId ? "PUT" : "POST";
 
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify(categoryForm),
       });
 
       if (res.ok) {
-        // Refresh list
-        const allRes = await fetch(`${API_BASE}/api/categories/all`);
-        const data = await allRes.json();
-        setCategories(data);
-        
+        const saved: Category = await res.json();
+
+        // Actualizamos la lista y re-normalizamos el orden de todas
+        let updatedCategories: Category[];
+        if (editingCategoryId) {
+          updatedCategories = categories.map((c) =>
+            c.id === editingCategoryId ? saved : c,
+          );
+        } else {
+          updatedCategories = [...categories, saved];
+        }
+
+        // Ordenar por el orden actual y re-asignar 1, 2, 3... para evitar saltos
+        const normalized = updatedCategories
+          .sort((a, b) => a.orden - b.orden)
+          .map((c, i) => ({ ...c, orden: i + 1 }));
+
+        setCategories(normalized);
+
+        // Si hubo cambios en los números de orden de otros, los sincronizamos
+        if (
+          !editingCategoryId ||
+          normalized.some((c, i) => updatedCategories[i]?.orden !== c.orden)
+        ) {
+          fetch(`${API_BASE}/api/categories/reorder`, {
+            method: "PATCH",
+            headers: getAuthHeaders(),
+            body: JSON.stringify(normalized),
+          });
+        }
+
         setCategoryForm(EMPTY_CATEGORY);
         setShowCategoryForm(false);
         setEditingCategoryId(null);
+        showSuccess("¡Listo!", "La categoría se guardó correctamente.");
       } else {
-        alert("Error al guardar la categoría");
+        showError(
+          "No se pudo guardar",
+          "Hubo un problema al guardar la categoría.",
+        );
       }
     } catch {
-      alert("Error de red");
+      showError("Problema de red", "No pudimos conectar con el servidor.");
     }
   };
 
@@ -525,35 +763,101 @@ export function AdminPanel() {
     });
     setEditingCategoryId(cat.id);
     setShowCategoryForm(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Scroll al inicio del panel de contenido
+    setTimeout(() => {
+      document
+        .getElementById("admin-main-content")
+        ?.scrollTo({ top: 0, behavior: "smooth" });
+    }, 100);
   };
 
   const handleDeleteCategory = async (id: number) => {
-    if (!confirm("¿Eliminar esta categoría?")) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/categories/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        setCategories((prev) => prev.filter((c) => c.id !== id));
-      }
-    } catch {
-      console.error("Error al eliminar");
-    }
+    showConfirm(
+      "¿Borrar categoría?",
+      "¿Estás seguro de que querés eliminar esta categoría?",
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/api/categories/${id}`, {
+            method: "DELETE",
+            headers: getAuthHeaders(null),
+          });
+          if (res.ok) {
+            // Quitamos la borrada y re-normalizamos las demás
+            setCategories((prev) => {
+              const filtered = prev.filter((c) => c.id !== id);
+              const normalized = filtered
+                .sort((a, b) => a.orden - b.orden)
+                .map((c, i) => ({ ...c, orden: i + 1 }));
+
+              // Sincronizamos el nuevo orden con el servidor
+              fetch(`${API_BASE}/api/categories/reorder`, {
+                method: "PATCH",
+                headers: getAuthHeaders(),
+                body: JSON.stringify(normalized),
+              });
+
+              return normalized;
+            });
+            showSuccess("¡Listo!", "La categoría fue eliminada.");
+          } else {
+            const errorData = await res.json().catch(() => ({}));
+            showError(
+              "No se pudo borrar",
+              errorData.title ||
+                "Hubo un problema al intentar borrar la categoría.",
+            );
+          }
+        } catch {
+          showError("Problema de red", "No pudimos conectar con el servidor.");
+        }
+      },
+    );
   };
 
   const handleToggleCategory = async (cat: Category) => {
     try {
       const res = await fetch(`${API_BASE}/api/categories/${cat.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...cat, activo: !cat.activo }),
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          ...cat,
+          activo: !cat.activo,
+        }),
       });
       if (res.ok) {
         setCategories((prev) =>
-          prev.map((c) => (c.id === cat.id ? { ...c, activo: !cat.activo } : c))
+          prev.map((c) =>
+            c.id === cat.id ? { ...c, activo: !cat.activo } : c,
+          ),
         );
       }
     } catch {
       console.error("Error al cambiar estado");
+    }
+  };
+
+  const handleReorderCategories = async (newOrder: Category[]) => {
+    // Actualizamos el estado local inmediatamente para que el movimiento sea fluido
+    const updatedWithOrder = newOrder.map((cat, index) => ({
+      ...cat,
+      orden: index + 1,
+    }));
+    setCategories(updatedWithOrder);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/categories/reorder`, {
+        method: "PATCH",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(updatedWithOrder),
+      });
+      if (!res.ok) {
+        showError("Error", "No se pudo guardar el nuevo orden en el servidor.");
+      }
+    } catch {
+      showError(
+        "Error de red",
+        "No se pudo conectar con el servidor para guardar el orden.",
+      );
     }
   };
 
@@ -566,7 +870,7 @@ export function AdminPanel() {
   ];
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="h-screen bg-background flex overflow-hidden">
       {/* Sidebar */}
       <aside className="w-60 bg-sidebar border-r border-sidebar-border p-4 flex flex-col flex-shrink-0">
         <div className="flex items-center gap-3 mb-8">
@@ -623,7 +927,7 @@ export function AdminPanel() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 p-8 overflow-auto">
+      <main id="admin-main-content" className="flex-1 p-8 overflow-auto">
         <div className="max-w-5xl mx-auto">
           {/* PRODUCTOS */}
           {currentView === "products" && (
@@ -670,7 +974,9 @@ export function AdminPanel() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm mb-1.5">Categoría *</label>
+                      <label className="block text-sm mb-1.5">
+                        Categoría *
+                      </label>
                       <select
                         value={productForm.category || ""}
                         onChange={(e) =>
@@ -1201,7 +1507,9 @@ export function AdminPanel() {
           {currentView === "carousel" && (
             <div>
               <div className="flex items-center justify-between mb-6">
-                <h1 style={{ fontFamily: "Georgia, serif" }}>Imágenes del Carousel</h1>
+                <h1 style={{ fontFamily: "Georgia, serif" }}>
+                  Imágenes del Carousel
+                </h1>
                 <button
                   id="new-carousel-btn"
                   onClick={() => {
@@ -1211,17 +1519,61 @@ export function AdminPanel() {
                     }
                     setShowCarouselForm((v) => !v);
                   }}
-                  className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg transition-colors shadow-sm text-sm"
+                  disabled={
+                    carouselImages.length >= 10 &&
+                    !showCarouselForm &&
+                    !editingCarouselId
+                  }
+                  className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg transition-colors shadow-sm text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {showCarouselForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                  {showCarouselForm ? (
+                    <X className="w-4 h-4" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
                   {showCarouselForm ? "Cancelar" : "Nueva Imagen"}
                 </button>
               </div>
 
+              {carouselImages.length >= 10 && !showCarouselForm && (
+                <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-amber-900">
+                      Límite alcanzado
+                    </p>
+                    <p className="text-xs text-amber-800">
+                      Has alcanzado el máximo de 10 imágenes. Para agregar una
+                      nueva, primero debes eliminar alguna de las existentes.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="mb-8 p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-start gap-3">
+                <Info className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-blue-900">
+                    Consejo de rendimiento
+                  </p>
+                  <p className="text-xs text-blue-800 leading-relaxed">
+                    Aunque puedes tener hasta 10 imágenes, te recomendamos
+                    mantener entre <b>3 y 5 imágenes activas</b>. Tener
+                    demasiadas imágenes puede hacer que la página cargue más
+                    lento para tus clientes, especialmente en celulares.
+                  </p>
+                </div>
+              </div>
+
               {showCarouselForm && (
                 <div className="bg-card border-2 border-primary/30 rounded-xl p-6 mb-6 shadow-sm">
-                  <h3 className="mb-5 text-base" style={{ fontFamily: "Georgia, serif" }}>
-                    {editingCarouselId ? "Editar imagen del carousel" : "Agregar imagen al carousel"}
+                  <h3
+                    className="mb-5 text-base"
+                    style={{ fontFamily: "Georgia, serif" }}
+                  >
+                    {editingCarouselId
+                      ? "Editar imagen del carousel"
+                      : "Agregar imagen al carousel"}
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2">
@@ -1241,26 +1593,23 @@ export function AdminPanel() {
                           className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-secondary file:text-foreground hover:file:bg-secondary/80 cursor-pointer"
                         />
                         {isUploadingCarousel && (
-                          <span className="text-sm text-primary font-medium animate-pulse">Subiendo...</span>
+                          <span className="text-sm text-primary font-medium animate-pulse">
+                            Subiendo...
+                          </span>
                         )}
                       </div>
                     </div>
-                    <div>
+                    <div className="col-span-2">
                       <label className="block text-sm mb-1.5">Título</label>
                       <input
                         value={carouselForm.titulo ?? ""}
-                        onChange={(e) => setCarouselForm((p) => ({ ...p, titulo: e.target.value }))}
+                        onChange={(e) =>
+                          setCarouselForm((p) => ({
+                            ...p,
+                            titulo: e.target.value,
+                          }))
+                        }
                         placeholder="Ej: Tradición y Calidad"
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm mb-1.5">Orden</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={carouselForm.orden}
-                        onChange={(e) => setCarouselForm((p) => ({ ...p, orden: Number(e.target.value) }))}
                         className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                       />
                     </div>
@@ -1268,7 +1617,12 @@ export function AdminPanel() {
                       <label className="block text-sm mb-1.5">Subtítulo</label>
                       <input
                         value={carouselForm.subtitulo ?? ""}
-                        onChange={(e) => setCarouselForm((p) => ({ ...p, subtitulo: e.target.value }))}
+                        onChange={(e) =>
+                          setCarouselForm((p) => ({
+                            ...p,
+                            subtitulo: e.target.value,
+                          }))
+                        }
                         placeholder="Ej: Más de 70 años llevando lo mejor de la naturaleza"
                         className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                       />
@@ -1278,7 +1632,12 @@ export function AdminPanel() {
                         <input
                           type="checkbox"
                           checked={carouselForm.activo}
-                          onChange={(e) => setCarouselForm((p) => ({ ...p, activo: e.target.checked }))}
+                          onChange={(e) =>
+                            setCarouselForm((p) => ({
+                              ...p,
+                              activo: e.target.checked,
+                            }))
+                          }
                           className="accent-primary w-4 h-4"
                         />
                         Activa al crear
@@ -1299,106 +1658,144 @@ export function AdminPanel() {
                     <button
                       id="save-carousel-btn"
                       onClick={handleSaveCarouselImage}
-                      disabled={!carouselForm.imagenNombre || isUploadingCarousel}
+                      disabled={
+                        !carouselForm.imagenNombre || isUploadingCarousel
+                      }
                       className="px-6 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-lg transition-colors text-sm"
                     >
-                      {editingCarouselId ? "Actualizar cambios" : "Guardar imagen"}
+                      {editingCarouselId
+                        ? "Actualizar cambios"
+                        : "Guardar imagen"}
                     </button>
                   </div>
                 </div>
               )}
+              <div className="bg-secondary/10 p-4 rounded-xl mb-6 flex items-center gap-3 border border-border/50">
+                <GripVertical className="w-5 h-5 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">
+                  Podes <b>arrastrar y soltar</b> las imágenes para cambiar su
+                  orden en el carousel de la tienda.
+                </p>
+              </div>
 
-              {/* Grid de imágenes */}
-              {carouselImages.length === 0 ? (
-                <div className="text-center py-16 text-muted-foreground border-2 border-dashed border-border rounded-xl">
-                  <ImageIcon className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                  <p>No hay imágenes en el carousel. Agrega la primera.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {carouselImages.map((img) => (
-                    <div
+              <Reorder.Group
+                axis="y"
+                values={carouselImages}
+                onReorder={handleReorderCarousel}
+                className="space-y-4 relative z-0"
+                style={{ isolation: "isolate" }}
+              >
+                {carouselImages.length === 0 ? (
+                  <div className="py-12 text-center bg-card rounded-xl border border-dashed border-border">
+                    <ImageIcon className="w-12 h-12 mx-auto text-muted-foreground opacity-20 mb-3" />
+                    <p className="text-muted-foreground">
+                      No hay imágenes en el carousel aún.
+                    </p>
+                  </div>
+                ) : (
+                  carouselImages.map((img) => (
+                    <Reorder.Item
                       key={img.id}
-                      className={`bg-card rounded-xl border overflow-hidden shadow-sm transition-all ${
-                        img.activo ? "border-border" : "border-border opacity-60"
-                      }`}
+                      value={img}
+                      className={`relative group bg-white rounded-2xl border border-border overflow-hidden shadow-sm ${!img.activo && "opacity-70 grayscale-[0.5]"} cursor-grab active:cursor-grabbing`}
+                      transition={{
+                        type: "spring",
+                        stiffness: 800,
+                        damping: 50,
+                      }}
+                      whileDrag={{
+                        scale: 1.03,
+                        zIndex: 999,
+                        backgroundColor: "#ffffff",
+                        boxShadow: "0 25px 50px -12px rgb(0 0 0 / 0.3)",
+                      }}
                     >
-                      {/* Preview */}
-                      <div className="relative h-36 bg-secondary">
-                        {img.imagenNombre ? (
-                          <img
-                            src={`${API_BASE}/images/${img.imagenNombre}`}
-                            alt={img.titulo ?? "Slide"}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-full text-muted-foreground">
-                            <ImageIcon className="w-8 h-8 opacity-40" />
-                          </div>
-                        )}
-                        {/* Orden badge */}
-                        <div className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
-                          <GripVertical className="w-3 h-3" />
-                          Orden {img.orden}
-                        </div>
-                        {/* Estado badge */}
-                        <div
-                          className={`absolute top-2 right-2 text-xs px-2 py-0.5 rounded-full font-medium ${
-                            img.activo
-                              ? "bg-accent/90 text-white"
-                              : "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          {img.activo ? "Activa" : "Inactiva"}
-                        </div>
-                      </div>
-
-                      {/* Info + actions */}
-                      <div className="p-4">
-                        <p className="font-medium text-sm truncate">
-                          {img.titulo || <span className="text-muted-foreground italic">Sin título</span>}
-                        </p>
-                        {img.subtitulo && (
-                          <p className="text-xs text-muted-foreground mt-0.5 truncate">{img.subtitulo}</p>
-                        )}
-                        <div className="flex items-center justify-between mt-3">
-                          <button
-                            onClick={() => handleToggleCarousel(img.id, img.activo)}
-                            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors ${
-                              img.activo
-                                ? "bg-accent/10 text-accent hover:bg-accent/20"
-                                : "bg-secondary text-muted-foreground hover:bg-secondary/80"
-                            }`}
-                          >
-                            {img.activo ? (
-                              <ToggleRight className="w-4 h-4" />
-                            ) : (
-                              <ToggleLeft className="w-4 h-4" />
+                      <div className="flex flex-col md:flex-row">
+                        <div className="relative w-full md:w-64 aspect-[21/9] md:aspect-video bg-secondary overflow-hidden flex-shrink-0">
+                          {img.imagenNombre ? (
+                            <img
+                              src={`${API_BASE}/images/${img.imagenNombre}`}
+                              alt={img.titulo || "Carousel"}
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <ImageIcon className="w-10 h-10 opacity-10" />
+                            </div>
+                          )}
+                          <div className="absolute top-3 left-3 flex gap-2">
+                            <span className="bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-tighter flex items-center gap-1">
+                              <GripVertical className="w-3 h-3" />
+                              Orden {img.orden}
+                            </span>
+                            {!img.activo && (
+                              <span className="bg-destructive/90 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-tighter">
+                                Inactiva
+                              </span>
                             )}
-                            {img.activo ? "Desactivar" : "Activar"}
-                          </button>
-                          <div className="flex gap-1">
+                          </div>
+                        </div>
+                        <div className="flex-1 p-5 flex flex-col justify-between">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h3
+                                className="text-lg font-medium"
+                                style={{ fontFamily: "Georgia, serif" }}
+                              >
+                                {img.titulo || "Sin título"}
+                              </h3>
+                              {img.subtitulo && (
+                                <p className="text-sm text-muted-foreground line-clamp-1">
+                                  {img.subtitulo}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleEditCarousel(img)}
+                                className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                                title="Editar"
+                              >
+                                <Edit className="w-4 h-4 text-muted-foreground" />
+                              </button>
+                              <button
+                                onClick={() =>
+                                  handleDeleteCarouselImage(img.id)
+                                }
+                                className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors"
+                                title="Eliminar"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between pt-4 border-t border-border/50">
                             <button
-                              onClick={() => handleEditCarousel(img)}
-                              className="p-1.5 hover:bg-secondary rounded-lg transition-colors"
-                              title="Editar detalles"
+                              onClick={() =>
+                                handleToggleCarousel(img.id, img.activo)
+                              }
+                              className={`flex items-center gap-2 text-xs font-semibold transition-colors ${img.activo ? "text-accent hover:text-accent/80" : "text-muted-foreground hover:text-foreground"}`}
                             >
-                              <Edit className="w-4 h-4" />
+                              {img.activo ? (
+                                <ToggleRight className="w-5 h-5" />
+                              ) : (
+                                <ToggleLeft className="w-5 h-5" />
+                              )}
+                              {img.activo ? "ACTIVA" : "INACTIVA"}
                             </button>
-                            <button
-                              onClick={() => handleDeleteCarouselImage(img.id)}
-                              className="p-1.5 hover:bg-destructive/10 text-destructive rounded-lg transition-colors"
-                              title="Eliminar"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <GripVertical className="w-5 h-5 opacity-30" />
+                              <span className="text-[10px] font-bold uppercase tracking-widest opacity-30">
+                                Arrastrar para reordenar
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    </Reorder.Item>
+                  ))
+                )}
+              </Reorder.Group>
             </div>
           )}
           {/* CATEGORIAS */}
@@ -1419,37 +1816,44 @@ export function AdminPanel() {
                   }}
                   className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg transition-colors shadow-sm text-sm"
                 >
-                  {showCategoryForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                  {showCategoryForm ? (
+                    <X className="w-4 h-4" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
                   {showCategoryForm ? "Cancelar" : "Nueva Categoría"}
                 </button>
               </div>
 
               {showCategoryForm && (
                 <div className="bg-card border-2 border-primary/30 rounded-xl p-6 mb-6 shadow-sm">
-                  <h3 className="mb-5 text-base" style={{ fontFamily: "Georgia, serif" }}>
+                  <h3
+                    className="mb-5 text-base"
+                    style={{ fontFamily: "Georgia, serif" }}
+                  >
                     {editingCategoryId ? "Editar categoría" : "Crear categoría"}
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2 md:col-span-1">
-                      <label className="block text-sm mb-1.5 font-medium">Nombre de la categoría *</label>
+                    <div className="col-span-2">
+                      <label className="block text-sm mb-1.5 font-medium">
+                        Nombre de la categoría *
+                      </label>
                       <input
                         value={categoryForm.nombre}
-                        onChange={(e) => setCategoryForm({ ...categoryForm, nombre: e.target.value })}
+                        onChange={(e) =>
+                          setCategoryForm({
+                            ...categoryForm,
+                            nombre: e.target.value,
+                          })
+                        }
                         placeholder="Ej: Harinas, Frutos Secos..."
                         className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
                       />
                     </div>
-                    <div className="col-span-2 md:col-span-1">
-                      <label className="block text-sm mb-1.5 font-medium">Orden de visualización</label>
-                      <input
-                        type="number"
-                        value={categoryForm.orden}
-                        onChange={(e) => setCategoryForm({ ...categoryForm, orden: Number(e.target.value) })}
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
-                      />
-                    </div>
                     <div className="col-span-2">
-                      <label className="block text-sm mb-2 font-medium">Imagen de la categoría *</label>
+                      <label className="block text-sm mb-2 font-medium">
+                        Imagen de la categoría
+                      </label>
                       <div className="flex items-start gap-6 p-4 bg-secondary/20 rounded-xl border border-border/50">
                         {categoryForm.imagenNombre ? (
                           <div className="relative group">
@@ -1458,8 +1862,13 @@ export function AdminPanel() {
                               alt="Preview"
                               className="w-32 h-32 object-cover rounded-lg border border-border shadow-md"
                             />
-                            <button 
-                              onClick={() => setCategoryForm({ ...categoryForm, imagenNombre: "" })}
+                            <button
+                              onClick={() =>
+                                setCategoryForm({
+                                  ...categoryForm,
+                                  imagenNombre: "",
+                                })
+                              }
                               className="absolute -top-2 -right-2 bg-destructive text-white p-1 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
                             >
                               <X className="w-3 h-3" />
@@ -1468,12 +1877,15 @@ export function AdminPanel() {
                         ) : (
                           <div className="w-32 h-32 rounded-lg border-2 border-dashed border-border flex flex-col items-center justify-center text-muted-foreground bg-background">
                             <ImageIcon className="w-8 h-8 opacity-20 mb-1" />
-                            <span className="text-[10px] uppercase tracking-wider font-semibold">Sin imagen</span>
+                            <span className="text-[10px] uppercase tracking-wider font-semibold">
+                              Sin imagen
+                            </span>
                           </div>
                         )}
                         <div className="flex-1 space-y-3">
                           <p className="text-xs text-muted-foreground leading-relaxed">
-                            Sube una imagen representativa para esta categoría. Se mostrará en el grid de la página principal.
+                            Sube una imagen representativa para esta categoría.
+                            Se mostrará en el grid de la página principal.
                           </p>
                           <div className="relative">
                             <input
@@ -1484,7 +1896,9 @@ export function AdminPanel() {
                             />
                             <button className="flex items-center gap-2 px-4 py-2 bg-background border border-border rounded-lg text-sm hover:bg-secondary transition-colors w-full md:w-auto">
                               <ImageIcon className="w-4 h-4" />
-                              {isUploadingCategory ? "Subiendo..." : "Seleccionar imagen"}
+                              {isUploadingCategory
+                                ? "Subiendo..."
+                                : "Seleccionar imagen"}
                             </button>
                           </div>
                         </div>
@@ -1504,7 +1918,7 @@ export function AdminPanel() {
                     </button>
                     <button
                       onClick={handleSaveCategory}
-                      disabled={!categoryForm.nombre || !categoryForm.imagenNombre || isUploadingCategory}
+                      disabled={!categoryForm.nombre || isUploadingCategory}
                       className="px-8 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-all shadow-md shadow-primary/20"
                     >
                       {editingCategoryId ? "Actualizar" : "Crear Categoría"}
@@ -1513,73 +1927,121 @@ export function AdminPanel() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="bg-secondary/10 p-4 rounded-xl mb-6 flex items-center gap-3 border border-border/50">
+                <GripVertical className="w-5 h-5 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">
+                  Podes <b>arrastrar y soltar</b> las categorías para cambiar su
+                  orden de visualización en la tienda.
+                </p>
+              </div>
+
+              <Reorder.Group
+                axis="y"
+                values={categories}
+                onReorder={handleReorderCategories}
+                className="space-y-4 relative z-0"
+                style={{ isolation: "isolate" }}
+              >
                 {categories.length === 0 ? (
-                  <div className="col-span-full py-12 text-center bg-card rounded-xl border border-dashed border-border">
+                  <div className="py-12 text-center bg-card rounded-xl border border-dashed border-border">
                     <Layers className="w-12 h-12 mx-auto text-muted-foreground opacity-20 mb-3" />
-                    <p className="text-muted-foreground">No hay categorías creadas aún.</p>
+                    <p className="text-muted-foreground">
+                      No hay categorías creadas aún.
+                    </p>
                   </div>
                 ) : (
                   categories.map((cat) => (
-                    <div 
-                      key={cat.id} 
-                      className={`group bg-card rounded-2xl border border-border overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 ${!cat.activo && 'opacity-70 grayscale-[0.5]'}`}
+                    <Reorder.Item
+                      key={cat.id}
+                      value={cat}
+                      className={`relative group bg-white rounded-2xl border border-border overflow-hidden shadow-sm ${!cat.activo && "opacity-70 grayscale-[0.5]"} cursor-grab active:cursor-grabbing`}
+                      transition={{
+                        type: "spring",
+                        stiffness: 800,
+                        damping: 50,
+                      }}
+                      whileDrag={{
+                        scale: 1.03,
+                        zIndex: 999,
+                        backgroundColor: "#ffffff",
+                        boxShadow: "0 25px 50px -12px rgb(0 0 0 / 0.3)",
+                      }}
                     >
-                      <div className="relative aspect-[16/10] bg-secondary overflow-hidden">
-                        {cat.imagenNombre ? (
-                          <img
-                            src={`${API_BASE}/images/${cat.imagenNombre}`}
-                            alt={cat.nombre}
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <ImageIcon className="w-10 h-10 opacity-10" />
-                          </div>
-                        )}
-                        <div className="absolute top-3 left-3 flex gap-2">
-                          <span className="bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-tighter">
-                            Orden {cat.orden}
-                          </span>
-                          {!cat.activo && (
-                            <span className="bg-destructive/90 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-tighter">
-                              Inactiva
-                            </span>
+                      <div className="flex flex-col md:flex-row">
+                        <div className="relative w-full md:w-48 aspect-[16/10] md:aspect-square bg-secondary overflow-hidden flex-shrink-0">
+                          {cat.imagenNombre ? (
+                            <img
+                              src={`${API_BASE}/images/${cat.imagenNombre}`}
+                              alt={cat.nombre}
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <ImageIcon className="w-10 h-10 opacity-10" />
+                            </div>
                           )}
+                          <div className="absolute top-3 left-3 flex gap-2">
+                            <span className="bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-tighter flex items-center gap-1">
+                              <GripVertical className="w-3 h-3" />
+                              Orden {cat.orden}
+                            </span>
+                            {!cat.activo && (
+                              <span className="bg-destructive/90 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-tighter">
+                                Inactiva
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <div className="p-5">
-                        <h3 className="text-lg font-medium mb-4" style={{ fontFamily: "Georgia, serif" }}>{cat.nombre}</h3>
-                        <div className="flex items-center justify-between pt-4 border-t border-border/50">
-                          <button
-                            onClick={() => handleToggleCategory(cat)}
-                            className={`flex items-center gap-2 text-xs font-semibold transition-colors ${cat.activo ? 'text-accent hover:text-accent/80' : 'text-muted-foreground hover:text-foreground'}`}
-                          >
-                            {cat.activo ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
-                            {cat.activo ? 'ACTIVA' : 'INACTIVA'}
-                          </button>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleEditCategory(cat)}
-                              className="p-2 hover:bg-secondary rounded-lg transition-colors"
-                              title="Editar"
+                        <div className="flex-1 p-5 flex flex-col justify-between">
+                          <div className="flex items-start justify-between">
+                            <h3
+                              className="text-lg font-medium"
+                              style={{ fontFamily: "Georgia, serif" }}
                             >
-                              <Edit className="w-4 h-4 text-muted-foreground" />
-                            </button>
+                              {cat.nombre}
+                            </h3>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleEditCategory(cat)}
+                                className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                                title="Editar"
+                              >
+                                <Edit className="w-4 h-4 text-muted-foreground" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteCategory(cat.id)}
+                                className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors"
+                                title="Eliminar"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between pt-4 border-t border-border/50">
                             <button
-                              onClick={() => handleDeleteCategory(cat.id)}
-                              className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors"
-                              title="Eliminar"
+                              onClick={() => handleToggleCategory(cat)}
+                              className={`flex items-center gap-2 text-xs font-semibold transition-colors ${cat.activo ? "text-accent hover:text-accent/80" : "text-muted-foreground hover:text-foreground"}`}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              {cat.activo ? (
+                                <ToggleRight className="w-5 h-5" />
+                              ) : (
+                                <ToggleLeft className="w-5 h-5" />
+                              )}
+                              {cat.activo ? "ACTIVA" : "INACTIVA"}
                             </button>
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <GripVertical className="w-5 h-5 opacity-30" />
+                              <span className="text-[10px] font-bold uppercase tracking-widest opacity-30">
+                                Arrastrar para reordenar
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </Reorder.Item>
                   ))
                 )}
-              </div>
+              </Reorder.Group>
             </div>
           )}
         </div>

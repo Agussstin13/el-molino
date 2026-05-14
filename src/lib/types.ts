@@ -35,3 +35,20 @@ export interface Order {
   date: string;
   metodo_pago: string;
 }
+
+export interface Category {
+  id: number;
+  nombre: string;
+  activo: boolean;
+  orden: number;
+  imagenNombre: string;
+}
+
+export interface CarouselImage {
+  id: number;
+  imagenNombre: string;
+  titulo: string | null;
+  subtitulo: string | null;
+  orden: number;
+  activo: boolean;
+}

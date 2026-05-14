@@ -1,17 +1,20 @@
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Plus, Minus, ShoppingCart, Heart, Home, Share2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
-import type { Product } from '../../lib/types';
-import { formatARS, getEffectivePrice, isWholesaleActive } from '../../lib/price';
-import { useCart } from '../context/CartContext';
-import { Header } from '../components/Header';
-import { Cart } from '../components/Cart';
-import { Checkout } from '../components/Checkout';
-import { Footer } from '../components/Footer';
-import { API_BASE } from '../../lib/config';
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { Plus, Minus, ShoppingCart, Heart, Home, Share2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import type { Product } from "../../lib/types";
+import {
+  formatARS,
+  getEffectivePrice,
+  isWholesaleActive,
+} from "../../lib/price";
+import { useCart } from "../context/CartContext";
+import { Header } from "../components/Header";
+import { Cart } from "../components/Cart";
+import { Checkout } from "../components/Checkout";
+import { Footer } from "../components/Footer";
+const API_BASE = import.meta.env.VITE_API_BASE;
 
-
-const RECENT_KEY = 'el-molino-recently-viewed';
+const RECENT_KEY = "el-molino-recently-viewed";
 
 /* ─── Íconos SVG ─────────────────────────────────────────────────────────── */
 
@@ -45,7 +48,7 @@ function LinkedInIcon() {
   );
 }
 function WhatsAppSvg({ large = false }: { large?: boolean }) {
-  const cls = large ? 'w-6 h-6' : 'w-[18px] h-[18px]';
+  const cls = large ? "w-6 h-6" : "w-[18px] h-[18px]";
   return (
     <svg viewBox="0 0 24 24" className={cls} fill="currentColor">
       <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
@@ -55,7 +58,13 @@ function WhatsAppSvg({ large = false }: { large?: boolean }) {
 }
 function MailSvg() {
   return (
-    <svg viewBox="0 0 24 24" className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth={2}>
+    <svg
+      viewBox="0 0 24 24"
+      className="w-[18px] h-[18px]"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
       <rect width="20" height="16" x="2" y="4" rx="2" />
       <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
     </svg>
@@ -79,7 +88,9 @@ function SmallProductCard({ product }: { product: Product }) {
             className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-500"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-5xl text-muted-foreground">📦</div>
+          <div className="w-full h-full flex items-center justify-center text-5xl text-muted-foreground">
+            📦
+          </div>
         )}
       </div>
       <div className="p-3 flex flex-col gap-1">
@@ -89,7 +100,9 @@ function SmallProductCard({ product }: { product: Product }) {
         {product.category && (
           <p className="text-xs text-muted-foreground">{product.category}</p>
         )}
-        <p className="text-sm font-semibold text-primary mt-1">{formatARS(product.price)}</p>
+        <p className="text-sm font-semibold text-primary mt-1">
+          {formatARS(product.price)}
+        </p>
       </div>
     </button>
   );
@@ -120,47 +133,64 @@ export function ProductDetailPage() {
     setAdded(false);
 
     fetch(`${API_BASE}/api/products/${id}`)
-      .then(res => {
-        if (!res.ok) throw new Error('Not found');
+      .then((res) => {
+        if (!res.ok) throw new Error("Not found");
         return res.json();
       })
       .then(async (p) => {
         const cur: Product = {
           id: p.id.toString(),
-          name: p.nombre,
-          price: p.precio,
+          name: p.name ?? p.nombre,
+          price: p.price ?? p.precio,
           stock: p.stock,
-          category: p.descripcion,
-          image: p.imagenNombre ? `${API_BASE}/images/${p.imagenNombre}` : '',
+          category: p.description ?? p.descripcion,
+          image: p.imageUrl ? `${API_BASE}/images/${p.imageUrl}` : "",
+          discount: p.discount ?? p.descuento ?? 0,
+          wholesalePrice: p.wholesalePrice
+            ? { quantity: p.wholesaleMinimumAmount ?? 10, price: p.wholesalePrice }
+            : undefined,
         };
         setProduct(cur);
 
         // Guardar en recientes y actualizar estado
         try {
-          const stored: Product[] = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
-          const next = [cur, ...stored.filter(r => r.id !== cur.id)].slice(0, 8);
+          const stored: Product[] = JSON.parse(
+            localStorage.getItem(RECENT_KEY) || "[]",
+          );
+          const next = [cur, ...stored.filter((r) => r.id !== cur.id)].slice(
+            0,
+            8,
+          );
           localStorage.setItem(RECENT_KEY, JSON.stringify(next));
-          setRecentlyViewed(next.filter(r => r.id !== cur.id).slice(0, 4));
-        } catch { /* noop */ }
+          setRecentlyViewed(next.filter((r) => r.id !== cur.id).slice(0, 4));
+        } catch {
+          /* noop */
+        }
 
         // Relacionados: misma categoría
         const allRes = await fetch(`${API_BASE}/api/products`);
+        if (!allRes.ok) return;
         const allData = await allRes.json();
+        if (!Array.isArray(allData)) return;
         setRelated(
           allData
-            .filter((r: any) => r.id.toString() !== id && r.descripcion === p.descripcion)
+            .filter(
+              (r: any) =>
+                r.id.toString() !== id &&
+                (r.description ?? r.descripcion) === cur.category,
+            )
             .map((r: any) => ({
               id: r.id.toString(),
-              name: r.nombre,
-              price: r.precio,
+              name: r.name ?? r.nombre,
+              price: r.price ?? r.precio,
               stock: r.stock,
-              category: r.descripcion,
-              image: r.imagenNombre ? `${API_BASE}/images/${r.imagenNombre}` : '',
+              category: r.description ?? r.descripcion,
+              image: r.imageUrl ? `${API_BASE}/images/${r.imageUrl}` : "",
             }))
-            .slice(0, 4)
+            .slice(0, 4),
         );
       })
-      .catch(err => console.error('Error fetching product:', err))
+      .catch((err) => console.error("Error fetching product:", err))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -193,7 +223,7 @@ export function ProductDetailPage() {
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
         <p className="text-xl text-muted-foreground">Producto no encontrado.</p>
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate("/")}
           className="bg-primary text-primary-foreground px-6 py-2 rounded-lg hover:bg-primary/90 transition-colors"
         >
           Volver a la tienda
@@ -214,20 +244,50 @@ export function ProductDetailPage() {
   };
 
   // ⚠️ Reemplazá con el número real de WhatsApp (formato: código país + número, sin + ni espacios)
-  const WA_NUMBER = '5491100000000';
+  const WA_NUMBER = "5491100000000";
   const waMsg = encodeURIComponent(
-    `Hola! Me interesa el producto: *${product.name}* (${formatARS(effectivePrice)}). ¿Tienen stock?`
+    `Hola! Me interesa el producto: *${product.name}* (${formatARS(effectivePrice)}). ¿Tienen stock?`,
   );
   const pageUrl = encodeURIComponent(window.location.href);
   const pageTitle = encodeURIComponent(product.name);
 
   const shareLinks = [
-    { label: 'Facebook',  icon: <FacebookIcon />,  href: `https://www.facebook.com/sharer/sharer.php?u=${pageUrl}`,                        hover: 'hover:text-[#1877F2]' },
-    { label: 'X',         icon: <TwitterIcon />,   href: `https://twitter.com/intent/tweet?text=${pageTitle}&url=${pageUrl}`,             hover: 'hover:text-foreground' },
-    { label: 'Pinterest', icon: <PinterestIcon />, href: `https://pinterest.com/pin/create/button/?url=${pageUrl}&description=${pageTitle}`, hover: 'hover:text-[#E60023]' },
-    { label: 'LinkedIn',  icon: <LinkedInIcon />,  href: `https://www.linkedin.com/sharing/share-offsite/?url=${pageUrl}`,                hover: 'hover:text-[#0A66C2]' },
-    { label: 'WhatsApp',  icon: <WhatsAppSvg />,   href: `https://wa.me/?text=${pageTitle}%20${pageUrl}`,                                 hover: 'hover:text-[#25D366]' },
-    { label: 'Email',     icon: <MailSvg />,        href: `mailto:?subject=${pageTitle}&body=${pageUrl}`,                                   hover: 'hover:text-primary' },
+    {
+      label: "Facebook",
+      icon: <FacebookIcon />,
+      href: `https://www.facebook.com/sharer/sharer.php?u=${pageUrl}`,
+      hover: "hover:text-[#1877F2]",
+    },
+    {
+      label: "X",
+      icon: <TwitterIcon />,
+      href: `https://twitter.com/intent/tweet?text=${pageTitle}&url=${pageUrl}`,
+      hover: "hover:text-foreground",
+    },
+    {
+      label: "Pinterest",
+      icon: <PinterestIcon />,
+      href: `https://pinterest.com/pin/create/button/?url=${pageUrl}&description=${pageTitle}`,
+      hover: "hover:text-[#E60023]",
+    },
+    {
+      label: "LinkedIn",
+      icon: <LinkedInIcon />,
+      href: `https://www.linkedin.com/sharing/share-offsite/?url=${pageUrl}`,
+      hover: "hover:text-[#0A66C2]",
+    },
+    {
+      label: "WhatsApp",
+      icon: <WhatsAppSvg />,
+      href: `https://wa.me/?text=${pageTitle}%20${pageUrl}`,
+      hover: "hover:text-[#25D366]",
+    },
+    {
+      label: "Email",
+      icon: <MailSvg />,
+      href: `mailto:?subject=${pageTitle}&body=${pageUrl}`,
+      hover: "hover:text-primary",
+    },
   ];
 
   /* ── Render ── */
@@ -236,14 +296,16 @@ export function ProductDetailPage() {
       <Header />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1.5 text-xs text-muted-foreground mb-6 flex-wrap">
           <Link to="/" className="hover:text-primary transition-colors">
             <Home className="w-3.5 h-3.5" />
           </Link>
           <span>/</span>
-          <Link to="/" className="hover:text-primary transition-colors uppercase font-medium tracking-wide">
+          <Link
+            to="/"
+            className="hover:text-primary transition-colors uppercase font-medium tracking-wide"
+          >
             Tienda
           </Link>
           {product.category && (
@@ -255,16 +317,16 @@ export function ProductDetailPage() {
             </>
           )}
           <span>/</span>
-          <span className="text-foreground font-medium truncate max-w-[200px]">{product.name}</span>
+          <span className="text-foreground font-medium truncate max-w-[200px]">
+            {product.name}
+          </span>
         </nav>
 
         {/* ── Bloque principal ── */}
         <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm mb-8">
           <div className="grid md:grid-cols-2">
-
             {/* Columna imagen */}
             <div className="relative flex flex-col items-center justify-center p-10 bg-secondary/20 border-b md:border-b-0 md:border-r border-border min-h-[420px]">
-
               {/* Ghost background */}
               {product.image && (
                 <div
@@ -280,11 +342,13 @@ export function ProductDetailPage() {
 
               {/* Botón favorito */}
               <button
-                onClick={() => setFavorited(v => !v)}
+                onClick={() => setFavorited((v) => !v)}
                 id="detail-favorite-btn"
                 className="absolute top-4 right-4 z-10 p-2 rounded-full bg-background/80 backdrop-blur-sm border border-border hover:bg-background transition-all shadow-sm"
               >
-                <Heart className={`w-5 h-5 transition-colors ${favorited ? 'fill-destructive text-destructive' : 'text-muted-foreground'}`} />
+                <Heart
+                  className={`w-5 h-5 transition-colors ${favorited ? "fill-destructive text-destructive" : "text-muted-foreground"}`}
+                />
               </button>
 
               {/* Imagen */}
@@ -318,7 +382,7 @@ export function ProductDetailPage() {
                   <Share2 className="w-3.5 h-3.5" /> Compartir:
                 </span>
                 <div className="flex items-center gap-4 flex-wrap justify-center">
-                  {shareLinks.map(link => (
+                  {shareLinks.map((link) => (
                     <a
                       key={link.label}
                       href={link.href}
@@ -332,20 +396,24 @@ export function ProductDetailPage() {
                   ))}
                 </div>
                 <button
-                  onClick={() => setFavorited(v => !v)}
-                  className={`flex items-center gap-1.5 text-sm transition-colors mt-1 ${favorited ? 'text-destructive' : 'text-muted-foreground hover:text-destructive'}`}
+                  onClick={() => setFavorited((v) => !v)}
+                  className={`flex items-center gap-1.5 text-sm transition-colors mt-1 ${favorited ? "text-destructive" : "text-muted-foreground hover:text-destructive"}`}
                 >
-                  <Heart className={`w-4 h-4 ${favorited ? 'fill-destructive' : ''}`} />
-                  {favorited ? 'En favoritos' : 'Agregar a favoritos'}
+                  <Heart
+                    className={`w-4 h-4 ${favorited ? "fill-destructive" : ""}`}
+                  />
+                  {favorited ? "En favoritos" : "Agregar a favoritos"}
                 </button>
               </div>
             </div>
 
             {/* Columna info */}
             <div className="p-8 flex flex-col gap-5">
-
               {/* Nombre */}
-              <h1 className="text-2xl md:text-3xl text-foreground leading-tight" style={{ fontFamily: 'Georgia, serif' }}>
+              <h1
+                className="text-2xl md:text-3xl text-foreground leading-tight"
+                style={{ fontFamily: "Georgia, serif" }}
+              >
                 {product.name}
               </h1>
 
@@ -368,7 +436,9 @@ export function ProductDetailPage() {
                 </span>
                 {isDiscounted && (
                   <>
-                    <span className="text-lg text-muted-foreground line-through">{formatARS(product.price)}</span>
+                    <span className="text-lg text-muted-foreground line-through">
+                      {formatARS(product.price)}
+                    </span>
                     <span className="text-sm bg-destructive/15 text-destructive px-2 py-0.5 rounded-full font-medium">
                       -{product.discount}% OFF
                     </span>
@@ -383,7 +453,9 @@ export function ProductDetailPage() {
 
               {/* Descripción */}
               {product.description && (
-                <p className="text-muted-foreground text-sm leading-relaxed">{product.description}</p>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  {product.description}
+                </p>
               )}
 
               <hr className="border-border" />
@@ -405,29 +477,37 @@ export function ProductDetailPage() {
               {/* Cantidad */}
               {product.stock > 0 && (
                 <div className="flex items-center gap-3 flex-wrap">
-                  <span className="text-sm font-medium text-muted-foreground">Cantidad:</span>
+                  <span className="text-sm font-medium text-muted-foreground">
+                    Cantidad:
+                  </span>
                   <div className="flex items-center border-2 border-border rounded-lg overflow-hidden bg-background">
                     <button
-                      onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                      onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                       id="detail-qty-minus"
                       className="px-3 py-2.5 hover:bg-secondary transition-colors"
                     >
                       <Minus className="w-4 h-4" />
                     </button>
-                    <span className="px-4 min-w-[3rem] text-center font-semibold">{quantity}</span>
+                    <span className="px-4 min-w-[3rem] text-center font-semibold">
+                      {quantity}
+                    </span>
                     <button
-                      onClick={() => setQuantity(q => Math.min(product.stock, q + 1))}
+                      onClick={() =>
+                        setQuantity((q) => Math.min(product.stock, q + 1))
+                      }
                       id="detail-qty-plus"
                       className="px-3 py-2.5 hover:bg-secondary transition-colors"
                     >
                       <Plus className="w-4 h-4" />
                     </button>
                   </div>
-                  {product.wholesalePrice && quantity < product.wholesalePrice.quantity && (
-                    <span className="text-xs text-muted-foreground">
-                      ({product.wholesalePrice.quantity - quantity} más para precio mayorista)
-                    </span>
-                  )}
+                  {product.wholesalePrice &&
+                    quantity < product.wholesalePrice.quantity && (
+                      <span className="text-xs text-muted-foreground">
+                        ({product.wholesalePrice.quantity - quantity} más para
+                        precio mayorista)
+                      </span>
+                    )}
                 </div>
               )}
 
@@ -438,14 +518,18 @@ export function ProductDetailPage() {
                 id="detail-add-to-cart"
                 className={`flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl font-medium transition-all shadow-md text-base ${
                   product.stock === 0
-                    ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                    ? "bg-muted text-muted-foreground cursor-not-allowed"
                     : added
-                    ? 'bg-accent text-accent-foreground scale-[0.98]'
-                    : 'bg-primary hover:bg-primary/90 text-primary-foreground hover:-translate-y-0.5 hover:shadow-primary/25'
+                      ? "bg-accent text-accent-foreground scale-[0.98]"
+                      : "bg-primary hover:bg-primary/90 text-primary-foreground hover:-translate-y-0.5 hover:shadow-primary/25"
                 }`}
               >
                 <ShoppingCart className="w-5 h-5" />
-                {product.stock === 0 ? 'Sin stock' : added ? '¡Agregado al carrito! ✓' : 'Agregar al carrito'}
+                {product.stock === 0
+                  ? "Sin stock"
+                  : added
+                    ? "¡Agregado al carrito! ✓"
+                    : "Agregar al carrito"}
               </button>
             </div>
           </div>
@@ -458,7 +542,9 @@ export function ProductDetailPage() {
               <h2 className="text-base font-medium">Productos relacionados</h2>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {related.map(p => <SmallProductCard key={p.id} product={p} />)}
+              {related.map((p) => (
+                <SmallProductCard key={p.id} product={p} />
+              ))}
             </div>
           </section>
         )}
@@ -470,11 +556,12 @@ export function ProductDetailPage() {
               <h2 className="text-base font-medium">Vistos recientemente</h2>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {recentlyViewed.map(p => <SmallProductCard key={p.id} product={p} />)}
+              {recentlyViewed.map((p) => (
+                <SmallProductCard key={p.id} product={p} />
+              ))}
             </div>
           </section>
         )}
-
       </main>
 
       <Footer />

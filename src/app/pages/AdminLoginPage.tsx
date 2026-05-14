@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Lock, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import logo from "../../imports/image.png"
 
 export function AdminLoginPage() {
-  const { login } = useAuth();
+  const { login, isAdminAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -13,12 +13,17 @@ export function AdminLoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Si ya está logueado, redirigir al panel
+  useEffect(() => {
+    if (isAdminAuthenticated) {
+      navigate('/admin', { replace: true });
+    }
+  }, [isAdminAuthenticated, navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-
-    // Simular delay de red (removido, ahora esperamos a la red real)
 
     const ok = await login(username.trim(), password);
     setLoading(false);

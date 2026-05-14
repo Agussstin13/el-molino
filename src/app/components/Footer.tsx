@@ -155,15 +155,15 @@ export function Footer() {
             )}
           </div>
         </div>
-
-        <div className="pt-8 border-t border-border flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-muted-foreground text-sm text-center md:text-left">
-            © {new Date().getFullYear()} El Molino. Todos los derechos
-            reservados.
-          </p>
-          <div className="flex gap-4 text-xs text-muted-foreground">
-            <span>Desarrollado por Zenithium</span>
-          </div>
+        <div className="pt-8 border-t border-border flex flex-col md:flex-row items-center justify-end gap-4">
+          <a 
+            href="#" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-xs text-muted-foreground hover:text-primary transition-colors"
+          >
+            Desarrollado por Zenithium
+          </a>
         </div>
       </div>
     </footer>

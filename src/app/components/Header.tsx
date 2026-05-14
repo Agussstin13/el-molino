@@ -6,7 +6,7 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { ClientLoginModal } from "./ClientLoginModal";
 import logo from "../../imports/image.png";
-import { API_BASE } from "../../lib/config";
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 interface Category {
   id: number;
@@ -36,7 +36,7 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-secondary/50 backdrop-blur-md border-b-2 border-border shadow-sm">
+    <header className="sticky top-0 z-50 bg-[#f0e0cb]/80 backdrop-blur-md border-b-2 border-border shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-4">
           {/* Hamburger + Logo */}

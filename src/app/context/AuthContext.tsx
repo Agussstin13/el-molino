@@ -1,58 +1,72 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
-import { API_BASE } from '../../lib/config';
-
-const STORAGE_KEY = 'el-molino-admin-auth';
-const API_URL = API_BASE;
-
-interface ClientUser {
-  nombre: string;
-  apellido: string;
-  email: string;
-}
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 
 interface AuthContextType {
   isAdminAuthenticated: boolean;
+  isClientAuthenticated: boolean;
+  clientUser: any | null;
+  adminToken: string | null;
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
-  
-  isClientAuthenticated: boolean;
-  clientUser: ClientUser | null;
   loginClient: (email: string, password: string) => Promise<boolean>;
-  registerClient: (data: any) => Promise<boolean>;
+  registerClient: (userData: any) => Promise<boolean>;
   logoutClient: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(
-    () => localStorage.getItem(STORAGE_KEY) === 'true'
-  );
+const API_BASE = import.meta.env.VITE_API_BASE;
 
-  const [clientUser, setClientUser] = useState<ClientUser | null>(() => {
+/** Strip surrounding quotes if the server returned a JSON-encoded string */
+function cleanToken(raw: string): string {
+  return raw.trim().replace(/^"|"$/g, '');
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [adminToken, setAdminToken] = useState<string | null>(() => {
+    const t = localStorage.getItem('adminToken');
+    return t ? cleanToken(t) : null;
+  });
+
+  const [clientUser, setClientUser] = useState<any | null>(() => {
+    const stored = localStorage.getItem('clientUser');
     try {
-      const stored = localStorage.getItem('el-molino-client-user');
       return stored ? JSON.parse(stored) : null;
     } catch {
       return null;
     }
   });
 
+  const isAdminAuthenticated = !!adminToken;
   const isClientAuthenticated = !!clientUser;
+
+  useEffect(() => {
+    if (adminToken) {
+      localStorage.setItem('adminToken', adminToken);
+    } else {
+      localStorage.removeItem('adminToken');
+    }
+  }, [adminToken]);
+
+  useEffect(() => {
+    if (clientUser) {
+      localStorage.setItem('clientUser', JSON.stringify(clientUser));
+    } else {
+      localStorage.removeItem('clientUser');
+    }
+  }, [clientUser]);
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_URL}/auth/login/admin`, {
+      const res = await fetch(`${API_BASE}/api/Auth/login/admin`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ user: username, password }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ User: username, Password: password }),
       });
 
-      if (response.ok) {
-        localStorage.setItem(STORAGE_KEY, 'true');
-        setIsAdminAuthenticated(true);
+      if (res.ok) {
+        const raw = await res.text();
+        const token = cleanToken(raw);
+        setAdminToken(token);
         return true;
       }
       return false;
@@ -63,68 +77,79 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    setIsAdminAuthenticated(false);
+    setAdminToken(null);
   };
 
   const loginClient = async (email: string, password: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_URL}/auth/client/login`, {
+      const res = await fetch(`${API_BASE}/api/Auth/login/user`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ Email: email, Password: password }),
       });
-      if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem('el-molino-client-user', JSON.stringify(data.user));
-        localStorage.setItem('el-molino-client-token', data.token);
-        setClientUser(data.user);
+
+      if (res.ok) {
+        const raw = await res.text();
+        const token = cleanToken(raw);
+        localStorage.setItem('userToken', token);
+        setClientUser({ email, token }); // Minimal user object
         return true;
       }
       return false;
-    } catch {
+    } catch (error) {
+      console.error('Client login error:', error);
       return false;
     }
   };
 
   const registerClient = async (userData: any): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_URL}/auth/client/register`, {
+      const res = await fetch(`${API_BASE}/api/clients/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
       });
-      if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem('el-molino-client-user', JSON.stringify(data.user));
-        localStorage.setItem('el-molino-client-token', data.token);
-        setClientUser(data.user);
+
+      if (res.ok) {
+        const user = await res.json();
+        setClientUser(user);
         return true;
       }
       return false;
-    } catch {
+    } catch (error) {
+      console.error('Client register error:', error);
       return false;
     }
   };
 
   const logoutClient = () => {
-    localStorage.removeItem('el-molino-client-user');
-    localStorage.removeItem('el-molino-client-token');
+    localStorage.removeItem('userToken');
     setClientUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      isAdminAuthenticated, login, logout,
-      isClientAuthenticated, clientUser, loginClient, registerClient, logoutClient
-    }}>
+    <AuthContext.Provider
+      value={{
+        isAdminAuthenticated,
+        isClientAuthenticated,
+        clientUser,
+        adminToken,
+        login,
+        logout,
+        loginClient,
+        registerClient,
+        logoutClient,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 }

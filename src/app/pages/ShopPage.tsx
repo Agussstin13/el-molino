@@ -1,56 +1,94 @@
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { HeroSection } from '../components/HeroSection';
-import { CategoryGrid } from '../components/CategoryGrid';
 import { ProductSection } from '../components/ProductSection';
-import { Cart } from '../components/Cart';
-import { Checkout } from '../components/Checkout';
 import { Footer } from '../components/Footer';
-import { useState, useEffect } from 'react';
+import { Cart } from '../components/Cart';
 import type { Product } from '../../lib/types';
-import { API_BASE } from '../../lib/config';
-import logo from "../../imports/image.png"
+
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 export function ShopPage() {
+  const [searchParams] = useSearchParams();
+  const categoryId = searchParams.get('categoria');
   const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/products`)
-      .then(res => res.json())
-      .then(data => {
-        const mappedProducts = data.map((p: any) => ({
-          id: p.id.toString(),
-          name: p.nombre,
-          price: p.precio,
-          stock: p.stock,
-          category: p.descripcion,
-          image: p.imagenNombre ? `${API_BASE}/images/${p.imagenNombre}` : '',
-        }));
-        setProducts(mappedProducts);
-      })
-      .catch(err => console.error("Error fetching products:", err));
-  }, []);
+    setLoading(true);
 
-  const featuredProducts = products.slice(0, 5);
-  const dailyDeals = products.slice(5, 10);
+    fetch(`${API_BASE}/api/products`)
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        if (!Array.isArray(data)) {
+          console.error("Respuesta inesperada:", data);
+          setProducts([]);
+          return;
+        }
+
+        const mapped = data.map((p: any) => ({
+          id: p.id.toString(),
+          name: p.name ?? p.nombre,
+          price: p.price ?? p.precio,
+          stock: p.stock,
+          category: p.description ?? p.descripcion,
+          image: p.imageUrl ? `${API_BASE}/images/${p.imageUrl}` : "",
+          categoryId: p.categoryId ?? p.categoriaId,
+          discount: p.discount ?? p.descuento ?? 0,
+          wholesalePrice: p.wholesalePrice
+            ? { quantity: p.wholesaleMinimumAmount ?? 10, price: p.wholesalePrice }
+            : p.precioMayorista
+            ? { quantity: p.montoMinimoMayorista ?? 10, price: p.precioMayorista }
+            : undefined,
+        }));
+
+        if (categoryId) {
+          setProducts(mapped.filter((p: any) => p.categoryId?.toString() === categoryId));
+        } else {
+          setProducts(mapped);
+        }
+      })
+      .catch(err => console.error("Error fetching products:", err))
+      .finally(() => setLoading(false));
+  }, [categoryId]);
+
+  const offers = products.filter(p => p.discount && p.discount > 0);
+  const others = products.filter(p => !p.discount || p.discount <= 0);
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
       <main>
-        <HeroSection />
-        <CategoryGrid />
-        <ProductSection title="Productos Destacados" products={featuredProducts} id="productos-destacados" />
-
-        <ProductSection
-          title="Ofertas del Día 🔥"
-          products={dailyDeals}
-          highlightDeals
-        />
+        {!categoryId && <HeroSection />}
+        
+        {categoryId ? (
+          <ProductSection 
+            title="Productos Seleccionados" 
+            products={products} 
+            id="productos-lista"
+          />
+        ) : (
+          <>
+            <ProductSection 
+              title="Ofertas del Día" 
+              products={offers} 
+              highlightDeals
+              id="ofertas"
+            />
+            <ProductSection 
+              title="Productos Destacados" 
+              products={others} 
+              id="productos-lista"
+            />
+          </>
+        )}
       </main>
-
       <Footer />
-
       <Cart />
-      <Checkout />
     </div>
   );
 }
