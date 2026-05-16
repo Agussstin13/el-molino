@@ -6,9 +6,10 @@ interface ProductSectionProps {
   products: Product[];
   highlightDeals?: boolean;
   id?: string;
+  viewMode?: 'list' | 'grid-sm' | 'grid-lg';
 }
 
-export function ProductSection({ title, products, highlightDeals, id }: ProductSectionProps) {
+export function ProductSection({ title, products, highlightDeals, id, viewMode }: ProductSectionProps) {
 
   return (
     <section className="py-8" id={id}>
@@ -30,10 +31,16 @@ export function ProductSection({ title, products, highlightDeals, id }: ProductS
           </div>
         ) : (
           <div
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+            className={`grid gap-6 ${
+              viewMode === 'list' 
+                ? 'grid-cols-1' 
+                : viewMode === 'grid-lg'
+                ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+                : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+            }`}
           >
             {products.map(product => (
-              <ProductCard key={product.id} product={product} />
+              <ProductCard key={product.id} product={product} viewMode={viewMode} />
             ))}
           </div>
         )}

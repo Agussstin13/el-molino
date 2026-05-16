@@ -199,9 +199,9 @@ export function ProductDetailPage() {
   /* ── Loading skeleton ── */
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen flex flex-col bg-background">
         <Header />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="h-4 w-64 bg-secondary rounded animate-pulse mb-6" />
           <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
             <div className="grid md:grid-cols-2">
@@ -215,6 +215,7 @@ export function ProductDetailPage() {
             </div>
           </div>
         </main>
+        <Footer />
       </div>
     );
   }
@@ -294,10 +295,10 @@ export function ProductDetailPage() {
 
   /* ── Render ── */
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen flex flex-col bg-background">
       <Header />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1.5 text-xs text-muted-foreground mb-6 flex-wrap">
           <Link to="/" className="hover:text-primary transition-colors">
