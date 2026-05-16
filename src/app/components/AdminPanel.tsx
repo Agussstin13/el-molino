@@ -103,14 +103,16 @@ export function AdminPanel() {
     category: "",
     image: "",
   });
-  const [isUploading, setIsUploading] = useState(false);
+  const [productImageFile, setProductImageFile] = useState<File | null>(null);
+  const [productImagePreview, setProductImagePreview] = useState<string>("");
 
   // Carousel state
   const [carouselImages, setCarouselImages] = useState<CarouselImage[]>([]);
   const [showCarouselForm, setShowCarouselForm] = useState(false);
   const [carouselForm, setCarouselForm] =
     useState<Omit<CarouselImage, "id">>(EMPTY_CAROUSEL);
-  const [isUploadingCarousel, setIsUploadingCarousel] = useState(false);
+  const [carouselImageFile, setCarouselImageFile] = useState<File | null>(null);
+  const [carouselImagePreview, setCarouselImagePreview] = useState<string>("");
   const [editingCarouselId, setEditingCarouselId] = useState<number | null>(
     null,
   );
@@ -121,7 +123,9 @@ export function AdminPanel() {
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [categoryForm, setCategoryForm] =
     useState<Omit<Category, "id">>(EMPTY_CATEGORY);
-  const [isUploadingCategory, setIsUploadingCategory] = useState(false);
+  const [categoryImageFile, setCategoryImageFile] = useState<File | null>(null);
+  const [categoryImagePreview, setCategoryImagePreview] = useState<string>("");
+  const [isSaving, setIsSaving] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(
     null,
   );
@@ -150,7 +154,41 @@ export function AdminPanel() {
 
         if (carouselRes.ok) {
           const data = await carouselRes.json();
-          setCarouselImages(data);
+          // Ordenar por displayOrder (los que tienen 0 van al final) y renumerar
+          // siempre de forma secuencial 1, 2, 3... para evitar duplicados
+          const sorted = [...data].sort(
+            (a: any, b: any) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0),
+          );
+          const mapped: import("../../lib/types").CarouselImage[] = sorted.map(
+            (item: any, i: number) => ({
+              id: item.id,
+              imagenNombre: item.imageUrl ?? "",
+              titulo: item.title ?? "",
+              subtitulo: item.description ?? "",
+              orden: i + 1, // Siempre secuencial para evitar duplicados
+              activo: item.active ?? true,
+            }),
+          );
+          setCarouselImages(mapped);
+
+          // Sincronizar el orden corregido con el backend (arregla datos viejos en la DB)
+          if (mapped.length > 0) {
+            const backendPayload = mapped.map((img) => ({
+              id: img.id,
+              imageUrl: img.imagenNombre,
+              title: img.titulo ?? null,
+              description: img.subtitulo ?? null,
+              displayOrder: img.orden,
+              active: img.activo,
+              redirectUrl: null,
+              creationDate: new Date().toISOString(),
+            }));
+            fetch(`${API_BASE}/api/carousel/reorder`, {
+              method: "PATCH",
+              headers: { ...authHeader, "Content-Type": "application/json" },
+              body: JSON.stringify(backendPayload),
+            });
+          }
         }
 
         // Categories
@@ -161,7 +199,21 @@ export function AdminPanel() {
 
         if (categoriesRes.ok) {
           const data = await categoriesRes.json();
-          setCategories(Array.isArray(data) ? data : []);
+          if (Array.isArray(data)) {
+            const sorted = [...data].sort(
+              (a: any, b: any) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0),
+            );
+            const mapped = sorted.map((c: any, i: number) => ({
+              id: c.id,
+              nombre: c.name ?? "",
+              imagenNombre: c.imagePath ?? "",
+              orden: c.displayOrder > 0 ? c.displayOrder : i + 1,
+              activo: c.active ?? true,
+            }));
+            setCategories(mapped);
+          } else {
+            setCategories([]);
+          }
         } else {
           setCategories([]);
         }
@@ -179,8 +231,8 @@ export function AdminPanel() {
             name: p.name ?? p.nombre,
             price: p.price ?? p.precio,
             stock: p.stock,
-            category: p.description ?? p.descripcion,
-            image: p.imageUrl ? `${API_BASE}/images/${p.imageUrl}` : "",
+            category: p.categoryName ?? p.description ?? "",
+            image: imgUrl(p.imagePath ?? p.imageUrl ?? ""),
             wholesalePrice: p.wholesalePrice
               ? {
                   quantity: p.wholesaleMinimumAmount ?? 10,
@@ -241,69 +293,44 @@ export function AdminPanel() {
     return headers;
   };
 
+  // Construye la URL final de una imagen: el backend puede devolver
+  // paths absolutos (/images/carousel/x.jpg) o relativos (carousel/x.jpg)
+  const imgUrl = (path: string) =>
+    path.startsWith("/") ? `${API_BASE}${path}` : `${API_BASE}/images/${path}`;
+
   const handleLogout = () => {
     logout();
     navigate("/admin/login");
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    setIsUploading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      const res = await fetch(`${API_BASE}/api/upload`, {
-        method: "POST",
-        body: formData,
-        headers: getAuthHeaders(null),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setProductForm((prev) => ({
-          ...prev,
-          image: `${API_BASE}/images/${data.fileName}`,
-        }));
-      } else {
-        showError(
-          "¡Ups!",
-          "No pudimos subir la imagen. Probá con otra o intentá más tarde.",
-        );
-      }
-    } catch (error) {
-      console.error(error);
-      showError(
-        "Problema de conexión",
-        "Parece que hay un problema con internet y no pudimos subir la imagen.",
-      );
-    } finally {
-      setIsUploading(false);
-    }
+    setProductImageFile(file);
+    setProductImagePreview(URL.createObjectURL(file));
   };
 
   const handleSaveProduct = async () => {
     const selectedCategory = categories.find(
       (c) => c.nombre === productForm.category,
     );
-    const backendProduct = {
-      Name: productForm.name,
-      Price: productForm.price,
-      Stock: productForm.stock,
-      Description: productForm.name, // O una descripción real si la tienes
-      ImagePath: productForm.image ? productForm.image.split("/").pop() : null, // Solo el nombre del archivo
-      WholesalePrice: (productForm.price ?? 0) * 0.8,
-      MinimumWholesaleAmount: 10,
-      CategoryId: selectedCategory?.id ?? 0,
-      Active: true,
-    };
+
+    const formData = new FormData();
+    formData.append("Name", productForm.name ?? "");
+    formData.append("Description", productForm.name ?? "");
+    formData.append("Price", String(productForm.price ?? 0));
+    formData.append("Stock", String(productForm.stock ?? 0));
+    formData.append("WholesalePrice", String((productForm.price ?? 0) * 0.8));
+    formData.append("MinimumWholesaleAmount", "10");
+    formData.append("CategoryId", String(selectedCategory?.id ?? 0));
+    formData.append("Active", "true");
+    if (productImageFile) formData.append("Image", productImageFile);
 
     try {
       const res = await fetch(`${API_BASE}/api/products`, {
         method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify(backendProduct),
+        headers: getAuthHeaders(null),
+        body: formData,
       });
 
       if (res.ok) {
@@ -313,10 +340,8 @@ export function AdminPanel() {
           name: created.name ?? created.nombre,
           price: created.price ?? created.precio,
           stock: created.stock,
-          category: created.description ?? created.descripcion,
-          image: created.imageUrl
-            ? `${API_BASE}/images/${created.imageUrl}`
-            : "",
+          category: created.categoryName ?? created.description ?? "",
+          image: imgUrl(created.imagePath ?? created.imageUrl ?? ""),
           wholesalePrice: created.wholesalePrice
             ? {
                 quantity: created.wholesaleMinimumAmount ?? 10,
@@ -334,6 +359,8 @@ export function AdminPanel() {
           category: "",
           image: "",
         });
+        setProductImageFile(null);
+        setProductImagePreview("");
         showSuccess("¡Listo!", "El producto se guardó correctamente.");
       } else {
         const err = await res.json().catch(() => ({}));
@@ -466,57 +493,108 @@ export function AdminPanel() {
   };
 
   // Carousel handlers
-  const handleCarouselImageUpload = async (
+  const handleCarouselImageSelect = (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setIsUploadingCarousel(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    try {
-      const res = await fetch(`${API_BASE}/api/upload`, {
-        method: "POST",
-        body: formData,
-        headers: getAuthHeaders(null),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setCarouselForm((prev) => ({ ...prev, imagenNombre: data.fileName }));
-      } else {
-        showError("¡Ups!", "No pudimos subir la imagen.");
-      }
-    } catch {
-      showError("Problema de conexión", "No se pudo subir la imagen.");
-    } finally {
-      setIsUploadingCarousel(false);
-    }
+    setCarouselImageFile(file);
+    setCarouselImagePreview(URL.createObjectURL(file));
   };
+
+  // Convierte el tipo frontend CarouselImage al formato CarouselItem que espera el backend
+  const toCarouselBackend = (items: CarouselImage[]) =>
+    items.map((img) => ({
+      id: img.id,
+      imageUrl: img.imagenNombre,
+      title: img.titulo ?? null,
+      description: img.subtitulo ?? null,
+      displayOrder: img.orden,
+      active: img.activo,
+      redirectUrl: null,
+      creationDate: new Date().toISOString(),
+    }));
 
   const handleSaveCarouselImage = async () => {
     try {
-      const url = editingCarouselId
-        ? `${API_BASE}/api/carousel/${editingCarouselId}`
-        : `${API_BASE}/api/carousel`;
+      // POST (crear): FormData con imagen incluida
+      // PUT (editar): JSON [FromBody] según el backend
+      let res: Response;
 
-      const method = editingCarouselId ? "PUT" : "POST";
-
-      const res = await fetch(url, {
-        method,
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          Id: editingCarouselId || 0,
-          Titulo: carouselForm.titulo || null,
-          Subtitulo: carouselForm.subtitulo || null,
-          ImagenNombre: carouselForm.imagenNombre,
-          Orden: carouselForm.orden,
-          Activo: carouselForm.activo,
-        }),
-      });
+      if (editingCarouselId) {
+        // Edición — ahora usa [FromForm] UpdateCarouselItemRequest con imagen opcional
+        const formData = new FormData();
+        formData.append("Id", String(editingCarouselId));
+        formData.append("Title", carouselForm.titulo || "");
+        formData.append("Description", carouselForm.subtitulo || "");
+        formData.append("ExistingImageUrl", carouselForm.imagenNombre);
+        formData.append("DisplayOrder", String(carouselForm.orden));
+        formData.append("Active", String(carouselForm.activo));
+        if (carouselImageFile) formData.append("Image", carouselImageFile);
+        res = await fetch(`${API_BASE}/api/carousel/${editingCarouselId}`, {
+          method: "PUT",
+          headers: getAuthHeaders(null),
+          body: formData,
+        });
+      } else {
+        // Creación — el backend usa [FromForm] CreateCarouselItemRequest
+        if (!carouselImageFile) {
+          showError("Imagen requerida", "Por favor seleccioná una imagen.");
+          return;
+        }
+        const formData = new FormData();
+        formData.append("Image", carouselImageFile);
+        formData.append("Title", carouselForm.titulo || "");
+        formData.append("Description", carouselForm.subtitulo || "");
+        formData.append("DisplayOrder", String(carouselForm.orden));
+        formData.append("Active", String(carouselForm.activo));
+        res = await fetch(`${API_BASE}/api/carousel`, {
+          method: "POST",
+          headers: getAuthHeaders(null),
+          body: formData,
+        });
+      }
       if (res.ok) {
-        const saved: CarouselImage = await res.json();
+        // Para POST devuelve el item creado; para PUT devuelve NoContent
+        let saved: CarouselImage;
+        if (editingCarouselId) {
+          if (carouselImageFile) {
+            // Hubo cambio de imagen — re-fetch para obtener la nueva URL del servidor
+            const updated = await fetch(
+              `${API_BASE}/api/carousel/${editingCarouselId}`,
+              { headers: getAuthHeaders(null) },
+            ).then((r) => r.json());
+            saved = {
+              id: updated.id,
+              imagenNombre: updated.imageUrl ?? "",
+              titulo: updated.title ?? "",
+              subtitulo: updated.description ?? "",
+              orden: updated.displayOrder,
+              activo: updated.active,
+            };
+          } else {
+            // Sin nueva imagen — construimos el estado localmente
+            saved = {
+              id: editingCarouselId,
+              imagenNombre: carouselForm.imagenNombre,
+              titulo: carouselForm.titulo,
+              subtitulo: carouselForm.subtitulo,
+              orden: carouselForm.orden,
+              activo: carouselForm.activo,
+            };
+          }
+        } else {
+          const json = await res.json();
+          saved = {
+            id: json.id,
+            imagenNombre: json.imageUrl ?? "",
+            titulo: json.title ?? "",
+            subtitulo: json.description ?? "",
+            orden: json.displayOrder,
+            activo: json.active,
+          };
+        }
 
-        // Actualizamos la lista y re-normalizamos
         let updatedCarousel: CarouselImage[];
         if (editingCarouselId) {
           updatedCarousel = carouselImages.map((img) =>
@@ -532,7 +610,6 @@ export function AdminPanel() {
 
         setCarouselImages(normalized);
 
-        // Sincronizar si hubo cambios en otros
         if (
           !editingCarouselId ||
           normalized.some((img, i) => updatedCarousel[i]?.orden !== img.orden)
@@ -540,11 +617,13 @@ export function AdminPanel() {
           fetch(`${API_BASE}/api/carousel/reorder`, {
             method: "PATCH",
             headers: getAuthHeaders(),
-            body: JSON.stringify(normalized),
+            body: JSON.stringify(toCarouselBackend(normalized)),
           });
         }
 
         setCarouselForm(EMPTY_CAROUSEL);
+        setCarouselImageFile(null);
+        setCarouselImagePreview("");
         setShowCarouselForm(false);
         setEditingCarouselId(null);
         showSuccess(
@@ -573,7 +652,7 @@ export function AdminPanel() {
       const res = await fetch(`${API_BASE}/api/carousel/reorder`, {
         method: "PATCH",
         headers: getAuthHeaders(),
-        body: JSON.stringify(updatedWithOrder),
+        body: JSON.stringify(toCarouselBackend(updatedWithOrder)),
       });
       if (!res.ok) {
         showError("Error", "No se pudo guardar el nuevo orden del carousel.");
@@ -591,6 +670,8 @@ export function AdminPanel() {
       orden: img.orden,
       activo: img.activo,
     });
+    setCarouselImageFile(null);
+    setCarouselImagePreview("");
     setEditingCarouselId(img.id);
     setShowCarouselForm(true);
 
@@ -623,7 +704,7 @@ export function AdminPanel() {
               fetch(`${API_BASE}/api/carousel/reorder`, {
                 method: "PATCH",
                 headers: getAuthHeaders(),
-                body: JSON.stringify(normalized),
+                body: JSON.stringify(toCarouselBackend(normalized)),
               });
 
               return normalized;
@@ -644,11 +725,20 @@ export function AdminPanel() {
   };
 
   const handleToggleCarousel = async (id: number, current: boolean) => {
+    const item = carouselImages.find((img) => img.id === id);
+    if (!item) return;
     try {
-      const res = await fetch(`${API_BASE}/api/carousel/${id}/toggle`, {
-        method: "PATCH",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ activo: !current }),
+      const formData = new FormData();
+      formData.append("Id", String(id));
+      formData.append("Title", item.titulo || "");
+      formData.append("Description", item.subtitulo || "");
+      formData.append("ExistingImageUrl", item.imagenNombre);
+      formData.append("DisplayOrder", String(item.orden));
+      formData.append("Active", String(!current));
+      const res = await fetch(`${API_BASE}/api/carousel/${id}`, {
+        method: "PUT",
+        headers: getAuthHeaders(null),
+        body: formData,
       });
       if (res.ok) {
         setCarouselImages((prev) =>
@@ -656,44 +746,26 @@ export function AdminPanel() {
             img.id === id ? { ...img, activo: !current } : img,
           ),
         );
+      } else {
+        showError("Error", "No se pudo cambiar el estado de la imagen.");
       }
     } catch {
-      console.error("Error al cambiar estado");
+      showError("Error de red", "No se pudo conectar con el servidor.");
     }
   };
 
   // Category handlers
-  const handleCategoryImageUpload = async (
+  const handleCategoryImageSelect = (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setIsUploadingCategory(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    try {
-      const res = await fetch(`${API_BASE}/api/upload`, {
-        method: "POST",
-        body: formData,
-        headers: getAuthHeaders(null),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setCategoryForm((prev) => ({ ...prev, imagenNombre: data.fileName }));
-      } else {
-        showError("¡Ups!", "No pudimos subir la imagen de la categoría.");
-      }
-    } catch {
-      showError(
-        "Problema de conexión",
-        "No se pudo conectar para subir la imagen.",
-      );
-    } finally {
-      setIsUploadingCategory(false);
-    }
+    setCategoryImageFile(file);
+    setCategoryImagePreview(URL.createObjectURL(file));
   };
 
   const handleSaveCategory = async () => {
+    setIsSaving(true);
     try {
       const url = editingCategoryId
         ? `${API_BASE}/api/categories/${editingCategoryId}`
@@ -701,16 +773,59 @@ export function AdminPanel() {
 
       const method = editingCategoryId ? "PUT" : "POST";
 
+      const formData = new FormData();
+      formData.append("Name", categoryForm.nombre);
+      formData.append("Active", String(categoryForm.activo));
+      formData.append("DisplayOrder", String(categoryForm.orden));
+      if (categoryImageFile) formData.append("Image", categoryImageFile);
+      // En edición, pasar la URL actual para que el servicio pueda borrar la vieja si se sube una nueva
+      if (editingCategoryId) {
+        formData.append("ExistingImagePath", categoryForm.imagenNombre);
+      }
+
       const res = await fetch(url, {
         method,
-        headers: getAuthHeaders(),
-        body: JSON.stringify(categoryForm),
+        headers: getAuthHeaders(null),
+        body: formData,
       });
 
       if (res.ok) {
-        const saved: Category = await res.json();
+        let saved: Category;
 
-        // Actualizamos la lista y re-normalizamos el orden de todas
+        if (editingCategoryId && categoryImageFile) {
+          // Hubo nueva imagen — re-fetch para obtener la nueva URL
+          const updated = await fetch(
+            `${API_BASE}/api/categories/${editingCategoryId}`,
+            { headers: getAuthHeaders(null) },
+          ).then((r) => r.json());
+          saved = {
+            id: updated.id,
+            nombre: updated.name ?? "",
+            imagenNombre: updated.imagePath ?? "",
+            orden: updated.displayOrder,
+            activo: updated.active,
+          };
+        } else if (editingCategoryId) {
+          // Sin nueva imagen — construir desde el estado local
+          saved = {
+            id: editingCategoryId,
+            nombre: categoryForm.nombre,
+            imagenNombre: categoryForm.imagenNombre,
+            orden: categoryForm.orden,
+            activo: categoryForm.activo,
+          };
+        } else {
+          // POST — el backend devuelve la categoría creada
+          const json = await res.json();
+          saved = {
+            id: json.id,
+            nombre: json.name ?? "",
+            imagenNombre: json.imagePath ?? "",
+            orden: json.displayOrder,
+            activo: json.active,
+          };
+        }
+
         let updatedCategories: Category[];
         if (editingCategoryId) {
           updatedCategories = categories.map((c) =>
@@ -720,14 +835,12 @@ export function AdminPanel() {
           updatedCategories = [...categories, saved];
         }
 
-        // Ordenar por el orden actual y re-asignar 1, 2, 3... para evitar saltos
         const normalized = updatedCategories
           .sort((a, b) => a.orden - b.orden)
           .map((c, i) => ({ ...c, orden: i + 1 }));
 
         setCategories(normalized);
 
-        // Si hubo cambios en los números de orden de otros, los sincronizamos
         if (
           !editingCategoryId ||
           normalized.some((c, i) => updatedCategories[i]?.orden !== c.orden)
@@ -735,11 +848,15 @@ export function AdminPanel() {
           fetch(`${API_BASE}/api/categories/reorder`, {
             method: "PATCH",
             headers: getAuthHeaders(),
-            body: JSON.stringify(normalized),
+            body: JSON.stringify(
+              normalized.map((c) => ({ id: c.id, displayOrder: c.orden })),
+            ),
           });
         }
 
         setCategoryForm(EMPTY_CATEGORY);
+        setCategoryImageFile(null);
+        setCategoryImagePreview("");
         setShowCategoryForm(false);
         setEditingCategoryId(null);
         showSuccess("¡Listo!", "La categoría se guardó correctamente.");
@@ -751,6 +868,8 @@ export function AdminPanel() {
       }
     } catch {
       showError("Problema de red", "No pudimos conectar con el servidor.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -761,9 +880,10 @@ export function AdminPanel() {
       orden: cat.orden,
       activo: cat.activo,
     });
+    setCategoryImageFile(null);
+    setCategoryImagePreview("");
     setEditingCategoryId(cat.id);
     setShowCategoryForm(true);
-    // Scroll al inicio del panel de contenido
     setTimeout(() => {
       document
         .getElementById("admin-main-content")
@@ -793,7 +913,9 @@ export function AdminPanel() {
               fetch(`${API_BASE}/api/categories/reorder`, {
                 method: "PATCH",
                 headers: getAuthHeaders(),
-                body: JSON.stringify(normalized),
+                body: JSON.stringify(
+                  normalized.map((c) => ({ id: c.id, displayOrder: c.orden })),
+                ),
               });
 
               return normalized;
@@ -816,13 +938,9 @@ export function AdminPanel() {
 
   const handleToggleCategory = async (cat: Category) => {
     try {
-      const res = await fetch(`${API_BASE}/api/categories/${cat.id}`, {
-        method: "PUT",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          ...cat,
-          activo: !cat.activo,
-        }),
+      const res = await fetch(`${API_BASE}/api/categories/${cat.id}/toggle`, {
+        method: "PATCH",
+        headers: getAuthHeaders(null),
       });
       if (res.ok) {
         setCategories((prev) =>
@@ -830,9 +948,11 @@ export function AdminPanel() {
             c.id === cat.id ? { ...c, activo: !cat.activo } : c,
           ),
         );
+      } else {
+        showError("Error", "No se pudo cambiar el estado de la categoría.");
       }
     } catch {
-      console.error("Error al cambiar estado");
+      showError("Error de red", "No se pudo conectar con el servidor.");
     }
   };
 
@@ -848,7 +968,9 @@ export function AdminPanel() {
       const res = await fetch(`${API_BASE}/api/categories/reorder`, {
         method: "PATCH",
         headers: getAuthHeaders(),
-        body: JSON.stringify(updatedWithOrder),
+        body: JSON.stringify(
+          updatedWithOrder.map((c) => ({ id: c.id, displayOrder: c.orden })),
+        ),
       });
       if (!res.ok) {
         showError("Error", "No se pudo guardar el nuevo orden en el servidor.");
@@ -1028,9 +1150,9 @@ export function AdminPanel() {
                     <div className="col-span-2">
                       <label className="block text-sm mb-1.5">Imagen *</label>
                       <div className="flex items-center gap-4">
-                        {productForm.image && (
+                        {productImagePreview && (
                           <img
-                            src={productForm.image}
+                            src={productImagePreview}
                             alt="Preview"
                             className="w-16 h-16 object-cover rounded-lg border border-border"
                           />
@@ -1038,14 +1160,9 @@ export function AdminPanel() {
                         <input
                           type="file"
                           accept="image/*"
-                          onChange={handleImageUpload}
+                          onChange={handleImageSelect}
                           className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-secondary file:text-foreground hover:file:bg-secondary/80 cursor-pointer"
                         />
-                        {isUploading && (
-                          <span className="text-sm text-primary font-medium animate-pulse">
-                            Subiendo...
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -1061,8 +1178,7 @@ export function AdminPanel() {
                       disabled={
                         !productForm.name ||
                         !productForm.price ||
-                        !productForm.image ||
-                        isUploading
+                        !productImageFile
                       }
                       className="px-6 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-lg transition-colors text-sm"
                     >
@@ -1579,9 +1695,13 @@ export function AdminPanel() {
                     <div className="col-span-2">
                       <label className="block text-sm mb-1.5">Imagen *</label>
                       <div className="flex items-center gap-4">
-                        {carouselForm.imagenNombre && (
+                        {(carouselImagePreview ||
+                          (editingCarouselId && carouselForm.imagenNombre)) && (
                           <img
-                            src={`${API_BASE}/images/${carouselForm.imagenNombre}`}
+                            src={
+                              carouselImagePreview ||
+                              imgUrl(carouselForm.imagenNombre)
+                            }
                             alt="Preview"
                             className="w-24 h-16 object-cover rounded-lg border border-border"
                           />
@@ -1589,14 +1709,9 @@ export function AdminPanel() {
                         <input
                           type="file"
                           accept="image/*"
-                          onChange={handleCarouselImageUpload}
+                          onChange={handleCarouselImageSelect}
                           className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-secondary file:text-foreground hover:file:bg-secondary/80 cursor-pointer"
                         />
-                        {isUploadingCarousel && (
-                          <span className="text-sm text-primary font-medium animate-pulse">
-                            Subiendo...
-                          </span>
-                        )}
                       </div>
                     </div>
                     <div className="col-span-2">
@@ -1658,9 +1773,7 @@ export function AdminPanel() {
                     <button
                       id="save-carousel-btn"
                       onClick={handleSaveCarouselImage}
-                      disabled={
-                        !carouselForm.imagenNombre || isUploadingCarousel
-                      }
+                      disabled={!editingCarouselId && !carouselImageFile}
                       className="px-6 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-lg transition-colors text-sm"
                     >
                       {editingCarouselId
@@ -1714,7 +1827,7 @@ export function AdminPanel() {
                         <div className="relative w-full md:w-64 aspect-[21/9] md:aspect-video bg-secondary overflow-hidden flex-shrink-0">
                           {img.imagenNombre ? (
                             <img
-                              src={`${API_BASE}/images/${img.imagenNombre}`}
+                              src={imgUrl(img.imagenNombre)}
                               alt={img.titulo || "Carousel"}
                               className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                             />
@@ -1855,20 +1968,26 @@ export function AdminPanel() {
                         Imagen de la categoría
                       </label>
                       <div className="flex items-start gap-6 p-4 bg-secondary/20 rounded-xl border border-border/50">
-                        {categoryForm.imagenNombre ? (
+                        {categoryImagePreview ||
+                        (editingCategoryId && categoryForm.imagenNombre) ? (
                           <div className="relative group">
                             <img
-                              src={`${API_BASE}/images/${categoryForm.imagenNombre}`}
+                              src={
+                                categoryImagePreview ||
+                                imgUrl(categoryForm.imagenNombre)
+                              }
                               alt="Preview"
                               className="w-32 h-32 object-cover rounded-lg border border-border shadow-md"
                             />
                             <button
-                              onClick={() =>
+                              onClick={() => {
                                 setCategoryForm({
                                   ...categoryForm,
                                   imagenNombre: "",
-                                })
-                              }
+                                });
+                                setCategoryImageFile(null);
+                                setCategoryImagePreview("");
+                              }}
                               className="absolute -top-2 -right-2 bg-destructive text-white p-1 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
                             >
                               <X className="w-3 h-3" />
@@ -1891,14 +2010,12 @@ export function AdminPanel() {
                             <input
                               type="file"
                               accept="image/*"
-                              onChange={handleCategoryImageUpload}
+                              onChange={handleCategoryImageSelect}
                               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                             />
                             <button className="flex items-center gap-2 px-4 py-2 bg-background border border-border rounded-lg text-sm hover:bg-secondary transition-colors w-full md:w-auto">
                               <ImageIcon className="w-4 h-4" />
-                              {isUploadingCategory
-                                ? "Subiendo..."
-                                : "Seleccionar imagen"}
+                              Seleccionar imagen
                             </button>
                           </div>
                         </div>
@@ -1918,10 +2035,14 @@ export function AdminPanel() {
                     </button>
                     <button
                       onClick={handleSaveCategory}
-                      disabled={!categoryForm.nombre || isUploadingCategory}
+                      disabled={!categoryForm.nombre || isSaving}
                       className="px-8 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-all shadow-md shadow-primary/20"
                     >
-                      {editingCategoryId ? "Actualizar" : "Crear Categoría"}
+                      {isSaving
+                        ? "Guardando..."
+                        : editingCategoryId
+                          ? "Actualizar"
+                          : "Crear Categoría"}
                     </button>
                   </div>
                 </div>
@@ -1971,7 +2092,7 @@ export function AdminPanel() {
                         <div className="relative w-full md:w-48 aspect-[16/10] md:aspect-square bg-secondary overflow-hidden flex-shrink-0">
                           {cat.imagenNombre ? (
                             <img
-                              src={`${API_BASE}/images/${cat.imagenNombre}`}
+                              src={imgUrl(cat.imagenNombre)}
                               alt={cat.nombre}
                               className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                             />

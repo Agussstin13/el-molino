@@ -5,19 +5,29 @@ const API_BASE = import.meta.env.VITE_API_BASE;
 
 interface Category {
   id: number;
-  nombre: string;
-  imagenNombre: string | null;
+  name: string;
+  imagePath: string | null; // el backend devuelve imagePath con /images/... incluido
+  active: boolean;
+  displayOrder: number;
 }
+
+// imagePath viene como "/images/categories/filename.jpg" del backend
+const imgUrl = (path: string | null) =>
+  path ? (path.startsWith('/') ? `${API_BASE}${path}` : `${API_BASE}/images/${path}`) : '';
 
 export function CategoryGrid() {
   const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/categories/all`)
+    fetch(`${API_BASE}/api/categories`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          setCategories(data.filter((c: any) => c.activo));
+          setCategories(
+            data
+              .filter((c: Category) => c.active)
+              .sort((a: Category, b: Category) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
+          );
         }
       })
       .catch(err => console.error("Error fetching categories:", err));
@@ -39,10 +49,10 @@ export function CategoryGrid() {
               className="group flex flex-col items-center gap-3"
             >
               <div className="w-full aspect-square rounded-2xl overflow-hidden border-2 border-border group-hover:border-primary transition-colors shadow-sm">
-                {category.imagenNombre ? (
+                {category.imagePath ? (
                   <img
-                    src={`${API_BASE}/images/${category.imagenNombre}`}
-                    alt={category.nombre}
+                    src={imgUrl(category.imagePath)}
+                    alt={category.name}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                   />
                 ) : (
@@ -52,7 +62,7 @@ export function CategoryGrid() {
                 )}
               </div>
               <span className="text-sm font-medium text-center group-hover:text-primary transition-colors">
-                {category.nombre}
+                {category.name}
               </span>
             </Link>
           ))}

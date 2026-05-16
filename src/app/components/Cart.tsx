@@ -1,6 +1,6 @@
 import { X, Trash2, Plus, Minus, ShoppingBag } from 'lucide-react';
 import { useCart } from '../context/CartContext';
-import { formatARS, getEffectivePrice, FREE_SHIPPING_THRESHOLD, SHIPPING_COST } from '@/lib/price';
+import { formatARS, getEffectivePrice, FREE_SHIPPING_THRESHOLD, SHIPPING_COST } from '../../lib/price';
 
 export function Cart() {
   const {

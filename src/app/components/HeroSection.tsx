@@ -7,11 +7,11 @@ const API_BASE = import.meta.env.VITE_API_BASE;
 
 interface CarouselSlide {
   id: number;
-  imagenNombre: string;
-  titulo: string | null;
-  subtitulo: string | null;
-  orden: number;
-  activo: boolean;
+  imageUrl: string;       // el backend devuelve imageUrl, no imagenNombre
+  title: string | null;
+  description: string | null;
+  displayOrder: number;
+  active: boolean;
 }
 
 export function HeroSection() {
@@ -39,11 +39,10 @@ export function HeroSection() {
           setSlides(
             data.map((s) => ({
               id: s.id,
-              image: s.imagenNombre
-                ? `${API_BASE}/images/${s.imagenNombre}`
-                : "",
-              titulo: s.titulo ?? "",
-              subtitulo: s.subtitulo ?? "",
+              // imageUrl ya incluye /images/... así que se concatena directo al host
+              image: s.imageUrl ? `${API_BASE}${s.imageUrl}` : "",
+              titulo: s.title ?? "",
+              subtitulo: s.description ?? "",
             }))
           );
         }

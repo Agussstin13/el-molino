@@ -16,7 +16,7 @@ export function WhatsAppFloatingButton() {
 
   if (isAdminPage) return null;
 
-  const WA_NUMBER = '5491100000000'; // Actualizar con el número real
+  const WA_NUMBER = '5492236927799'; // +54 9 223 6927799
   const message = encodeURIComponent('Hola! Quisiera hacer una consulta.');
   const whatsappUrl = `https://wa.me/${WA_NUMBER}?text=${message}`;
 

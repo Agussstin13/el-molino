@@ -1,4 +1,4 @@
-import { Search, ShoppingCart, User, Menu, X, Home, Instagram, Facebook, Mail, Phone, ChevronRight } from "lucide-react";
+import { Search, ShoppingCart, User, Menu, X, Home, Instagram, Phone, ChevronRight } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { createPortal } from "react-dom";
@@ -10,7 +10,7 @@ const API_BASE = import.meta.env.VITE_API_BASE;
 
 interface Category {
   id: number;
-  nombre: string;
+  name: string;
 }
 
 export function Header() {
@@ -153,11 +153,11 @@ export function Header() {
                       {categories.map(cat => (
                         <Link 
                           key={cat.id} 
-                          to={`/?categoria=${cat.id}`}
+                          to={`/?categoria=${cat.id}#productos-lista`}
                           onClick={() => setIsMenuOpen(false)}
                           className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-primary/5 hover:text-primary transition-colors text-sm"
                         >
-                          {cat.nombre}
+                          {cat.name}
                           <ChevronRight className="w-4 h-4 opacity-50" />
                         </Link>
                       ))}
@@ -171,26 +171,17 @@ export function Header() {
               <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Contacto</p>
               
               <div className="space-y-3">
-                <a href="mailto:contacto@elmolino.com.ar" className="flex items-center gap-3 text-sm text-foreground hover:text-primary transition-colors">
+                <a href="https://instagram.com/elmolinomdp" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-sm text-foreground hover:text-primary transition-colors">
                   <div className="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center flex-shrink-0">
-                    <Mail className="w-4 h-4 text-primary" />
+                    <Instagram className="w-4 h-4 text-primary" />
                   </div>
-                  contacto@elmolino.com.ar
+                  @elmolinomdp
                 </a>
-                <a href="tel:+5491112345678" className="flex items-center gap-3 text-sm text-foreground hover:text-primary transition-colors">
+                <a href="https://wa.me/5492236927799" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-sm text-foreground hover:text-primary transition-colors">
                   <div className="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center flex-shrink-0">
                     <Phone className="w-4 h-4 text-primary" />
                   </div>
-                  +54 9 11 1234-5678
-                </a>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <a href="#" className="w-10 h-10 rounded-full bg-background border border-border flex items-center justify-center text-foreground hover:text-primary hover:border-primary transition-colors">
-                  <Instagram className="w-5 h-5" />
-                </a>
-                <a href="#" className="w-10 h-10 rounded-full bg-background border border-border flex items-center justify-center text-foreground hover:text-[#1877F2] hover:border-[#1877F2] transition-colors">
-                  <Facebook className="w-5 h-5" />
+                  +54 9 223 6927799
                 </a>
               </div>
             </div>

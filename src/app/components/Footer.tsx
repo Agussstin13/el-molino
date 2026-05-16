@@ -1,4 +1,4 @@
-import { MapPin, Phone, Mail, Instagram, Facebook, Send } from "lucide-react";
+import { MapPin, Phone, Instagram, Send } from "lucide-react";
 import React, { useState } from "react";
 import logo from "../../imports/image.png";
 
@@ -46,20 +46,7 @@ export function Footer() {
               Tradición y calidad artesanal en cada producto. Llevando los
               mejores sabores a tu mesa desde nuestros comienzos.
             </p>
-            <div className="flex gap-4">
-              <a
-                href="#"
-                className="w-10 h-10 rounded-full bg-background flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors shadow-sm border border-border/50"
-              >
-                <Instagram className="w-5 h-5" />
-              </a>
-              <a
-                href="#"
-                className="w-10 h-10 rounded-full bg-background flex items-center justify-center text-muted-foreground hover:text-[#1877F2] hover:bg-[#1877F2]/10 transition-colors shadow-sm border border-border/50"
-              >
-                <Facebook className="w-5 h-5" />
-              </a>
-            </div>
+
           </div>
 
           {/* Contact Info */}
@@ -80,12 +67,12 @@ export function Footer() {
                 </span>
               </li>
               <li className="flex items-center gap-3 text-muted-foreground text-sm group">
-                <Phone className="w-5 h-5 text-primary shrink-0 group-hover:scale-110 transition-transform" />
-                <span>+54 9 11 1234-5678</span>
+                <Instagram className="w-5 h-5 text-primary shrink-0 group-hover:scale-110 transition-transform" />
+                <a href="https://instagram.com/elmolinomdp" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">@elmolinomdp</a>
               </li>
               <li className="flex items-center gap-3 text-muted-foreground text-sm group">
-                <Mail className="w-5 h-5 text-primary shrink-0 group-hover:scale-110 transition-transform" />
-                <span>contacto@elmolino.com.ar</span>
+                <Phone className="w-5 h-5 text-primary shrink-0 group-hover:scale-110 transition-transform" />
+                <a href="https://wa.me/5492236927799" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">+54 9 223 6927799</a>
               </li>
             </ul>
           </div>

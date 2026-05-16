@@ -8,6 +8,8 @@ import { Cart } from '../components/Cart';
 import type { Product } from '../../lib/types';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
+const imgUrl = (path: string) =>
+  path ? (path.startsWith('/') ? `${API_BASE}${path}` : `${API_BASE}/images/${path}`) : '';
 
 export function ShopPage() {
   const [searchParams] = useSearchParams();
@@ -35,8 +37,8 @@ export function ShopPage() {
           name: p.name ?? p.nombre,
           price: p.price ?? p.precio,
           stock: p.stock,
-          category: p.description ?? p.descripcion,
-          image: p.imageUrl ? `${API_BASE}/images/${p.imageUrl}` : "",
+          category: p.categoryName ?? p.description ?? "",
+          image: imgUrl(p.imagePath ?? p.imageUrl ?? ''),
           categoryId: p.categoryId ?? p.categoriaId,
           discount: p.discount ?? p.descuento ?? 0,
           wholesalePrice: p.wholesalePrice
@@ -56,6 +58,21 @@ export function ShopPage() {
       .finally(() => setLoading(false));
   }, [categoryId]);
 
+  useEffect(() => {
+    if (!loading && window.location.hash) {
+      const id = window.location.hash.replace('#', '');
+      const el = document.getElementById(id);
+      if (el) {
+        setTimeout(() => {
+          const y = el.getBoundingClientRect().top + window.scrollY - 100; // Offset for fixed header
+          window.scrollTo({ top: y, behavior: 'smooth' });
+        }, 100);
+      }
+    } else if (!loading && !categoryId) {
+       window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [loading, categoryId]);
+
   const offers = products.filter(p => p.discount && p.discount > 0);
   const others = products.filter(p => !p.discount || p.discount <= 0);
 
@@ -67,7 +84,7 @@ export function ShopPage() {
         
         {categoryId ? (
           <ProductSection 
-            title="Productos Seleccionados" 
+            title={products.length > 0 && products[0].category ? products[0].category : "Productos"}
             products={products} 
             id="productos-lista"
           />

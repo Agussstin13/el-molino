@@ -13,6 +13,8 @@ import { Cart } from "../components/Cart";
 import { Checkout } from "../components/Checkout";
 import { Footer } from "../components/Footer";
 const API_BASE = import.meta.env.VITE_API_BASE;
+const imgUrl = (path: string) =>
+  path ? (path.startsWith('/') ? `${API_BASE}${path}` : `${API_BASE}/images/${path}`) : '';
 
 const RECENT_KEY = "el-molino-recently-viewed";
 
@@ -143,8 +145,8 @@ export function ProductDetailPage() {
           name: p.name ?? p.nombre,
           price: p.price ?? p.precio,
           stock: p.stock,
-          category: p.description ?? p.descripcion,
-          image: p.imageUrl ? `${API_BASE}/images/${p.imageUrl}` : "",
+          category: p.categoryName ?? p.description ?? "",
+          image: imgUrl(p.imagePath ?? p.imageUrl ?? ''),
           discount: p.discount ?? p.descuento ?? 0,
           wholesalePrice: p.wholesalePrice
             ? { quantity: p.wholesaleMinimumAmount ?? 10, price: p.wholesalePrice }
@@ -184,8 +186,8 @@ export function ProductDetailPage() {
               name: r.name ?? r.nombre,
               price: r.price ?? r.precio,
               stock: r.stock,
-              category: r.description ?? r.descripcion,
-              image: r.imageUrl ? `${API_BASE}/images/${r.imageUrl}` : "",
+              category: r.categoryName ?? r.description ?? "",
+              image: imgUrl(r.imagePath ?? r.imageUrl ?? ''),
             }))
             .slice(0, 4),
         );
