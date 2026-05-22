@@ -125,27 +125,31 @@ export function Checkout() {
   };
 
   const handleConfirm = async () => {
+    const userToken = localStorage.getItem('userToken');
+
     const backendOrder = {
-      usuarioId: null,
-      nombreComprador: form.nombre,
-      apellidoComprador: form.apellido,
-      telefonoComprador: form.telefono,
-      dniComprador: form.dni,
-      direccionEnvio:
-        `${form.calle} ${form.nro_calle}, ${form.ciudad}, ${form.codigo_postal} ${form.info_adicional ? "- " + form.info_adicional : ""}`.trim(),
-      total: finalTotal,
-      metodoPago: form.metodo_pago,
-      estadoPago: "pendiente",
-      estadoPedido: "pendiente",
-      informacionPedido: items
-        .map((i) => `${i.name} (x${i.quantity})`)
-        .join(", "),
+      buyerFirstName: form.nombre,
+      buyerLastName: form.apellido,
+      buyerPhone: form.telefono,
+      buyerDocument: form.dni,
+      shippingAddress:
+        `${form.calle} ${form.nro_calle}, ${form.ciudad}, ${form.codigo_postal}${form.info_adicional ? " - " + form.info_adicional : ""}`.trim(),
+      paymentMethod: form.metodo_pago,
+      items: items.map((i) => ({
+        productId: parseInt(i.id, 10),
+        quantity: i.quantity,
+      })),
     };
+
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (userToken) {
+      headers["Authorization"] = `Bearer ${userToken}`;
+    }
 
     try {
       const res = await fetch(`${API_BASE}/api/orders`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(backendOrder),
       });
       if (res.ok) {
@@ -153,7 +157,9 @@ export function Checkout() {
         clearCart();
         localStorage.removeItem(FORM_STORAGE_KEY);
       } else {
-        showError("Error", "Error al confirmar el pedido. Intente nuevamente.");
+        const errData = await res.json().catch(() => null);
+        const msg = errData?.title || errData?.detail || "Error al confirmar el pedido. Intente nuevamente.";
+        showError("Error", msg);
       }
     } catch (e) {
       console.error(e);

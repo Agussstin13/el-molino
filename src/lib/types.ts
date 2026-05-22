@@ -3,11 +3,16 @@ export interface Product {
   name: string;
   price: number;
   image: string;
+  imagePath?: string;
   discount?: number;
   wholesalePrice?: { quantity: number; price: number };
   description?: string;
   category?: string;
+  categoryId?: number;
   stock: number;
+  active?: boolean;
+  onOffer?: boolean;
+  offerPrice?: number | null;
 }
 
 export interface CartItem extends Product {

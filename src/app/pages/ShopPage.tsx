@@ -53,7 +53,11 @@ export function ShopPage() {
           category: p.categoryName ?? p.description ?? "",
           image: imgUrl(p.imagePath ?? p.imageUrl ?? ''),
           categoryId: p.categoryId ?? p.categoriaId,
-          discount: p.discount ?? p.descuento ?? 0,
+          onOffer: p.onOffer ?? false,
+          offerPrice: p.offerPrice ?? null,
+          discount: p.onOffer && p.offerPrice
+            ? Math.round(((p.price - p.offerPrice) / p.price) * 100)
+            : (p.discount ?? p.descuento ?? 0),
           wholesalePrice: p.wholesalePrice
             ? { quantity: p.wholesaleMinimumAmount ?? 10, price: p.wholesalePrice }
             : p.precioMayorista

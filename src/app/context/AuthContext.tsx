@@ -92,7 +92,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const raw = await res.text();
         const token = cleanToken(raw);
         localStorage.setItem('userToken', token);
-        setClientUser({ email, token }); // Minimal user object
+
+        // Decode JWT payload to get user id/name from claims
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          const userId = payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] || payload.sub;
+          setClientUser({ email, token, id: userId ? parseInt(userId, 10) : null });
+        } catch {
+          setClientUser({ email, token });
+        }
         return true;
       }
       return false;
@@ -111,9 +119,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (res.ok) {
-        const user = await res.json();
-        setClientUser(user);
-        return true;
+        // Registration succeeded — auto-login to get a JWT token
+        const loginSuccess = await loginClient(userData.email, userData.password);
+        return loginSuccess;
       }
       return false;
     } catch (error) {

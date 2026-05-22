@@ -102,9 +102,20 @@ function SmallProductCard({ product }: { product: Product }) {
         {product.category && (
           <p className="text-xs text-muted-foreground">{product.category}</p>
         )}
-        <p className="text-sm font-semibold text-primary mt-1">
-          {formatARS(product.price)}
-        </p>
+        {product.onOffer && product.offerPrice ? (
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-xs text-muted-foreground/60 line-through">
+              {formatARS(product.price)}
+            </span>
+            <span className="text-sm font-semibold text-accent">
+              {formatARS(product.offerPrice)}
+            </span>
+          </div>
+        ) : (
+          <p className="text-sm font-semibold text-primary mt-1">
+            {formatARS(product.price)}
+          </p>
+        )}
       </div>
     </button>
   );
@@ -146,20 +157,61 @@ export function ProductDetailPage() {
           price: p.price ?? p.precio,
           stock: p.stock,
           category: p.categoryName ?? p.description ?? "",
+          categoryId: p.categoryId ?? p.categoriaId,
           image: imgUrl(p.imagePath ?? p.imageUrl ?? ''),
-          discount: p.discount ?? p.descuento ?? 0,
+          onOffer: p.onOffer ?? false,
+          offerPrice: p.offerPrice ?? null,
+          discount: p.onOffer && p.offerPrice
+            ? Math.round(((p.price - p.offerPrice) / p.price) * 100)
+            : (p.discount ?? p.descuento ?? 0),
           wholesalePrice: p.wholesalePrice
             ? { quantity: p.wholesaleMinimumAmount ?? 10, price: p.wholesalePrice }
             : undefined,
         };
         setProduct(cur);
 
-        // Guardar en recientes y actualizar estado
+        // Relacionados y Vistos recientemente: misma categoría y validación de existencia
+        const allRes = await fetch(`${API_BASE}/api/products`);
+        if (!allRes.ok) return;
+        const allData = await allRes.json();
+        if (!Array.isArray(allData)) return;
+
+        // Mapear los productos existentes en base de datos
+        const activeDbProducts = allData.map((r: any) => ({
+          id: r.id.toString(),
+          name: r.name ?? r.nombre,
+          price: r.price ?? r.precio,
+          stock: r.stock,
+          category: r.categoryName ?? r.description ?? "",
+          categoryId: r.categoryId ?? r.categoriaId,
+          image: imgUrl(r.imagePath ?? r.imageUrl ?? ''),
+          onOffer: r.onOffer ?? false,
+          offerPrice: r.offerPrice ?? null,
+          discount: r.onOffer && r.offerPrice
+            ? Math.round(((r.price - r.offerPrice) / r.price) * 100)
+            : (r.discount ?? r.descuento ?? 0),
+        }));
+
+        setRelated(
+          activeDbProducts
+            .filter(
+              (r: any) =>
+                r.id.toString() !== id &&
+                r.category === cur.category,
+            )
+            .slice(0, 4)
+        );
+
+        // Guardar en recientes y filtrar los que ya no existen en la base de datos
         try {
           const stored: Product[] = JSON.parse(
             localStorage.getItem(RECENT_KEY) || "[]",
           );
-          const next = [cur, ...stored.filter((r) => r.id !== cur.id)].slice(
+          // Crear un Set con los IDs existentes para búsqueda eficiente
+          const activeIds = new Set(activeDbProducts.map(p => p.id));
+          
+          // Agregamos el producto actual y filtramos los previos que ya no existen en DB
+          const next = [cur, ...stored.filter((r) => r.id !== cur.id && activeIds.has(r.id))].slice(
             0,
             8,
           );
@@ -168,29 +220,6 @@ export function ProductDetailPage() {
         } catch {
           /* noop */
         }
-
-        // Relacionados: misma categoría
-        const allRes = await fetch(`${API_BASE}/api/products`);
-        if (!allRes.ok) return;
-        const allData = await allRes.json();
-        if (!Array.isArray(allData)) return;
-        setRelated(
-          allData
-            .filter(
-              (r: any) =>
-                r.id.toString() !== id &&
-                (r.description ?? r.descripcion) === cur.category,
-            )
-            .map((r: any) => ({
-              id: r.id.toString(),
-              name: r.name ?? r.nombre,
-              price: r.price ?? r.precio,
-              stock: r.stock,
-              category: r.categoryName ?? r.description ?? "",
-              image: imgUrl(r.imagePath ?? r.imageUrl ?? ''),
-            }))
-            .slice(0, 4),
-        );
       })
       .catch((err) => console.error("Error fetching product:", err))
       .finally(() => setLoading(false));
@@ -238,7 +267,7 @@ export function ProductDetailPage() {
   /* ── Datos derivados ── */
   const effectivePrice = getEffectivePrice(product, quantity);
   const wholesale = isWholesaleActive(product, quantity);
-  const isDiscounted = !!product.discount && !wholesale;
+  const isDiscounted = (product.onOffer || !!product.discount) && !wholesale;
 
   const handleAdd = () => {
     addToCart(product, quantity);
@@ -300,90 +329,84 @@ export function ProductDetailPage() {
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Breadcrumb */}
-        <nav className="flex items-center gap-1.5 text-xs text-muted-foreground mb-6 flex-wrap">
-          <Link to="/" className="hover:text-primary transition-colors">
-            <Home className="w-3.5 h-3.5" />
+        <nav className="flex items-center gap-2 text-sm text-[#4a7c59] mb-6 flex-wrap tracking-wide">
+          <Link to="/" className="hover:text-primary transition-colors flex items-center">
+            <Home className="w-4 h-4 stroke-[1.75]" />
           </Link>
-          <span>/</span>
-          <Link
-            to="/"
-            className="hover:text-primary transition-colors uppercase font-medium tracking-wide"
-          >
-            Tienda
+          <span className="text-border">/</span>
+          <Link to="/" className="hover:text-primary transition-colors uppercase font-medium">
+            TIENDA
           </Link>
           {product.category && (
             <>
-              <span>/</span>
-              <Link to="/" className="hover:text-primary transition-colors">
+              <span className="text-border">/</span>
+              <Link
+                to={`/?categoria=${product.categoryId}`}
+                className="hover:text-primary transition-colors font-medium"
+              >
                 {product.category}
               </Link>
             </>
           )}
-          <span>/</span>
-          <span className="text-foreground font-medium truncate max-w-[200px]">
-            {product.name}
-          </span>
+          <span className="text-border">/</span>
+          <span className="text-[#333d36] font-bold">{product.name}</span>
         </nav>
 
         {/* ── Bloque principal ── */}
         <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm mb-8">
           <div className="grid md:grid-cols-2">
-            {/* Columna imagen */}
-            <div className="relative flex flex-col items-center justify-center p-10 bg-secondary/20 border-b md:border-b-0 md:border-r border-border min-h-[420px]">
-              {/* Ghost background */}
-              {product.image && (
-                <div
-                  className="absolute inset-0 bg-center bg-cover opacity-[0.08] blur-2xl scale-110 pointer-events-none"
-                  style={{ backgroundImage: `url('${product.image}')` }}
-                />
-              )}
 
-              {/* Badge NUEVO */}
-              <div className="absolute top-4 left-4 z-10 bg-primary text-primary-foreground text-[11px] px-3 py-1 rounded font-bold uppercase tracking-widest shadow">
-                Nuevo
+            {/* ── Columna imagen ── */}
+            <div className="relative flex flex-col border-b md:border-b-0 md:border-r border-border">
+
+              {/* Badges fuera de la imagen, en la parte superior del panel */}
+              <div className="flex items-center gap-2 px-5 pt-5 pb-0 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 bg-emerald-500 text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-sm">
+                  NUEVO
+                </span>
+                {product.onOffer && product.offerPrice && (
+                  <span className="inline-flex items-center gap-1 bg-red-500 text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-sm">
+                    -{Math.round(((product.price - product.offerPrice) / product.price) * 100)}% OFF
+                  </span>
+                )}
+                {product.stock > 0 && product.stock <= 5 && (
+                  <span className="inline-flex items-center gap-1 bg-amber-500 text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-sm">
+                    Últimas {product.stock} unidades
+                  </span>
+                )}
+                {product.stock === 0 && (
+                  <span className="inline-flex items-center gap-1 bg-muted text-muted-foreground text-[11px] font-semibold px-3 py-1 rounded-full border border-border">
+                    Sin stock
+                  </span>
+                )}
               </div>
 
-              {/* Botón favorito */}
-              <button
-                onClick={() => setFavorited((v) => !v)}
-                id="detail-favorite-btn"
-                className="absolute top-4 right-4 z-10 p-2 rounded-full bg-background/80 backdrop-blur-sm border border-border hover:bg-background transition-all shadow-sm"
-              >
-                <Heart
-                  className={`w-5 h-5 transition-colors ${favorited ? "fill-destructive text-destructive" : "text-muted-foreground"}`}
-                />
-              </button>
+              {/* Contenedor imagen */}
+              <div className="relative flex items-center justify-center p-8 flex-1 min-h-[340px] bg-secondary/10 overflow-hidden mx-5 my-4 rounded-2xl">
+                {/* Ghost background blur */}
+                {product.image && (
+                  <div
+                    className="absolute inset-0 bg-center bg-cover opacity-[0.07] blur-2xl scale-110 pointer-events-none"
+                    style={{ backgroundImage: `url('${product.image}')` }}
+                  />
+                )}
 
-              {/* Imagen */}
-              <div className="relative z-10 w-full max-w-[280px] aspect-square flex items-center justify-center">
                 {product.image ? (
                   <img
                     src={product.image}
                     alt={product.name}
-                    className="w-full h-full object-contain drop-shadow-xl"
+                    className="relative z-10 w-full max-w-[300px] aspect-square object-contain drop-shadow-2xl"
                   />
                 ) : (
                   <div className="text-8xl text-muted-foreground">📦</div>
                 )}
               </div>
 
-              {/* Stock aviso */}
-              {product.stock > 0 && product.stock <= 5 && (
-                <p className="relative z-10 mt-4 text-xs text-destructive bg-destructive/10 border border-destructive/20 px-3 py-1 rounded-full font-medium">
-                  ⚠ Últimas {product.stock} unidades
-                </p>
-              )}
-              {product.stock === 0 && (
-                <p className="relative z-10 mt-4 text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full">
-                  Sin stock disponible
-                </p>
-              )}
-
-              {/* Compartir */}
-              <div className="relative z-10 mt-8 flex flex-col items-center gap-2.5 w-full">
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              {/* Compartir + Favorito */}
+              <div className="flex flex-col items-center gap-3 px-5 pb-6">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Share2 className="w-3.5 h-3.5" /> Compartir:
-                </span>
+                </div>
                 <div className="flex items-center gap-4 flex-wrap justify-center">
                   {shareLinks.map((link) => (
                     <a
@@ -398,60 +421,68 @@ export function ProductDetailPage() {
                     </a>
                   ))}
                 </div>
-                <button
-                  onClick={() => setFavorited((v) => !v)}
-                  className={`flex items-center gap-1.5 text-sm transition-colors mt-1 ${favorited ? "text-destructive" : "text-muted-foreground hover:text-destructive"}`}
-                >
-                  <Heart
-                    className={`w-4 h-4 ${favorited ? "fill-destructive" : ""}`}
-                  />
-                  {favorited ? "En favoritos" : "Agregar a favoritos"}
-                </button>
               </div>
             </div>
 
-            {/* Columna info */}
+            {/* ── Columna info ── */}
             <div className="p-8 flex flex-col gap-5">
-              {/* Nombre */}
-              <h1
-                className="text-2xl md:text-3xl text-foreground leading-tight"
-                style={{ fontFamily: "Georgia, serif" }}
-              >
-                {product.name}
-              </h1>
+              {/* Nombre + Favorito */}
+              <div className="flex items-start gap-3">
+                <h1
+                  className="flex-1 text-2xl md:text-3xl text-foreground leading-tight"
+                  style={{ fontFamily: "Georgia, serif" }}
+                >
+                  {product.name}
+                </h1>
+                <button
+                  onClick={() => setFavorited((v) => !v)}
+                  id="detail-favorite-btn"
+                  className="flex-shrink-0 mt-1 p-2.5 rounded-full border border-border hover:bg-secondary transition-all shadow-sm"
+                  title={favorited ? "Quitar de favoritos" : "Agregar a favoritos"}
+                >
+                  <Heart
+                    className={`w-5 h-5 transition-colors ${favorited ? "fill-destructive text-destructive" : "text-muted-foreground"}`}
+                  />
+                </button>
+              </div>
 
               <hr className="border-border" />
 
               {/* Categoría */}
               {product.category && (
                 <div className="flex items-center gap-2 text-sm flex-wrap">
-                  <span className="text-muted-foreground">🏷 Categorías:</span>
-                  <span className="text-primary font-medium uppercase text-xs tracking-wide bg-primary/10 px-2.5 py-0.5 rounded-full">
+                  <span className="text-muted-foreground">🏷 Categoría:</span>
+                  <Link
+                    to={`/?categoria=${product.categoryId}`}
+                    className="text-primary font-medium uppercase text-xs tracking-wide bg-primary/10 px-2.5 py-0.5 rounded-full hover:bg-primary/20 transition-colors"
+                  >
                     {product.category}
-                  </span>
+                  </Link>
                 </div>
               )}
 
               {/* Precio */}
-              <div className="flex items-baseline gap-3 flex-wrap">
-                <span className="text-3xl text-primary font-semibold">
-                  {formatARS(effectivePrice)}
-                </span>
+              <div className="flex flex-col gap-1">
                 {isDiscounted && (
-                  <>
-                    <span className="text-lg text-muted-foreground line-through">
-                      {formatARS(product.price)}
-                    </span>
-                    <span className="text-sm bg-destructive/15 text-destructive px-2 py-0.5 rounded-full font-medium">
-                      -{product.discount}% OFF
-                    </span>
-                  </>
-                )}
-                {wholesale && (
-                  <span className="text-sm bg-accent/20 text-accent px-2 py-0.5 rounded-full font-medium">
-                    Precio mayorista
+                  <span className="text-base text-muted-foreground line-through">
+                    {formatARS(product.price)}
                   </span>
                 )}
+                <div className="flex items-baseline gap-3 flex-wrap">
+                  <span className={`text-3xl font-bold ${isDiscounted ? "text-red-500" : "text-primary"}`}>
+                    {formatARS(effectivePrice)}
+                  </span>
+                  {isDiscounted && (
+                    <span className="text-sm bg-red-50 text-red-500 border border-red-200 px-2 py-0.5 rounded-full font-semibold">
+                      -{product.discount}% OFF
+                    </span>
+                  )}
+                  {wholesale && (
+                    <span className="text-sm bg-accent/20 text-accent px-2 py-0.5 rounded-full font-medium">
+                      Precio mayorista
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Descripción */}
@@ -480,10 +511,8 @@ export function ProductDetailPage() {
               {/* Cantidad */}
               {product.stock > 0 && (
                 <div className="flex items-center gap-3 flex-wrap">
-                  <span className="text-sm font-medium text-muted-foreground">
-                    Cantidad:
-                  </span>
-                  <div className="flex items-center border-2 border-border rounded-lg overflow-hidden bg-background">
+                  <span className="text-sm font-medium text-muted-foreground">Cantidad:</span>
+                  <div className="flex items-center border-2 border-border rounded-xl overflow-hidden bg-background">
                     <button
                       onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                       id="detail-qty-minus"
@@ -491,26 +520,20 @@ export function ProductDetailPage() {
                     >
                       <Minus className="w-4 h-4" />
                     </button>
-                    <span className="px-4 min-w-[3rem] text-center font-semibold">
-                      {quantity}
-                    </span>
+                    <span className="px-4 min-w-[3rem] text-center font-semibold">{quantity}</span>
                     <button
-                      onClick={() =>
-                        setQuantity((q) => Math.min(product.stock, q + 1))
-                      }
+                      onClick={() => setQuantity((q) => Math.min(product.stock, q + 1))}
                       id="detail-qty-plus"
                       className="px-3 py-2.5 hover:bg-secondary transition-colors"
                     >
                       <Plus className="w-4 h-4" />
                     </button>
                   </div>
-                  {product.wholesalePrice &&
-                    quantity < product.wholesalePrice.quantity && (
-                      <span className="text-xs text-muted-foreground">
-                        ({product.wholesalePrice.quantity - quantity} más para
-                        precio mayorista)
-                      </span>
-                    )}
+                  {product.wholesalePrice && quantity < product.wholesalePrice.quantity && (
+                    <span className="text-xs text-muted-foreground">
+                      ({product.wholesalePrice.quantity - quantity} más para precio mayorista)
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -523,8 +546,8 @@ export function ProductDetailPage() {
                   product.stock === 0
                     ? "bg-muted text-muted-foreground cursor-not-allowed"
                     : added
-                      ? "bg-accent text-accent-foreground scale-[0.98]"
-                      : "bg-primary hover:bg-primary/90 text-primary-foreground hover:-translate-y-0.5 hover:shadow-primary/25"
+                      ? "bg-emerald-500 text-white scale-[0.98]"
+                      : "bg-primary hover:bg-primary/90 text-primary-foreground hover:-translate-y-0.5 hover:shadow-lg"
                 }`}
               >
                 <ShoppingCart className="w-5 h-5" />
@@ -541,8 +564,8 @@ export function ProductDetailPage() {
         {/* ── Productos relacionados ── */}
         {related.length > 0 && (
           <section className="mb-8">
-            <div className="flex items-center gap-3 mb-4 pb-3 border-b border-border">
-              <h2 className="text-base font-medium">Productos relacionados</h2>
+            <div className="flex items-center gap-3 mb-5 pb-3 border-b border-border">
+              <h2 className="text-base font-semibold text-foreground">Productos relacionados</h2>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
               {related.map((p) => (
@@ -555,8 +578,8 @@ export function ProductDetailPage() {
         {/* ── Vistos recientemente ── */}
         {recentlyViewed.length > 0 && (
           <section className="mb-8">
-            <div className="flex items-center gap-3 mb-4 pb-3 border-b border-border">
-              <h2 className="text-base font-medium">Vistos recientemente</h2>
+            <div className="flex items-center gap-3 mb-5 pb-3 border-b border-border">
+              <h2 className="text-base font-semibold text-foreground">Vistos recientemente</h2>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
               {recentlyViewed.map((p) => (

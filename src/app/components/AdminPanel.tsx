@@ -15,12 +15,17 @@ import {
   AlertCircle,
   Info,
   Layers,
+  ArrowLeft,
+  Upload,
+  Percent,
+  Search,
+  Calendar,
 } from "lucide-react";
 import { motion, Reorder } from "motion/react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useAlert } from "../context/AlertContext";
-import { formatARS } from "../../lib/price";
+import { formatARS, formatInputPrice, parseInputPrice } from "../../lib/price";
 import type {
   CarouselImage,
   Category,
@@ -36,7 +41,8 @@ type AdminView =
   | "promotions"
   | "orders"
   | "carousel"
-  | "categories";
+  | "categories"
+  | "daily-offers";
 
 const EMPTY_CAROUSEL: Omit<CarouselImage, "id"> = {
   imagenNombre: "",
@@ -96,15 +102,23 @@ export function AdminPanel() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [showProductForm, setShowProductForm] = useState(false);
-  const [productForm, setProductForm] = useState<Partial<Product>>({
+  const [productForm, setProductForm] = useState({
     name: "",
-    price: 0,
+    description: "",
+    price: 0 as string | number,
     stock: 0,
     category: "",
-    image: "",
+    enableWholesale: false,
+    wholesalePrice: 0 as string | number,
+    minimumWholesaleAmount: 10,
+    onOffer: false,
+    offerPrice: 0 as string | number,
+    unidadVenta: "Unidad",
+    active: true,
   });
   const [productImageFile, setProductImageFile] = useState<File | null>(null);
   const [productImagePreview, setProductImagePreview] = useState<string>("");
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
   // Carousel state
   const [carouselImages, setCarouselImages] = useState<CarouselImage[]>([]);
@@ -129,6 +143,197 @@ export function AdminPanel() {
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(
     null,
   );
+
+  // Daily offers state
+  const [offersDraft, setOffersDraft] = useState<Record<string, { onOffer: boolean; offerPrice: string | number }>>({});
+  const [offersSearchQuery, setOffersSearchQuery] = useState("");
+  const [offersFilter, setOffersFilter] = useState<"all" | "active" | "inactive">("all");
+  const [isSavingOffers, setIsSavingOffers] = useState(false);
+
+  useEffect(() => {
+    if (currentView === "daily-offers") {
+      const initialDraft: Record<string, { onOffer: boolean; offerPrice: string | number }> = {};
+      products.forEach(p => {
+        initialDraft[p.id] = {
+          onOffer: p.onOffer || false,
+          offerPrice: p.offerPrice ? formatInputPrice(p.offerPrice) : "",
+        };
+      });
+      setOffersDraft(initialDraft);
+    }
+  }, [currentView, products]);
+
+  const handleToggleOfferDraft = (productId: string) => {
+    setOffersDraft(prev => {
+      const current = prev[productId] || { onOffer: false, offerPrice: "" };
+      const nextOnOffer = !current.onOffer;
+      
+      let nextOfferPrice = current.offerPrice;
+      if (nextOnOffer && !nextOfferPrice) {
+        const prod = products.find(p => p.id === productId);
+        if (prod) {
+          const suggested = Math.round(prod.price * 0.9);
+          nextOfferPrice = formatInputPrice(suggested);
+        }
+      }
+      
+      return {
+        ...prev,
+        [productId]: {
+          onOffer: nextOnOffer,
+          offerPrice: nextOfferPrice,
+        },
+      };
+    });
+  };
+
+  const handleOfferPriceDraftChange = (productId: string, value: string) => {
+    setOffersDraft(prev => {
+      const current = prev[productId] || { onOffer: false, offerPrice: "" };
+      return {
+        ...prev,
+        [productId]: {
+          ...current,
+          offerPrice: formatInputPrice(value),
+        },
+      };
+    });
+  };
+
+  const getDiscountPercentage = (productId: string): number | null => {
+    const prod = products.find(p => p.id === productId);
+    if (!prod) return null;
+    
+    const draft = offersDraft[productId];
+    if (!draft || !draft.onOffer) return null;
+    
+    const offerVal = parseInputPrice(draft.offerPrice);
+    if (offerVal <= 0 || offerVal >= prod.price) return null;
+    
+    const discount = ((prod.price - offerVal) / prod.price) * 100;
+    return Math.round(discount);
+  };
+
+  const getAverageDiscount = (): number => {
+    let sum = 0;
+    let count = 0;
+    products.forEach(p => {
+      const draft = offersDraft[p.id];
+      if (draft && draft.onOffer) {
+        const offerVal = parseInputPrice(draft.offerPrice);
+        if (offerVal > 0 && offerVal < p.price) {
+          sum += ((p.price - offerVal) / p.price) * 100;
+          count++;
+        }
+      }
+    });
+    return count > 0 ? Math.round(sum / count) : 0;
+  };
+
+  const handleSaveDailyOffers = async () => {
+    const dirtyProducts = products.filter(p => {
+      const draft = offersDraft[p.id];
+      if (!draft) return false;
+      
+      const parsedDraftPrice = parseInputPrice(draft.offerPrice);
+      const isStatusChanged = draft.onOffer !== p.onOffer;
+      const isPriceChanged = parsedDraftPrice !== p.offerPrice;
+      
+      return isStatusChanged || isPriceChanged;
+    });
+
+    if (dirtyProducts.length === 0) {
+      showError("Sin cambios", "No se detectaron modificaciones en las ofertas.");
+      return;
+    }
+
+    setIsSavingOffers(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const p of dirtyProducts) {
+      const draft = offersDraft[p.id];
+      const parsedDraftPrice = parseInputPrice(draft.offerPrice);
+      
+      const formData = new FormData();
+      formData.append("Id", p.id);
+      formData.append("Name", p.name);
+      formData.append("Description", p.description || "");
+      formData.append("Price", String(p.price));
+      formData.append("Stock", String(p.stock));
+      formData.append("CategoryId", String(p.categoryId));
+      formData.append("Active", String(p.active));
+      
+      formData.append("OnOffer", String(draft.onOffer));
+      formData.append("OfferPrice", String(parsedDraftPrice));
+      
+      if (p.wholesalePrice) {
+        formData.append("WholesalePrice", String(p.wholesalePrice.price));
+        formData.append("MinimumWholesaleAmount", String(p.wholesalePrice.quantity));
+      }
+      
+      if (p.imagePath) {
+        formData.append("ExistingImagePath", p.imagePath);
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/api/products/${p.id}`, {
+          method: "PUT",
+          headers: getAuthHeaders(null),
+          body: formData,
+        });
+        if (res.ok) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch {
+        failCount++;
+      }
+    }
+
+    // Refresh products list
+    try {
+      const productsRes = await fetch(`${API_BASE}/api/products`, {
+        headers: getAuthHeaders(null),
+      });
+      if (productsRes.ok) {
+        const data = await productsRes.json();
+        const mapped = data.map((p: any) => ({
+          id: p.id.toString(),
+          name: p.name ?? p.nombre,
+          price: p.price ?? p.precio,
+          stock: p.stock,
+          description: p.description ?? "",
+          category: p.categoryName ?? "",
+          categoryId: p.categoryId ?? p.categoriaId,
+          image: imgUrl(p.imagePath ?? p.imageUrl ?? ""),
+          imagePath: p.imagePath ?? p.imageUrl ?? "",
+          active: p.active ?? true,
+          offerPrice: p.offerPrice ?? null,
+          onOffer: p.onOffer ?? false,
+          wholesalePrice: p.wholesalePrice
+            ? {
+                quantity: p.wholesaleMinimumAmount ?? 10,
+                price: p.wholesalePrice,
+              }
+            : undefined,
+        }));
+        setProducts(mapped);
+      }
+    } catch (err) {
+      console.error("Error refreshing products:", err);
+    }
+
+    setIsSavingOffers(false);
+    if (failCount === 0) {
+      showSuccess("¡Ofertas guardadas!", `Se actualizaron con éxito las ofertas de ${successCount} producto(s).`);
+    } else if (successCount > 0) {
+      showSuccess("Guardado parcial", `Se actualizaron ${successCount} ofertas, pero fallaron ${failCount}.`);
+    } else {
+      showError("Error", "No se pudo actualizar ninguna de las ofertas modificadas.");
+    }
+  };
 
   const handleSessionExpired = () => {
     logout();
@@ -231,11 +436,17 @@ export function AdminPanel() {
             name: p.name ?? p.nombre,
             price: p.price ?? p.precio,
             stock: p.stock,
-            category: p.categoryName ?? p.description ?? "",
+            category: p.categoryName ?? "",
+            categoryId: p.categoryId,
+            description: p.description ?? "",
+            imagePath: p.imagePath ?? p.imageUrl ?? "",
             image: imgUrl(p.imagePath ?? p.imageUrl ?? ""),
+            active: p.active ?? true,
+            onOffer: p.onOffer ?? false,
+            offerPrice: p.offerPrice,
             wholesalePrice: p.wholesalePrice
               ? {
-                  quantity: p.wholesaleMinimumAmount ?? 10,
+                  quantity: p.minimumWholesaleAmount ?? 10,
                   price: p.wholesalePrice,
                 }
               : undefined,
@@ -310,72 +521,168 @@ export function AdminPanel() {
     setProductImagePreview(URL.createObjectURL(file));
   };
 
+  const handleNewProductClick = () => {
+    setEditingProductId(null);
+    setProductForm({
+      name: "",
+      description: "",
+      price: 0,
+      stock: 0,
+      category: "",
+      enableWholesale: false,
+      wholesalePrice: 0,
+      minimumWholesaleAmount: 10,
+      onOffer: false,
+      offerPrice: 0,
+      unidadVenta: "Unidad",
+      active: true,
+    });
+    setProductImageFile(null);
+    setProductImagePreview("");
+    setShowProductForm(true);
+  };
+
+  const handleEditProductClick = (product: any) => {
+    setEditingProductId(product.id);
+    setProductForm({
+      name: product.name || "",
+      description: product.description || "",
+      price: product.price || 0,
+      stock: product.stock || 0,
+      category: product.category || "",
+      enableWholesale: !!product.wholesalePrice,
+      wholesalePrice: product.wholesalePrice?.price || 0,
+      minimumWholesaleAmount: product.wholesalePrice?.quantity || 10,
+      onOffer: !!product.onOffer,
+      offerPrice: product.offerPrice || 0,
+      unidadVenta: "Unidad",
+      active: product.active !== false,
+    });
+    setProductImagePreview(product.image || "");
+    setProductImageFile(null);
+    setShowProductForm(true);
+  };
+
   const handleSaveProduct = async () => {
     const selectedCategory = categories.find(
       (c) => c.nombre === productForm.category,
     );
 
+    if (!selectedCategory) {
+      showError("Categoría requerida", "Por favor selecciona una categoría válida para el producto.");
+      return;
+    }
+
+    setIsSaving(true);
     const formData = new FormData();
     formData.append("Name", productForm.name ?? "");
-    formData.append("Description", productForm.name ?? "");
-    formData.append("Price", String(productForm.price ?? 0));
+    formData.append("Description", productForm.description ?? "");
+    formData.append("Price", String(parseInputPrice(productForm.price)));
     formData.append("Stock", String(productForm.stock ?? 0));
-    formData.append("WholesalePrice", String((productForm.price ?? 0) * 0.8));
-    formData.append("MinimumWholesaleAmount", "10");
-    formData.append("CategoryId", String(selectedCategory?.id ?? 0));
-    formData.append("Active", "true");
-    if (productImageFile) formData.append("Image", productImageFile);
+    formData.append("CategoryId", String(selectedCategory.id));
+    formData.append("Active", String(productForm.active));
+
+    if (productForm.enableWholesale) {
+      formData.append("WholesalePrice", String(parseInputPrice(productForm.wholesalePrice)));
+      formData.append("MinimumWholesaleAmount", String(productForm.minimumWholesaleAmount));
+    }
+
+    if (productForm.onOffer) {
+      formData.append("OnOffer", "true");
+      formData.append("OfferPrice", String(parseInputPrice(productForm.offerPrice)));
+    } else {
+      formData.append("OnOffer", "false");
+    }
+
+    if (productImageFile) {
+      formData.append("Image", productImageFile);
+    }
 
     try {
-      const res = await fetch(`${API_BASE}/api/products`, {
-        method: "POST",
+      const url = editingProductId 
+        ? `${API_BASE}/api/products/${editingProductId}`
+        : `${API_BASE}/api/products`;
+      
+      const method = editingProductId ? "PUT" : "POST";
+
+      if (editingProductId) {
+        formData.append("Id", editingProductId);
+        const currentProd = products.find(p => p.id === editingProductId);
+        if (currentProd?.imagePath) {
+          formData.append("ExistingImagePath", currentProd.imagePath);
+        }
+      }
+
+      const res = await fetch(url, {
+        method: method,
         headers: getAuthHeaders(null),
         body: formData,
       });
 
       if (res.ok) {
-        const created = await res.json();
-        const newProduct = {
-          id: created.id.toString(),
-          name: created.name ?? created.nombre,
-          price: created.price ?? created.precio,
-          stock: created.stock,
-          category: created.categoryName ?? created.description ?? "",
-          image: imgUrl(created.imagePath ?? created.imageUrl ?? ""),
-          wholesalePrice: created.wholesalePrice
-            ? {
-                quantity: created.wholesaleMinimumAmount ?? 10,
-                price: created.wholesalePrice,
-              }
-            : undefined,
-        } as Product;
+        const productsRes = await fetch(`${API_BASE}/api/products`, {
+          headers: getAuthHeaders(null),
+        });
+        if (productsRes.ok) {
+          const data = await productsRes.json();
+          const mapped = data.map((p: any) => ({
+            id: p.id.toString(),
+            name: p.name ?? p.nombre,
+            price: p.price ?? p.precio,
+            stock: p.stock,
+            description: p.description ?? "",
+            category: p.categoryName ?? "",
+            categoryId: p.categoryId ?? p.categoriaId,
+            image: imgUrl(p.imagePath ?? p.imageUrl ?? ""),
+            imagePath: p.imagePath ?? p.imageUrl ?? "",
+            active: p.active ?? true,
+            offerPrice: p.offerPrice ?? null,
+            onOffer: p.onOffer ?? false,
+            wholesalePrice: p.wholesalePrice
+              ? {
+                  quantity: p.wholesaleMinimumAmount ?? 10,
+                  price: p.wholesalePrice,
+                }
+              : undefined,
+          }));
+          setProducts(mapped);
+        }
 
-        setProducts((prev) => [newProduct, ...prev]);
         setShowProductForm(false);
+        setEditingProductId(null);
         setProductForm({
           name: "",
+          description: "",
           price: 0,
           stock: 0,
           category: "",
-          image: "",
+          enableWholesale: false,
+          wholesalePrice: 0,
+          minimumWholesaleAmount: 10,
+          onOffer: false,
+          offerPrice: 0,
+          unidadVenta: "Unidad",
+          active: true,
         });
         setProductImageFile(null);
         setProductImagePreview("");
-        showSuccess("¡Listo!", "El producto se guardó correctamente.");
+        showSuccess("¡Listo!", `El producto se ${editingProductId ? "actualizó" : "creó"} correctamente.`);
       } else {
         const err = await res.json().catch(() => ({}));
         showError(
-          "No se pudo guardar",
-          err.title ||
-            "Hubo un problema al intentar guardar el producto. Por favor, revisá los datos.",
+          `No se pudo ${editingProductId ? "actualizar" : "guardar"}`,
+          err.detail || err.title ||
+            `Hubo un problema al intentar ${editingProductId ? "actualizar" : "guardar"} el producto.`
         );
       }
     } catch (e) {
       console.error(e);
       showError(
         "Problema de red",
-        "No pudimos conectar con el servidor. Revisá tu conexión.",
+        "No pudimos conectar con el servidor. Revisá tu conexión."
       );
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -985,11 +1292,26 @@ export function AdminPanel() {
 
   const navItems = [
     { id: "products" as AdminView, icon: Package, label: "Productos" },
+    { id: "daily-offers" as AdminView, icon: Percent, label: "Ofertas del día" },
     { id: "promotions" as AdminView, icon: Tag, label: "Cupones" },
     { id: "orders" as AdminView, icon: ShoppingBag, label: "Pedidos" },
     { id: "carousel" as AdminView, icon: ImageIcon, label: "Carousel" },
     { id: "categories" as AdminView, icon: Layers, label: "Categorías" },
   ];
+
+  const filteredOffersProducts = products.filter(p => {
+    if (offersSearchQuery) {
+      const q = offersSearchQuery.toLowerCase();
+      const matchesName = p.name.toLowerCase().includes(q);
+      const matchesCat = (p.category || "").toLowerCase().includes(q);
+      if (!matchesName && !matchesCat) return false;
+    }
+    const draft = offersDraft[p.id];
+    const isOnOffer = draft ? draft.onOffer : (p.onOffer || false);
+    if (offersFilter === "active") return isOnOffer;
+    if (offersFilter === "inactive") return !isOnOffer;
+    return true;
+  });
 
   return (
     <div className="h-screen bg-background flex overflow-hidden">
@@ -1060,7 +1382,14 @@ export function AdminPanel() {
                 </h1>
                 <button
                   id="new-product-btn"
-                  onClick={() => setShowProductForm((v) => !v)}
+                  onClick={() => {
+                    if (showProductForm) {
+                      setShowProductForm(false);
+                      setEditingProductId(null);
+                    } else {
+                      handleNewProductClick();
+                    }
+                  }}
                   className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg transition-colors shadow-sm text-sm"
                 >
                   {showProductForm ? (
@@ -1078,111 +1407,233 @@ export function AdminPanel() {
                     className="mb-5 text-base"
                     style={{ fontFamily: "Georgia, serif" }}
                   >
-                    Crear producto
+                    {editingProductId ? "Editar producto" : "Crear producto"}
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm mb-1.5">Nombre *</label>
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-sm mb-1.5 font-medium">Nombre *</label>
                       <input
+                        type="text"
                         value={productForm.name || ""}
-                        onChange={(e) =>
-                          setProductForm((p) => ({
-                            ...p,
-                            name: e.target.value,
-                          }))
-                        }
-                        placeholder="Ej: Alfajor"
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        onChange={(e) => setProductForm(p => ({ ...p, name: e.target.value }))}
+                        placeholder="Ej: Avena arrollada"
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm mb-1.5">
-                        Categoría *
-                      </label>
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-sm mb-1.5 font-medium">Categoría *</label>
                       <select
                         value={productForm.category || ""}
-                        onChange={(e) =>
-                          setProductForm((p) => ({
-                            ...p,
-                            category: e.target.value,
-                          }))
-                        }
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        onChange={(e) => setProductForm(p => ({ ...p, category: e.target.value }))}
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer text-foreground"
                       >
-                        <option value="">Seleccionar categoría</option>
+                        <option value="" disabled>Seleccionar...</option>
                         {categories.map((cat) => (
-                          <option key={cat.id} value={cat.nombre}>
-                            {cat.nombre}
-                          </option>
+                          <option key={cat.id} value={cat.nombre}>{cat.nombre}</option>
                         ))}
                       </select>
                     </div>
-                    <div>
-                      <label className="block text-sm mb-1.5">
-                        Precio ($) *
-                      </label>
-                      <input
-                        type="number"
-                        value={productForm.price || ""}
-                        onChange={(e) =>
-                          setProductForm((p) => ({
-                            ...p,
-                            price: Number(e.target.value),
-                          }))
-                        }
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    <div className="col-span-2">
+                      <label className="block text-sm mb-1.5 font-medium">Descripción</label>
+                      <textarea
+                        value={productForm.description || ""}
+                        onChange={(e) => setProductForm(p => ({ ...p, description: e.target.value }))}
+                        placeholder="Descripción opcional del producto..."
+                        rows={3}
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all resize-none"
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm mb-1.5">Stock *</label>
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-sm mb-1.5 font-medium">Unidad de venta *</label>
+                      <select
+                        value={productForm.unidadVenta || "Unidad"}
+                        onChange={(e) => setProductForm(p => ({ ...p, unidadVenta: e.target.value }))}
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer text-foreground"
+                      >
+                        <option value="Unidad">Unidad</option>
+                        <option value="Kilogramo">Kilogramo</option>
+                        <option value="Gramo">Gramo</option>
+                        <option value="Pack">Pack</option>
+                      </select>
+                    </div>
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-sm mb-1.5 font-medium">Stock inicial *</label>
                       <input
                         type="number"
                         value={productForm.stock || ""}
-                        onChange={(e) =>
-                          setProductForm((p) => ({
-                            ...p,
-                            stock: Number(e.target.value),
-                          }))
-                        }
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        onChange={(e) => setProductForm(p => ({ ...p, stock: Number(e.target.value) }))}
+                        placeholder="0"
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
                       />
                     </div>
-                    <div className="col-span-2">
-                      <label className="block text-sm mb-1.5">Imagen *</label>
-                      <div className="flex items-center gap-4">
-                        {productImagePreview && (
-                          <img
-                            src={productImagePreview}
-                            alt="Preview"
-                            className="w-16 h-16 object-cover rounded-lg border border-border"
-                          />
-                        )}
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-sm mb-1.5 font-medium">Precio minorista *</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">$</span>
                         <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageSelect}
-                          className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-secondary file:text-foreground hover:file:bg-secondary/80 cursor-pointer"
+                          type="text"
+                          value={formatInputPrice(productForm.price)}
+                          onChange={(e) => setProductForm(p => ({ ...p, price: formatInputPrice(e.target.value) }))}
+                          placeholder="0,00"
+                          className="w-full pl-7 pr-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
                         />
                       </div>
                     </div>
+                    <div className="col-span-2 sm:col-span-1 flex items-center justify-between p-3 bg-secondary/20 border border-border/50 rounded-lg">
+                      <span className="text-sm font-medium text-foreground">Producto activo</span>
+                      <button
+                        type="button"
+                        onClick={() => setProductForm(p => ({ ...p, active: !p.active }))}
+                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          productForm.active ? "bg-accent" : "bg-switch-background"
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            productForm.active ? "translate-x-5" : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="col-span-2 pt-2 border-t border-border/40 mt-2">
+                      <label className="flex items-center gap-2 text-sm font-medium cursor-pointer select-none text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={productForm.enableWholesale}
+                          onChange={(e) => setProductForm(p => ({ ...p, enableWholesale: e.target.checked }))}
+                          className="accent-primary rounded border-border"
+                        />
+                        Habilitar precio mayorista
+                      </label>
+                    </div>
+
+                    {productForm.enableWholesale && (
+                      <>
+                        <div className="col-span-2 sm:col-span-1">
+                          <label className="block text-sm mb-1.5 font-medium">Precio mayorista *</label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">$</span>
+                            <input
+                              type="text"
+                              value={formatInputPrice(productForm.wholesalePrice)}
+                              onChange={(e) => setProductForm(p => ({ ...p, wholesalePrice: formatInputPrice(e.target.value) }))}
+                              placeholder="0,00"
+                              className="w-full pl-7 pr-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                            />
+                          </div>
+                        </div>
+                        <div className="col-span-2 sm:col-span-1">
+                          <label className="block text-sm mb-1.5 font-medium">Cantidad mínima mayorista *</label>
+                          <input
+                            type="number"
+                            value={productForm.minimumWholesaleAmount || ""}
+                            onChange={(e) => setProductForm(p => ({ ...p, minimumWholesaleAmount: Number(e.target.value) }))}
+                            placeholder="10"
+                            className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div className="col-span-2 pt-2 border-t border-border/40 mt-2">
+                      <label className="flex items-center gap-2 text-sm font-medium cursor-pointer select-none text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={productForm.onOffer}
+                          onChange={(e) => setProductForm(p => ({ ...p, onOffer: e.target.checked }))}
+                          className="accent-primary rounded border-border"
+                        />
+                        Habilitar precio de oferta (Promoción)
+                      </label>
+                    </div>
+
+                    {productForm.onOffer && (
+                      <div className="col-span-2 sm:col-span-1">
+                        <label className="block text-sm mb-1.5 font-medium">Precio de oferta *</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">$</span>
+                          <input
+                            type="text"
+                            value={formatInputPrice(productForm.offerPrice)}
+                            onChange={(e) => setProductForm(p => ({ ...p, offerPrice: formatInputPrice(e.target.value) }))}
+                            placeholder="0,00"
+                            className="w-full pl-7 pr-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="col-span-2">
+                      <label className="block text-sm mb-2 font-medium">Imagen del producto *</label>
+                      <div className="flex items-start gap-6 p-4 bg-secondary/20 rounded-xl border border-border/50">
+                        {productImagePreview ? (
+                          <div className="relative group">
+                            <img
+                              src={productImagePreview}
+                              alt="Preview"
+                              className="w-32 h-32 object-cover rounded-lg border border-border shadow-md"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setProductImageFile(null);
+                                setProductImagePreview("");
+                              }}
+                              className="absolute -top-2 -right-2 bg-destructive text-white p-1.5 rounded-full hover:bg-destructive/90 transition-all shadow-md"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <label className="flex flex-col items-center justify-center w-32 h-32 border-2 border-dashed border-border hover:border-primary/50 rounded-lg cursor-pointer transition-colors bg-secondary/5">
+                            <Upload className="w-6 h-6 text-muted-foreground mb-1" />
+                            <span className="text-[10px] text-muted-foreground font-semibold">Subir imagen</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleImageSelect}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                        <div className="flex-1 text-xs text-muted-foreground flex flex-col justify-center gap-1">
+                          <p className="font-semibold text-foreground">Detalles de carga:</p>
+                          <p>• Formatos soportados: JPG, PNG, WEBP</p>
+                          <p>• Relación de aspecto recomendada: 1:1 (Cuadrada)</p>
+                          <p>• Tamaño máximo de archivo: 2 MB</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex justify-end gap-3 mt-5 pt-4 border-t border-border">
+
+                  <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-border/40">
                     <button
-                      onClick={() => setShowProductForm(false)}
-                      className="px-4 py-2 border border-border rounded-lg hover:bg-secondary transition-colors text-sm"
+                      type="button"
+                      onClick={() => {
+                        setShowProductForm(false);
+                        setEditingProductId(null);
+                      }}
+                      className="px-4 py-2 border border-border rounded-lg hover:bg-secondary/40 transition-colors text-sm text-foreground"
                     >
                       Cancelar
                     </button>
                     <button
+                      type="button"
                       onClick={handleSaveProduct}
                       disabled={
+                        isSaving ||
                         !productForm.name ||
-                        !productForm.price ||
-                        !productImageFile
+                        !parseInputPrice(productForm.price) ||
+                        (!editingProductId && !productImageFile)
                       }
-                      className="px-6 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-lg transition-colors text-sm"
+                      className="px-6 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-lg transition-colors text-sm font-semibold shadow-sm"
                     >
-                      Guardar producto
+                      {isSaving
+                        ? "Guardando..."
+                        : editingProductId
+                          ? "Actualizar producto"
+                          : "Guardar producto"}
                     </button>
                   </div>
                 </div>
@@ -1200,6 +1651,9 @@ export function AdminPanel() {
                       </th>
                       <th className="text-left p-4 text-sm font-medium">
                         Stock
+                      </th>
+                      <th className="text-left p-4 text-sm font-medium">
+                        Estado
                       </th>
                       <th className="text-right p-4 text-sm font-medium">
                         Acciones
@@ -1220,9 +1674,16 @@ export function AdminPanel() {
                               className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
                             />
                             <div>
-                              <p className="text-sm font-medium">
-                                {product.name}
-                              </p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium">
+                                  {product.name}
+                                </p>
+                                {product.onOffer && (
+                                  <span className="px-1.5 py-0.5 bg-accent/20 text-accent text-[9px] font-extrabold rounded tracking-wider">
+                                    PROMO
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-xs text-muted-foreground">
                                 {product.category}
                               </p>
@@ -1230,7 +1691,34 @@ export function AdminPanel() {
                           </div>
                         </td>
                         <td className="p-4 text-sm">
-                          {formatARS(product.price)}
+                          {product.onOffer ? (
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="line-through text-muted-foreground text-xs">
+                                  {formatARS(product.price)}
+                                </span>
+                                <span className="font-bold text-accent">
+                                  {formatARS(product.offerPrice ?? product.price)}
+                                </span>
+                              </div>
+                              {product.wholesalePrice && (
+                                <p className="text-[10px] text-muted-foreground mt-0.5">
+                                  May: <span className="font-medium text-foreground">{formatARS(product.wholesalePrice.price)}</span> (min. {product.wholesalePrice.quantity} u.)
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div>
+                              <span className="font-medium">
+                                {formatARS(product.price)}
+                              </span>
+                              {product.wholesalePrice && (
+                                <p className="text-[10px] text-muted-foreground mt-0.5">
+                                  May: <span className="font-medium text-foreground">{formatARS(product.wholesalePrice.price)}</span> (min. {product.wholesalePrice.quantity} u.)
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="p-4">
                           <span
@@ -1246,8 +1734,20 @@ export function AdminPanel() {
                           </span>
                         </td>
                         <td className="p-4">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+                              product.active
+                                ? "bg-accent/10 text-accent border-accent/20"
+                                : "bg-secondary/60 text-muted-foreground border-border"
+                            }`}
+                          >
+                            {product.active ? "Activo" : "Inactivo"}
+                          </span>
+                        </td>
+                        <td className="p-4">
                           <div className="flex gap-1 justify-end">
                             <button
+                              onClick={() => handleEditProductClick(product)}
                               className="p-2 hover:bg-secondary rounded-lg transition-colors"
                               title="Editar"
                             >
@@ -1266,6 +1766,226 @@ export function AdminPanel() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {/* OFERTAS DEL DÍA */}
+          {currentView === "daily-offers" && (
+            <div>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div>
+                  <h1 style={{ fontFamily: "Georgia, serif" }} className="text-2xl font-bold">
+                    Ofertas del día
+                  </h1>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Activá el descuento por producto y definí el precio de oferta
+                  </p>
+                </div>
+                <div className="bg-accent/10 text-accent border border-accent/20 px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 shadow-sm self-start md:self-auto">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>
+                    {(() => {
+                      const d = new Date();
+                      const dayName = d.toLocaleDateString("es-AR", { weekday: "long" });
+                      const dayNum = d.getDate();
+                      const monthName = d.toLocaleDateString("es-AR", { month: "long" });
+                      return `${dayName.charAt(0).toUpperCase() + dayName.slice(1)} ${dayNum} de ${monthName}`;
+                    })()}
+                  </span>
+                </div>
+              </div>
+
+              {/* KPIs Rows */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="bg-card border border-border rounded-xl p-5 shadow-sm flex flex-col justify-between h-28 hover:shadow-md transition-all duration-300">
+                  <span className="text-sm font-medium text-muted-foreground">Total productos</span>
+                  <span className="text-3xl font-extrabold tracking-tight mt-1">{products.length}</span>
+                </div>
+                <div className="bg-card border border-border rounded-xl p-5 shadow-sm flex flex-col justify-between h-28 hover:shadow-md transition-all duration-300">
+                  <span className="text-sm font-medium text-muted-foreground">En oferta hoy</span>
+                  <span className="text-3xl font-extrabold tracking-tight mt-1 text-accent">
+                    {Object.values(offersDraft).filter(d => d.onOffer).length}
+                  </span>
+                </div>
+                <div className="bg-card border border-border rounded-xl p-5 shadow-sm flex flex-col justify-between h-28 hover:shadow-md transition-all duration-300">
+                  <span className="text-sm font-medium text-muted-foreground">Descuento promedio</span>
+                  <span className="text-3xl font-extrabold tracking-tight mt-1 text-chart-4">
+                    {getAverageDiscount()}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Filters & Search Row */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-6">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="Buscar producto..."
+                    value={offersSearchQuery}
+                    onChange={(e) => setOffersSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
+                <div className="flex bg-secondary/40 p-1 border border-border rounded-lg self-start sm:self-auto">
+                  <button
+                    onClick={() => setOffersFilter("all")}
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                      offersFilter === "all"
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Todos
+                  </button>
+                  <button
+                    onClick={() => setOffersFilter("active")}
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                      offersFilter === "active"
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Con oferta
+                  </button>
+                  <button
+                    onClick={() => setOffersFilter("inactive")}
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                      offersFilter === "inactive"
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Sin oferta
+                  </button>
+                </div>
+              </div>
+
+              {/* Products Table */}
+              <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm mb-6">
+                <table className="w-full">
+                  <thead className="bg-secondary/50">
+                    <tr>
+                      <th className="text-left p-4 text-sm font-medium">Producto</th>
+                      <th className="text-left p-4 text-sm font-medium">Precio Normal</th>
+                      <th className="text-left p-4 text-sm font-medium" style={{ width: "200px" }}>Precio Oferta</th>
+                      <th className="text-left p-4 text-sm font-medium">Descuento</th>
+                      <th className="text-right p-4 text-sm font-medium" style={{ width: "100px" }}>Activo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredOffersProducts.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-muted-foreground text-sm">
+                          No se encontraron productos para los criterios seleccionados.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredOffersProducts.map((product) => {
+                        const draft = offersDraft[product.id] || { onOffer: false, offerPrice: "" };
+                        const pct = getDiscountPercentage(product.id);
+                        return (
+                          <tr
+                            key={product.id}
+                            className="border-t border-border hover:bg-secondary/20 transition-colors"
+                          >
+                            <td className="p-4">
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={product.image}
+                                  alt={product.name}
+                                  className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                                />
+                                <div>
+                                  <p className="text-sm font-medium">{product.name}</p>
+                                  <p className="text-xs text-muted-foreground">{product.category}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4 text-sm font-medium text-foreground">
+                              {formatARS(product.price)}
+                            </td>
+                            <td className="p-4">
+                              <div className="relative">
+                                <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium select-none ${
+                                  draft.onOffer ? "text-muted-foreground" : "text-muted-foreground/30"
+                                }`}>$</span>
+                                <input
+                                  type="text"
+                                  disabled={!draft.onOffer}
+                                  value={draft.offerPrice}
+                                  onChange={(e) => handleOfferPriceDraftChange(product.id, e.target.value)}
+                                  placeholder={draft.onOffer ? "0,00" : "Desactivado"}
+                                  className={`w-full pl-7 pr-3 py-1.5 border rounded-lg text-sm transition-all focus:ring-2 focus:ring-primary/20 ${
+                                    draft.onOffer
+                                      ? "bg-input-background border-border text-foreground font-medium"
+                                      : "bg-secondary/30 border-border/40 text-muted-foreground/40 cursor-not-allowed"
+                                  }`}
+                                />
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              {pct !== null ? (
+                                <span className="px-2.5 py-0.5 bg-accent/20 text-accent border border-accent/20 rounded-full text-xs font-semibold">
+                                  -{pct}%
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground/50 text-sm">—</span>
+                              )}
+                            </td>
+                            <td className="p-4">
+                              <div className="flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleOfferDraft(product.id)}
+                                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                    draft.onOffer ? "bg-accent" : "bg-switch-background"
+                                  }`}
+                                >
+                                  <span
+                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                      draft.onOffer ? "translate-x-5" : "translate-x-0"
+                                    }`}
+                                  />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Actions Bar */}
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-border/40">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const initialDraft: Record<string, { onOffer: boolean; offerPrice: string | number }> = {};
+                    products.forEach(p => {
+                      initialDraft[p.id] = {
+                        onOffer: p.onOffer || false,
+                        offerPrice: p.offerPrice ? formatInputPrice(p.offerPrice) : "",
+                      };
+                    });
+                    setOffersDraft(initialDraft);
+                    showSuccess("Descartado", "Se descartaron los cambios no guardados.");
+                  }}
+                  className="px-4 py-2 border border-border rounded-lg hover:bg-secondary/40 transition-colors text-sm text-foreground"
+                >
+                  Descartar
+                </button>
+                <button
+                  type="button"
+                  disabled={isSavingOffers}
+                  onClick={handleSaveDailyOffers}
+                  className="px-6 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-lg transition-colors text-sm font-semibold shadow-sm flex items-center gap-2"
+                >
+                  {isSavingOffers ? "Guardando cambios..." : "Guardar cambios"}
+                </button>
               </div>
             </div>
           )}
