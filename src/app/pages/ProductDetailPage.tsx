@@ -1,10 +1,11 @@
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Plus, Minus, ShoppingCart, Heart, Home, Share2 } from "lucide-react";
 import { useState, useEffect } from "react";
-import type { Product } from "../../lib/types";
+import type { Product, ProductGramage } from "../../lib/types";
 import {
   formatARS,
   getEffectivePrice,
+  getEffectiveGramagePrice,
   isWholesaleActive,
 } from "../../lib/price";
 import { useCart } from "../context/CartContext";
@@ -102,7 +103,7 @@ function SmallProductCard({ product }: { product: Product }) {
         {product.category && (
           <p className="text-xs text-muted-foreground">{product.category}</p>
         )}
-        {product.onOffer && product.offerPrice ? (
+        {product.offerPrice ? (
           <div className="flex items-center gap-2 mt-1">
             <span className="text-xs text-muted-foreground/60 line-through">
               {formatARS(product.price)}
@@ -126,11 +127,12 @@ function SmallProductCard({ product }: { product: Product }) {
 export function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { addToCart } = useCart();
+  const { addToCart, items } = useCart();
 
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
   const [favorited, setFavorited] = useState(false);
+  const [selectedGramage, setSelectedGramage] = useState<ProductGramage | null>(null);
 
   const [product, setProduct] = useState<Product | null>(null);
   const [related, setRelated] = useState<Product[]>([]);
@@ -159,16 +161,26 @@ export function ProductDetailPage() {
           category: p.categoryName ?? p.description ?? "",
           categoryId: p.categoryId ?? p.categoriaId,
           image: imgUrl(p.imagePath ?? p.imageUrl ?? ''),
-          onOffer: p.onOffer ?? false,
+          imagePath: p.imagePath ?? "",
+          description: p.description ?? "",
+          // La oferta se determina por offerPrice != null
+          onOffer: p.offerPrice != null,
           offerPrice: p.offerPrice ?? null,
-          discount: p.onOffer && p.offerPrice
+          discount: p.offerPrice != null && p.price
             ? Math.round(((p.price - p.offerPrice) / p.price) * 100)
             : (p.discount ?? p.descuento ?? 0),
           wholesalePrice: p.wholesalePrice
-            ? { quantity: p.wholesaleMinimumAmount ?? 10, price: p.wholesalePrice }
+            ? { quantity: p.minimumWholesaleAmount ?? 10, price: p.wholesalePrice }
             : undefined,
+          measurementUnit: p.measurementUnit ?? "unidad",
+          gramages: Array.isArray(p.gramages) ? p.gramages : [],
+          active: p.active ?? true,
         };
         setProduct(cur);
+        // Pre-seleccionar el primer gramaje si aplica
+        if (cur.measurementUnit === "gramo" && cur.gramages && cur.gramages.length > 0) {
+          setSelectedGramage(cur.gramages[0]);
+        }
 
         // Relacionados y Vistos recientemente: misma categoría y validación de existencia
         const allRes = await fetch(`${API_BASE}/api/products`);
@@ -185,11 +197,13 @@ export function ProductDetailPage() {
           category: r.categoryName ?? r.description ?? "",
           categoryId: r.categoryId ?? r.categoriaId,
           image: imgUrl(r.imagePath ?? r.imageUrl ?? ''),
-          onOffer: r.onOffer ?? false,
+          onOffer: r.offerPrice != null,
           offerPrice: r.offerPrice ?? null,
-          discount: r.onOffer && r.offerPrice
+          discount: r.offerPrice != null && r.price
             ? Math.round(((r.price - r.offerPrice) / r.price) * 100)
             : (r.discount ?? r.descuento ?? 0),
+          measurementUnit: r.measurementUnit ?? "unidad",
+          gramages: Array.isArray(r.gramages) ? r.gramages : [],
         }));
 
         setRelated(
@@ -265,13 +279,35 @@ export function ProductDetailPage() {
   }
 
   /* ── Datos derivados ── */
-  const effectivePrice = getEffectivePrice(product, quantity);
+  /* ── Datos derivados ── */
+  const isGramProduct = product.measurementUnit === "gramo";
+
+  const currentUsedInCart = items.filter(i => i.id === product.id).reduce((acc, i) => {
+    if (i.measurementUnit === 'gramo' && i.selectedGramage) return acc + (i.quantity * i.selectedGramage.grams);
+    return acc + i.quantity;
+  }, 0);
+
+  const remainingStock = product.stock - currentUsedInCart;
+  let maxQtyAllowed = remainingStock;
+  if (isGramProduct && selectedGramage) {
+    maxQtyAllowed = Math.floor(remainingStock / selectedGramage.grams);
+  }
+  // No permitir que maxQtyAllowed sea menor a 0
+  maxQtyAllowed = Math.max(0, maxQtyAllowed);
+  const displayPrice = isGramProduct && selectedGramage
+    ? getEffectiveGramagePrice(selectedGramage)
+    : getEffectivePrice(product, quantity);
+  const effectivePrice = displayPrice;
   const wholesale = isWholesaleActive(product, quantity);
-  const isDiscounted = (product.onOffer || !!product.discount) && !wholesale;
+  const isDiscounted = isGramProduct
+    ? !!(selectedGramage?.offerPrice != null && selectedGramage.offerPrice > 0)
+    : !!(product.offerPrice != null && product.offerPrice > 0 && !wholesale);
 
   const handleAdd = () => {
-    addToCart(product, quantity);
+    if (quantity > maxQtyAllowed) return;
+    addToCart(product, quantity, isGramProduct ? selectedGramage : undefined);
     setAdded(true);
+    setQuantity(1);
     setTimeout(() => setAdded(false), 2500);
   };
 
@@ -364,7 +400,7 @@ export function ProductDetailPage() {
                 <span className="inline-flex items-center gap-1.5 bg-emerald-500 text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-sm">
                   NUEVO
                 </span>
-                {product.onOffer && product.offerPrice && (
+                {product.offerPrice && (
                   <span className="inline-flex items-center gap-1 bg-red-500 text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-sm">
                     -{Math.round(((product.price - product.offerPrice) / product.price) * 100)}% OFF
                   </span>
@@ -465,16 +501,23 @@ export function ProductDetailPage() {
               <div className="flex flex-col gap-1">
                 {isDiscounted && (
                   <span className="text-base text-muted-foreground line-through">
-                    {formatARS(product.price)}
+                    {isGramProduct && selectedGramage
+                      ? formatARS(selectedGramage.price)
+                      : formatARS(product.price)}
                   </span>
                 )}
                 <div className="flex items-baseline gap-3 flex-wrap">
-                  <span className={`text-3xl font-bold ${isDiscounted ? "text-red-500" : "text-primary"}`}>
+                  <span className={`text-3xl font-bold ${isDiscounted ? "text-red-500" : "text-foreground"}`}>
                     {formatARS(effectivePrice)}
                   </span>
+                  {isGramProduct && (
+                    <span className="text-sm text-muted-foreground">/ {selectedGramage ? `${selectedGramage.grams}g` : "kg"}</span>
+                  )}
                   {isDiscounted && (
                     <span className="text-sm bg-red-50 text-red-500 border border-red-200 px-2 py-0.5 rounded-full font-semibold">
-                      -{product.discount}% OFF
+                      -{isGramProduct && selectedGramage && selectedGramage.price > 0
+                        ? Math.round(((selectedGramage.price - getEffectiveGramagePrice(selectedGramage)) / selectedGramage.price) * 100)
+                        : product.discount}% OFF
                     </span>
                   )}
                   {wholesale && (
@@ -508,31 +551,65 @@ export function ProductDetailPage() {
 
               <hr className="border-border" />
 
-              {/* Cantidad */}
+              {/* Selector de presentación (gramajes) */}
+              {product.stock > 0 && isGramProduct && product.gramages && product.gramages.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <span className="text-sm font-medium text-muted-foreground">Presentación:</span>
+                  <div className="flex flex-wrap gap-2">
+                    {product.gramages.map((g) => (
+                      <button
+                        key={g.id}
+                        onClick={() => setSelectedGramage(g)}
+                        className={`px-4 py-2 rounded-xl border text-sm font-semibold transition-all ${
+                          selectedGramage?.id === g.id
+                            ? "bg-foreground text-background border-foreground"
+                            : "border-border text-foreground hover:border-foreground/50"
+                        }`}
+                      >
+                        {g.grams >= 1000 ? `${g.grams / 1000} kg` : `${g.grams} g`}
+                        {g.offerPrice != null && g.offerPrice > 0 && (
+                          <span className="ml-1.5 text-[10px] text-red-500 font-bold">OFERTA</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Selector de cantidad */}
               {product.stock > 0 && (
-                <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-3 flex-wrap mt-2">
                   <span className="text-sm font-medium text-muted-foreground">Cantidad:</span>
-                  <div className="flex items-center border-2 border-border rounded-xl overflow-hidden bg-background">
+                  <div className={`flex items-center border-2 border-border rounded-xl overflow-hidden bg-background ${maxQtyAllowed === 0 ? 'opacity-50 pointer-events-none' : ''}`}>
                     <button
                       onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                       id="detail-qty-minus"
                       className="px-3 py-2.5 hover:bg-secondary transition-colors"
+                      disabled={maxQtyAllowed === 0}
                     >
                       <Minus className="w-4 h-4" />
                     </button>
-                    <span className="px-4 min-w-[3rem] text-center font-semibold">{quantity}</span>
+                    <span className="px-4 min-w-[3rem] text-center font-semibold">
+                      {maxQtyAllowed === 0 ? 0 : quantity}
+                    </span>
                     <button
-                      onClick={() => setQuantity((q) => Math.min(product.stock, q + 1))}
+                      onClick={() => setQuantity((q) => {
+                        return Math.min(maxQtyAllowed, q + 1);
+                      })}
                       id="detail-qty-plus"
                       className="px-3 py-2.5 hover:bg-secondary transition-colors"
+                      disabled={maxQtyAllowed === 0}
                     >
                       <Plus className="w-4 h-4" />
                     </button>
                   </div>
-                  {product.wholesalePrice && quantity < product.wholesalePrice.quantity && (
+                  {product.wholesalePrice && quantity < product.wholesalePrice.quantity && !isGramProduct && (
                     <span className="text-xs text-muted-foreground">
                       ({product.wholesalePrice.quantity - quantity} más para precio mayorista)
                     </span>
+                  )}
+                  {maxQtyAllowed === 0 && (
+                     <span className="text-xs text-destructive font-medium ml-2">Stock máximo alcanzado en el carrito</span>
                   )}
                 </div>
               )}
@@ -540,10 +617,10 @@ export function ProductDetailPage() {
               {/* Botón agregar */}
               <button
                 onClick={handleAdd}
-                disabled={product.stock === 0}
+                disabled={product.stock === 0 || maxQtyAllowed === 0 || quantity > maxQtyAllowed}
                 id="detail-add-to-cart"
                 className={`flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl font-medium transition-all shadow-md text-base ${
-                  product.stock === 0
+                  product.stock === 0 || maxQtyAllowed === 0 || quantity > maxQtyAllowed
                     ? "bg-muted text-muted-foreground cursor-not-allowed"
                     : added
                       ? "bg-emerald-500 text-white scale-[0.98]"
@@ -553,9 +630,11 @@ export function ProductDetailPage() {
                 <ShoppingCart className="w-5 h-5" />
                 {product.stock === 0
                   ? "Sin stock"
-                  : added
-                    ? "¡Agregado al carrito! ✓"
-                    : "Agregar al carrito"}
+                  : maxQtyAllowed === 0 || quantity > maxQtyAllowed
+                    ? "Stock máximo alcanzado"
+                    : added
+                      ? "¡Agregado al carrito! ✓"
+                      : "Agregar al carrito"}
               </button>
             </div>
           </div>
@@ -575,19 +654,6 @@ export function ProductDetailPage() {
           </section>
         )}
 
-        {/* ── Vistos recientemente ── */}
-        {recentlyViewed.length > 0 && (
-          <section className="mb-8">
-            <div className="flex items-center gap-3 mb-5 pb-3 border-b border-border">
-              <h2 className="text-base font-semibold text-foreground">Vistos recientemente</h2>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {recentlyViewed.map((p) => (
-                <SmallProductCard key={p.id} product={p} />
-              ))}
-            </div>
-          </section>
-        )}
       </main>
 
       <Footer />

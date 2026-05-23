@@ -1,4 +1,4 @@
-import type { Product } from './types';
+import type { Product, ProductGramage } from './types';
 
 export const FREE_SHIPPING_THRESHOLD = 5000;
 export const SHIPPING_COST = 500;
@@ -19,20 +19,33 @@ export function formatARS(amount: number): string {
 /**
  * Retorna el precio efectivo según la cantidad:
  * - Si aplica precio mayorista → precio mayorista
- * - Si tiene descuento → precio con descuento
+ * - Si tiene offerPrice → precio de oferta
+ * - Si tiene discount (legacy) → precio con descuento
  * - Si no → precio normal
  */
 export function getEffectivePrice(product: Product, quantity: number): number {
   if (product.wholesalePrice && quantity >= product.wholesalePrice.quantity) {
     return product.wholesalePrice.price;
   }
-  if (product.onOffer && product.offerPrice) {
+  // La oferta se determina por offerPrice != null (ya no existe onOffer en el backend)
+  if (product.offerPrice != null && product.offerPrice > 0) {
     return product.offerPrice;
   }
   if (product.discount) {
     return product.price * (1 - product.discount / 100);
   }
   return product.price;
+}
+
+/**
+ * Retorna el precio efectivo de un gramaje.
+ * Si tiene offerPrice en el gramaje, lo usa. Si no, usa el precio del gramaje.
+ */
+export function getEffectiveGramagePrice(gramage: ProductGramage): number {
+  if (gramage.offerPrice != null && gramage.offerPrice > 0) {
+    return gramage.offerPrice;
+  }
+  return gramage.price;
 }
 
 export function isWholesaleActive(product: Product, quantity: number): boolean {

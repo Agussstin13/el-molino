@@ -111,9 +111,11 @@ export function AdminPanel() {
     enableWholesale: false,
     wholesalePrice: 0 as string | number,
     minimumWholesaleAmount: 10,
-    onOffer: false,
+    enableOffer: false,
     offerPrice: 0 as string | number,
-    unidadVenta: "Unidad",
+    measurementUnit: "unidad" as "unidad" | "gramo",
+    gramages: [] as number[], // lista de gramos: [250, 500, 1000]
+    newGramageInput: "",       // input temporal para agregar un gramaje
     active: true,
   });
   const [productImageFile, setProductImageFile] = useState<File | null>(null);
@@ -145,17 +147,17 @@ export function AdminPanel() {
   );
 
   // Daily offers state
-  const [offersDraft, setOffersDraft] = useState<Record<string, { onOffer: boolean; offerPrice: string | number }>>({});
+  const [offersDraft, setOffersDraft] = useState<Record<string, { active: boolean; offerPrice: string | number }>>({});
   const [offersSearchQuery, setOffersSearchQuery] = useState("");
   const [offersFilter, setOffersFilter] = useState<"all" | "active" | "inactive">("all");
   const [isSavingOffers, setIsSavingOffers] = useState(false);
 
   useEffect(() => {
     if (currentView === "daily-offers") {
-      const initialDraft: Record<string, { onOffer: boolean; offerPrice: string | number }> = {};
+      const initialDraft: Record<string, { active: boolean; offerPrice: string | number }> = {};
       products.forEach(p => {
         initialDraft[p.id] = {
-          onOffer: p.onOffer || false,
+          active: p.offerPrice != null,
           offerPrice: p.offerPrice ? formatInputPrice(p.offerPrice) : "",
         };
       });
@@ -165,22 +167,24 @@ export function AdminPanel() {
 
   const handleToggleOfferDraft = (productId: string) => {
     setOffersDraft(prev => {
-      const current = prev[productId] || { onOffer: false, offerPrice: "" };
-      const nextOnOffer = !current.onOffer;
+      const current = prev[productId] || { active: false, offerPrice: "" };
+      const nextActive = !current.active;
       
       let nextOfferPrice = current.offerPrice;
-      if (nextOnOffer && !nextOfferPrice) {
+      if (nextActive && !nextOfferPrice) {
         const prod = products.find(p => p.id === productId);
         if (prod) {
           const suggested = Math.round(prod.price * 0.9);
           nextOfferPrice = formatInputPrice(suggested);
         }
+      } else if (!nextActive) {
+        nextOfferPrice = "";
       }
       
       return {
         ...prev,
         [productId]: {
-          onOffer: nextOnOffer,
+          active: nextActive,
           offerPrice: nextOfferPrice,
         },
       };
@@ -189,7 +193,7 @@ export function AdminPanel() {
 
   const handleOfferPriceDraftChange = (productId: string, value: string) => {
     setOffersDraft(prev => {
-      const current = prev[productId] || { onOffer: false, offerPrice: "" };
+      const current = prev[productId] || { active: false, offerPrice: "" };
       return {
         ...prev,
         [productId]: {
@@ -205,7 +209,7 @@ export function AdminPanel() {
     if (!prod) return null;
     
     const draft = offersDraft[productId];
-    if (!draft || !draft.onOffer) return null;
+    if (!draft || !draft.active) return null;
     
     const offerVal = parseInputPrice(draft.offerPrice);
     if (offerVal <= 0 || offerVal >= prod.price) return null;
@@ -219,7 +223,7 @@ export function AdminPanel() {
     let count = 0;
     products.forEach(p => {
       const draft = offersDraft[p.id];
-      if (draft && draft.onOffer) {
+      if (draft && draft.active) {
         const offerVal = parseInputPrice(draft.offerPrice);
         if (offerVal > 0 && offerVal < p.price) {
           sum += ((p.price - offerVal) / p.price) * 100;
@@ -234,12 +238,12 @@ export function AdminPanel() {
     const dirtyProducts = products.filter(p => {
       const draft = offersDraft[p.id];
       if (!draft) return false;
-      
       const parsedDraftPrice = parseInputPrice(draft.offerPrice);
-      const isStatusChanged = draft.onOffer !== p.onOffer;
-      const isPriceChanged = parsedDraftPrice !== p.offerPrice;
-      
-      return isStatusChanged || isPriceChanged;
+      const currentOfferActive = p.offerPrice != null;
+      const draftOfferActive = draft.active;
+      const isStatusChanged = draftOfferActive !== currentOfferActive;
+      const isPriceChanged = parsedDraftPrice !== (p.offerPrice ?? 0);
+      return isStatusChanged || (draftOfferActive && isPriceChanged);
     });
 
     if (dirtyProducts.length === 0) {
@@ -263,9 +267,12 @@ export function AdminPanel() {
       formData.append("Stock", String(p.stock));
       formData.append("CategoryId", String(p.categoryId));
       formData.append("Active", String(p.active));
-      
-      formData.append("OnOffer", String(draft.onOffer));
-      formData.append("OfferPrice", String(parsedDraftPrice));
+      formData.append("MeasurementUnit", p.measurementUnit ?? "unidad");
+
+      // Si la oferta está activa, enviamos el precio; si no, no enviamos nada (backend lo pone en null)
+      if (draft.active && parsedDraftPrice > 0) {
+        formData.append("OfferPrice", String(parsedDraftPrice));
+      }
       
       if (p.wholesalePrice) {
         formData.append("WholesalePrice", String(p.wholesalePrice.price));
@@ -311,10 +318,12 @@ export function AdminPanel() {
           imagePath: p.imagePath ?? p.imageUrl ?? "",
           active: p.active ?? true,
           offerPrice: p.offerPrice ?? null,
-          onOffer: p.onOffer ?? false,
+          onOffer: p.offerPrice != null,
+          measurementUnit: p.measurementUnit ?? "unidad",
+          gramages: Array.isArray(p.gramages) ? p.gramages : [],
           wholesalePrice: p.wholesalePrice
             ? {
-                quantity: p.wholesaleMinimumAmount ?? 10,
+                quantity: p.minimumWholesaleAmount ?? 10,
                 price: p.wholesalePrice,
               }
             : undefined,
@@ -442,8 +451,10 @@ export function AdminPanel() {
             imagePath: p.imagePath ?? p.imageUrl ?? "",
             image: imgUrl(p.imagePath ?? p.imageUrl ?? ""),
             active: p.active ?? true,
-            onOffer: p.onOffer ?? false,
-            offerPrice: p.offerPrice,
+            onOffer: p.offerPrice != null,
+            offerPrice: p.offerPrice ?? null,
+            measurementUnit: p.measurementUnit ?? "unidad",
+            gramages: Array.isArray(p.gramages) ? p.gramages : [],
             wholesalePrice: p.wholesalePrice
               ? {
                   quantity: p.minimumWholesaleAmount ?? 10,
@@ -532,9 +543,11 @@ export function AdminPanel() {
       enableWholesale: false,
       wholesalePrice: 0,
       minimumWholesaleAmount: 10,
-      onOffer: false,
+      enableOffer: false,
       offerPrice: 0,
-      unidadVenta: "Unidad",
+      measurementUnit: "unidad",
+      gramages: [],
+      newGramageInput: "",
       active: true,
     });
     setProductImageFile(null);
@@ -548,14 +561,18 @@ export function AdminPanel() {
       name: product.name || "",
       description: product.description || "",
       price: product.price || 0,
-      stock: product.stock || 0,
+      stock: product.measurementUnit === "gramo" ? (product.stock / 1000) : (product.stock || 0),
       category: product.category || "",
       enableWholesale: !!product.wholesalePrice,
       wholesalePrice: product.wholesalePrice?.price || 0,
       minimumWholesaleAmount: product.wholesalePrice?.quantity || 10,
-      onOffer: !!product.onOffer,
+      enableOffer: product.offerPrice != null,
       offerPrice: product.offerPrice || 0,
-      unidadVenta: "Unidad",
+      measurementUnit: product.measurementUnit ?? "unidad",
+      gramages: Array.isArray(product.gramages)
+        ? product.gramages.map((g: any) => g.grams)
+        : [],
+      newGramageInput: "",
       active: product.active !== false,
     });
     setProductImagePreview(product.image || "");
@@ -573,26 +590,53 @@ export function AdminPanel() {
       return;
     }
 
+    const parsedPrice = parseInputPrice(productForm.price);
+    const parsedWholesale = parseInputPrice(productForm.wholesalePrice);
+    const parsedOffer = parseInputPrice(productForm.offerPrice);
+
+    if (productForm.enableWholesale && parsedWholesale >= parsedPrice) {
+      showError("Error en precio", "El precio mayorista debe ser menor al precio normal.");
+      return;
+    }
+
+    if (productForm.enableOffer && parsedOffer > 0 && parsedOffer >= parsedPrice) {
+      showError("Error en precio", "El precio de oferta debe ser menor al precio normal.");
+      return;
+    }
+
+    if (productForm.enableWholesale && productForm.enableOffer && parsedOffer > 0 && parsedWholesale >= parsedOffer) {
+      showError("Error en precio", "El precio mayorista debe ser menor al precio de oferta.");
+      return;
+    }
+
     setIsSaving(true);
     const formData = new FormData();
     formData.append("Name", productForm.name ?? "");
     formData.append("Description", productForm.description ?? "");
     formData.append("Price", String(parseInputPrice(productForm.price)));
-    formData.append("Stock", String(productForm.stock ?? 0));
+    
+    const finalStock = productForm.measurementUnit === "gramo" ? ((productForm.stock ?? 0) * 1000) : (productForm.stock ?? 0);
+    formData.append("Stock", String(finalStock));
+    
     formData.append("CategoryId", String(selectedCategory.id));
     formData.append("Active", String(productForm.active));
+    formData.append("MeasurementUnit", productForm.measurementUnit);
+
+    // Gramajes: solo si es producto por gramo
+    if (productForm.measurementUnit === "gramo") {
+      productForm.gramages.forEach(g => formData.append("Gramages", String(g)));
+    }
 
     if (productForm.enableWholesale) {
       formData.append("WholesalePrice", String(parseInputPrice(productForm.wholesalePrice)));
       formData.append("MinimumWholesaleAmount", String(productForm.minimumWholesaleAmount));
     }
 
-    if (productForm.onOffer) {
-      formData.append("OnOffer", "true");
+    // La oferta se activa/desactiva enviando o no offerPrice
+    if (productForm.enableOffer && parseInputPrice(productForm.offerPrice) > 0) {
       formData.append("OfferPrice", String(parseInputPrice(productForm.offerPrice)));
-    } else {
-      formData.append("OnOffer", "false");
     }
+    // Si no hay oferta, no enviamos OfferPrice (el backend lo pondrá en null)
 
     if (productImageFile) {
       formData.append("Image", productImageFile);
@@ -637,10 +681,12 @@ export function AdminPanel() {
             imagePath: p.imagePath ?? p.imageUrl ?? "",
             active: p.active ?? true,
             offerPrice: p.offerPrice ?? null,
-            onOffer: p.onOffer ?? false,
+            onOffer: p.offerPrice != null,
+            measurementUnit: p.measurementUnit ?? "unidad",
+            gramages: Array.isArray(p.gramages) ? p.gramages : [],
             wholesalePrice: p.wholesalePrice
               ? {
-                  quantity: p.wholesaleMinimumAmount ?? 10,
+                  quantity: p.minimumWholesaleAmount ?? 10,
                   price: p.wholesalePrice,
                 }
               : undefined,
@@ -659,9 +705,11 @@ export function AdminPanel() {
           enableWholesale: false,
           wholesalePrice: 0,
           minimumWholesaleAmount: 10,
-          onOffer: false,
+          enableOffer: false,
           offerPrice: 0,
-          unidadVenta: "Unidad",
+          measurementUnit: "unidad",
+          gramages: [],
+          newGramageInput: "",
           active: true,
         });
         setProductImageFile(null);
@@ -1230,11 +1278,26 @@ export function AdminPanel() {
             showSuccess("¡Listo!", "La categoría fue eliminada.");
           } else {
             const errorData = await res.json().catch(() => ({}));
-            showError(
-              "No se pudo borrar",
-              errorData.title ||
-                "Hubo un problema al intentar borrar la categoría.",
-            );
+            const errorMsg: string =
+              errorData.message ?? errorData.title ?? errorData.detail ?? "";
+
+            // 409 Conflict o mensaje que menciona productos asociados
+            const hasLinkedProducts =
+              res.status === 409 ||
+              errorMsg.toLowerCase().includes("product") ||
+              errorMsg.toLowerCase().includes("asociad");
+
+            if (hasLinkedProducts) {
+              showError(
+                "No se puede eliminar",
+                "Esta categoría tiene productos asociados. Reasigná o eliminá esos productos antes de borrar la categoría.",
+              );
+            } else {
+              showError(
+                "No se pudo borrar",
+                errorMsg || "Hubo un problema al intentar borrar la categoría.",
+              );
+            }
           }
         } catch {
           showError("Problema de red", "No pudimos conectar con el servidor.");
@@ -1307,7 +1370,7 @@ export function AdminPanel() {
       if (!matchesName && !matchesCat) return false;
     }
     const draft = offersDraft[p.id];
-    const isOnOffer = draft ? draft.onOffer : (p.onOffer || false);
+    const isOnOffer = draft ? draft.active : (p.offerPrice != null);
     if (offersFilter === "active") return isOnOffer;
     if (offersFilter === "inactive") return !isOnOffer;
     return true;
@@ -1355,6 +1418,8 @@ export function AdminPanel() {
         <div className="border-t border-sidebar-border pt-4 space-y-2">
           <a
             href="/"
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition-colors text-sm"
           >
             <Package className="w-4 h-4" />
@@ -1443,21 +1508,37 @@ export function AdminPanel() {
                         className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all resize-none"
                       />
                     </div>
-                    <div className="col-span-2 sm:col-span-1">
-                      <label className="block text-sm mb-1.5 font-medium">Unidad de venta *</label>
-                      <select
-                        value={productForm.unidadVenta || "Unidad"}
-                        onChange={(e) => setProductForm(p => ({ ...p, unidadVenta: e.target.value }))}
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer text-foreground"
-                      >
-                        <option value="Unidad">Unidad</option>
-                        <option value="Kilogramo">Kilogramo</option>
-                        <option value="Gramo">Gramo</option>
-                        <option value="Pack">Pack</option>
-                      </select>
+                    <div className="col-span-2">
+                      <label className="block text-sm mb-1.5 font-medium">Tipo de venta *</label>
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setProductForm(p => ({ ...p, measurementUnit: "unidad", gramages: [], newGramageInput: "" }))}
+                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${
+                            productForm.measurementUnit === "unidad"
+                              ? "bg-foreground text-background border-foreground"
+                              : "border-border text-foreground hover:border-foreground/50"
+                          }`}
+                        >
+                          Por unidad
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setProductForm(p => ({ ...p, measurementUnit: "gramo" }))}
+                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${
+                            productForm.measurementUnit === "gramo"
+                              ? "bg-foreground text-background border-foreground"
+                              : "border-border text-foreground hover:border-foreground/50"
+                          }`}
+                        >
+                          Por gramo (kg)
+                        </button>
+                      </div>
                     </div>
                     <div className="col-span-2 sm:col-span-1">
-                      <label className="block text-sm mb-1.5 font-medium">Stock inicial *</label>
+                      <label className="block text-sm mb-1.5 font-medium">
+                        {productForm.measurementUnit === "gramo" ? "Stock inicial (kilos) *" : "Stock inicial (unidades) *"}
+                      </label>
                       <input
                         type="number"
                         value={productForm.stock || ""}
@@ -1467,7 +1548,9 @@ export function AdminPanel() {
                       />
                     </div>
                     <div className="col-span-2 sm:col-span-1">
-                      <label className="block text-sm mb-1.5 font-medium">Precio minorista *</label>
+                      <label className="block text-sm mb-1.5 font-medium">
+                        {productForm.measurementUnit === "gramo" ? "Precio por kg *" : "Precio minorista *"}
+                      </label>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">$</span>
                         <input
@@ -1478,6 +1561,9 @@ export function AdminPanel() {
                           className="w-full pl-7 pr-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
                         />
                       </div>
+                      {productForm.measurementUnit === "gramo" && (
+                        <p className="text-[11px] text-muted-foreground mt-1">El precio de cada gramaje se calcula automáticamente a partir del precio por kg.</p>
+                      )}
                     </div>
                     <div className="col-span-2 sm:col-span-1 flex items-center justify-between p-3 bg-secondary/20 border border-border/50 rounded-lg">
                       <span className="text-sm font-medium text-foreground">Producto activo</span>
@@ -1536,19 +1622,74 @@ export function AdminPanel() {
                       </>
                     )}
 
+                    {/* Gramajes — solo si producto por gramo */}
+                    {productForm.measurementUnit === "gramo" && (
+                      <div className="col-span-2 p-4 bg-secondary/20 border border-border/50 rounded-xl">
+                        <label className="block text-sm font-medium mb-3">Presentaciones (gramajes) *</label>
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {productForm.gramages.length === 0 && (
+                            <p className="text-xs text-muted-foreground italic">No hay gramajes cargados todavía.</p>
+                          )}
+                          {productForm.gramages.map((g, i) => (
+                            <div key={i} className="flex items-center gap-1.5 bg-background border border-border rounded-lg px-2.5 py-1.5 text-sm font-medium">
+                              {g >= 1000 ? `${g / 1000} kg` : `${g} g`}
+                              <button
+                                type="button"
+                                onClick={() => setProductForm(p => ({ ...p, gramages: p.gramages.filter((_, idx) => idx !== i) }))}
+                                className="text-muted-foreground hover:text-destructive transition-colors"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            value={productForm.newGramageInput}
+                            onChange={(e) => setProductForm(p => ({ ...p, newGramageInput: e.target.value }))}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                const val = parseInt(productForm.newGramageInput);
+                                if (val > 0 && !productForm.gramages.includes(val)) {
+                                  setProductForm(p => ({ ...p, gramages: [...p.gramages, val].sort((a, b) => a - b), newGramageInput: "" }));
+                                }
+                              }
+                            }}
+                            placeholder="Ej: 250 (en gramos)"
+                            className="flex-1 px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const val = parseInt(productForm.newGramageInput);
+                              if (val > 0 && !productForm.gramages.includes(val)) {
+                                setProductForm(p => ({ ...p, gramages: [...p.gramages, val].sort((a, b) => a - b), newGramageInput: "" }));
+                              }
+                            }}
+                            className="px-4 py-2 bg-foreground text-background rounded-lg text-sm font-medium hover:opacity-80 transition-opacity flex items-center gap-1.5"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Agregar
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-2">Ingresá el peso en gramos. Ej: 250, 500, 1000</p>
+                      </div>
+                    )}
+
                     <div className="col-span-2 pt-2 border-t border-border/40 mt-2">
                       <label className="flex items-center gap-2 text-sm font-medium cursor-pointer select-none text-foreground">
                         <input
                           type="checkbox"
-                          checked={productForm.onOffer}
-                          onChange={(e) => setProductForm(p => ({ ...p, onOffer: e.target.checked }))}
+                          checked={productForm.enableOffer}
+                          onChange={(e) => setProductForm(p => ({ ...p, enableOffer: e.target.checked }))}
                           className="accent-primary rounded border-border"
                         />
                         Habilitar precio de oferta (Promoción)
                       </label>
                     </div>
 
-                    {productForm.onOffer && (
+                    {productForm.enableOffer && (
                       <div className="col-span-2 sm:col-span-1">
                         <label className="block text-sm mb-1.5 font-medium">Precio de oferta *</label>
                         <div className="relative">
@@ -1678,9 +1819,14 @@ export function AdminPanel() {
                                 <p className="text-sm font-medium">
                                   {product.name}
                                 </p>
-                                {product.onOffer && (
+                                {product.offerPrice != null && (
                                   <span className="px-1.5 py-0.5 bg-accent/20 text-accent text-[9px] font-extrabold rounded tracking-wider">
                                     PROMO
+                                  </span>
+                                )}
+                                {product.measurementUnit === "gramo" && (
+                                  <span className="px-1.5 py-0.5 bg-secondary text-muted-foreground text-[9px] font-semibold rounded tracking-wider">
+                                    GRAMOS
                                   </span>
                                 )}
                               </div>
@@ -1691,14 +1837,14 @@ export function AdminPanel() {
                           </div>
                         </td>
                         <td className="p-4 text-sm">
-                          {product.onOffer ? (
+                          {product.offerPrice != null ? (
                             <div>
                               <div className="flex items-center gap-1.5">
                                 <span className="line-through text-muted-foreground text-xs">
                                   {formatARS(product.price)}
                                 </span>
                                 <span className="font-bold text-accent">
-                                  {formatARS(product.offerPrice ?? product.price)}
+                                  {formatARS(product.offerPrice)}
                                 </span>
                               </div>
                               {product.wholesalePrice && (
@@ -1711,10 +1857,16 @@ export function AdminPanel() {
                             <div>
                               <span className="font-medium">
                                 {formatARS(product.price)}
+                                {product.measurementUnit === "gramo" && <span className="text-muted-foreground text-xs ml-1">/kg</span>}
                               </span>
                               {product.wholesalePrice && (
                                 <p className="text-[10px] text-muted-foreground mt-0.5">
                                   May: <span className="font-medium text-foreground">{formatARS(product.wholesalePrice.price)}</span> (min. {product.wholesalePrice.quantity} u.)
+                                </p>
+                              )}
+                              {product.measurementUnit === "gramo" && Array.isArray(product.gramages) && product.gramages.length > 0 && (
+                                <p className="text-[10px] text-muted-foreground mt-0.5">
+                                  {(product.gramages as any[]).map((g: any) => g.grams >= 1000 ? `${g.grams / 1000}kg` : `${g.grams}g`).join(" · ")}
                                 </p>
                               )}
                             </div>
@@ -1730,7 +1882,9 @@ export function AdminPanel() {
                                   : "bg-destructive/20 text-destructive"
                             }`}
                           >
-                            {product.stock} uds.
+                            {product.measurementUnit === "gramo" 
+                              ? (product.stock >= 1000 ? `${product.stock / 1000} kg` : `${product.stock} g`)
+                              : `${product.stock} uds.`}
                           </span>
                         </td>
                         <td className="p-4">
@@ -1805,7 +1959,7 @@ export function AdminPanel() {
                 <div className="bg-card border border-border rounded-xl p-5 shadow-sm flex flex-col justify-between h-28 hover:shadow-md transition-all duration-300">
                   <span className="text-sm font-medium text-muted-foreground">En oferta hoy</span>
                   <span className="text-3xl font-extrabold tracking-tight mt-1 text-accent">
-                    {Object.values(offersDraft).filter(d => d.onOffer).length}
+                    {Object.values(offersDraft).filter(d => d.active).length}
                   </span>
                 </div>
                 <div className="bg-card border border-border rounded-xl p-5 shadow-sm flex flex-col justify-between h-28 hover:shadow-md transition-all duration-300">
@@ -1883,7 +2037,7 @@ export function AdminPanel() {
                       </tr>
                     ) : (
                       filteredOffersProducts.map((product) => {
-                        const draft = offersDraft[product.id] || { onOffer: false, offerPrice: "" };
+                        const draft = offersDraft[product.id] || { active: false, offerPrice: "" };
                         const pct = getDiscountPercentage(product.id);
                         return (
                           <tr
@@ -1908,22 +2062,22 @@ export function AdminPanel() {
                             </td>
                             <td className="p-4">
                               <div className="relative">
-                                <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium select-none ${
-                                  draft.onOffer ? "text-muted-foreground" : "text-muted-foreground/30"
-                                }`}>$</span>
-                                <input
-                                  type="text"
-                                  disabled={!draft.onOffer}
-                                  value={draft.offerPrice}
-                                  onChange={(e) => handleOfferPriceDraftChange(product.id, e.target.value)}
-                                  placeholder={draft.onOffer ? "0,00" : "Desactivado"}
-                                  className={`w-full pl-7 pr-3 py-1.5 border rounded-lg text-sm transition-all focus:ring-2 focus:ring-primary/20 ${
-                                    draft.onOffer
-                                      ? "bg-input-background border-border text-foreground font-medium"
-                                      : "bg-secondary/30 border-border/40 text-muted-foreground/40 cursor-not-allowed"
-                                  }`}
-                                />
-                              </div>
+                                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium select-none ${
+                                    draft.active ? "text-muted-foreground" : "text-muted-foreground/30"
+                                  }`}>$</span>
+                                  <input
+                                    type="text"
+                                    disabled={!draft.active}
+                                    value={draft.offerPrice}
+                                    onChange={(e) => handleOfferPriceDraftChange(product.id, e.target.value)}
+                                    placeholder={draft.active ? "0,00" : "Desactivado"}
+                                    className={`w-full pl-7 pr-3 py-1.5 border rounded-lg text-sm transition-all focus:ring-2 focus:ring-primary/20 ${
+                                      draft.active
+                                        ? "bg-input-background border-border text-foreground font-medium"
+                                        : "bg-secondary/30 border-border/40 text-muted-foreground/40 cursor-not-allowed"
+                                    }`}
+                                  />
+                                </div>
                             </td>
                             <td className="p-4">
                               {pct !== null ? (
@@ -1940,12 +2094,12 @@ export function AdminPanel() {
                                   type="button"
                                   onClick={() => handleToggleOfferDraft(product.id)}
                                   className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                    draft.onOffer ? "bg-accent" : "bg-switch-background"
+                                    draft.active ? "bg-accent" : "bg-switch-background"
                                   }`}
                                 >
                                   <span
                                     className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                      draft.onOffer ? "translate-x-5" : "translate-x-0"
+                                      draft.active ? "translate-x-5" : "translate-x-0"
                                     }`}
                                   />
                                 </button>
@@ -1964,10 +2118,10 @@ export function AdminPanel() {
                 <button
                   type="button"
                   onClick={() => {
-                    const initialDraft: Record<string, { onOffer: boolean; offerPrice: string | number }> = {};
+                    const initialDraft: Record<string, { active: boolean; offerPrice: string | number }> = {};
                     products.forEach(p => {
                       initialDraft[p.id] = {
-                        onOffer: p.onOffer || false,
+                        active: p.offerPrice != null,
                         offerPrice: p.offerPrice ? formatInputPrice(p.offerPrice) : "",
                       };
                     });

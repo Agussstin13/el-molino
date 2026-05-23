@@ -1,3 +1,11 @@
+export interface ProductGramage {
+  id: number;
+  productId: number;
+  grams: number;
+  price: number;
+  offerPrice?: number | null;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -11,12 +19,15 @@ export interface Product {
   categoryId?: number;
   stock: number;
   active?: boolean;
-  onOffer?: boolean;
   offerPrice?: number | null;
+  onOffer?: boolean; // legacy — derivado de offerPrice != null
+  measurementUnit?: string; // "unidad" | "gramo"
+  gramages?: ProductGramage[];
 }
 
 export interface CartItem extends Product {
   quantity: number;
+  selectedGramage?: ProductGramage; // gramaje seleccionado si aplica
 }
 
 export interface Coupon {

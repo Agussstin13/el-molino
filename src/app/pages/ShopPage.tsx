@@ -53,16 +53,19 @@ export function ShopPage() {
           category: p.categoryName ?? p.description ?? "",
           image: imgUrl(p.imagePath ?? p.imageUrl ?? ''),
           categoryId: p.categoryId ?? p.categoriaId,
-          onOffer: p.onOffer ?? false,
+          onOffer: p.offerPrice != null,
           offerPrice: p.offerPrice ?? null,
-          discount: p.onOffer && p.offerPrice
+          discount: p.offerPrice != null && p.price
             ? Math.round(((p.price - p.offerPrice) / p.price) * 100)
             : (p.discount ?? p.descuento ?? 0),
           wholesalePrice: p.wholesalePrice
-            ? { quantity: p.wholesaleMinimumAmount ?? 10, price: p.wholesalePrice }
-            : p.precioMayorista
-            ? { quantity: p.montoMinimoMayorista ?? 10, price: p.precioMayorista }
+            ? { quantity: p.minimumWholesaleAmount ?? 10, price: p.wholesalePrice }
             : undefined,
+          measurementUnit: p.measurementUnit ?? "unidad",
+          gramages: Array.isArray(p.gramages) ? p.gramages : [],
+          imagePath: p.imagePath ?? "",
+          description: p.description ?? "",
+          active: p.active ?? true,
         }));
 
         if (categoryId) {

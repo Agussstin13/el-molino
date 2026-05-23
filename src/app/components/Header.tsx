@@ -15,7 +15,7 @@ interface Category {
 
 export function Header() {
   const { cartCount, openCart } = useCart();
-  const { isClientAuthenticated } = useAuth();
+  const { isClientAuthenticated, clientUser } = useAuth();
   const [search, setSearch] = useState("");
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -86,10 +86,17 @@ export function Header() {
             {/* Client Auth */}
             <button
               onClick={() => setIsLoginModalOpen(true)}
-              className={`p-2 rounded-lg transition-colors flex-shrink-0 ${isClientAuthenticated ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-foreground'}`}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors flex-shrink-0 ${isClientAuthenticated ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-foreground'}`}
               aria-label="Mi Perfil"
             >
-              <User className="w-6 h-6" />
+              <User className="w-5 h-5" />
+              {isClientAuthenticated && clientUser && (
+                <span className="hidden sm:inline text-sm font-medium">
+                  {clientUser.nombre && clientUser.apellido 
+                    ? `${clientUser.nombre} ${clientUser.apellido}` 
+                    : clientUser.nombre || clientUser.email?.split('@')[0] || 'Mi cuenta'}
+                </span>
+              )}
             </button>
 
             {/* Cart */}

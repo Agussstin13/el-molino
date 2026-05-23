@@ -15,9 +15,9 @@ interface CartContextType {
   subtotal: number;
   shipping: number;
   total: number;
-  addToCart: (product: Product, quantity: number) => void;
-  updateQuantity: (id: string, quantity: number) => void;
-  removeItem: (id: string) => void;
+  addToCart: (product: Product, quantity: number, selectedGramage?: any) => void;
+  updateQuantity: (id: string, quantity: number, selectedGramageId?: number) => void;
+  removeItem: (id: string, selectedGramageId?: number) => void;
   openCart: () => void;
   closeCart: () => void;
   openCheckout: () => void;
@@ -47,32 +47,32 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 
-  const addToCart = (product: Product, quantity: number) => {
+  const addToCart = (product: Product, quantity: number, selectedGramage?: any) => {
     setItems(prev => {
-      const existing = prev.find(item => item.id === product.id);
+      const existing = prev.find(item => item.id === product.id && item.selectedGramage?.id === selectedGramage?.id);
       if (existing) {
         return prev.map(item =>
-          item.id === product.id
+          item.id === product.id && item.selectedGramage?.id === selectedGramage?.id
             ? { ...item, quantity: item.quantity + quantity }
             : item
         );
       }
-      return [...prev, { ...product, quantity }];
+      return [...prev, { ...product, quantity, selectedGramage }];
     });
   };
 
-  const updateQuantity = (id: string, quantity: number) => {
+  const updateQuantity = (id: string, quantity: number, selectedGramageId?: number) => {
     if (quantity <= 0) {
-      removeItem(id);
+      removeItem(id, selectedGramageId);
       return;
     }
     setItems(prev =>
-      prev.map(item => (item.id === id ? { ...item, quantity } : item))
+      prev.map(item => (item.id === id && item.selectedGramage?.id === selectedGramageId ? { ...item, quantity } : item))
     );
   };
 
-  const removeItem = (id: string) => {
-    setItems(prev => prev.filter(item => item.id !== id));
+  const removeItem = (id: string, selectedGramageId?: number) => {
+    setItems(prev => prev.filter(item => !(item.id === id && item.selectedGramage?.id === selectedGramageId)));
   };
 
   const cartCount = items.reduce((sum, item) => sum + item.quantity, 0);

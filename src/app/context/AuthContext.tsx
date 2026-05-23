@@ -95,9 +95,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Decode JWT payload to get user id/name from claims
         try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
+          const base64Url = token.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+          }).join(''));
+          const payload = JSON.parse(jsonPayload);
+          
           const userId = payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] || payload.sub;
-          setClientUser({ email, token, id: userId ? parseInt(userId, 10) : null });
+          const nombre = payload.nombre;
+          const apellido = payload.apellido;
+          setClientUser({ email, token, id: userId ? parseInt(userId, 10) : null, nombre, apellido });
         } catch {
           setClientUser({ email, token });
         }

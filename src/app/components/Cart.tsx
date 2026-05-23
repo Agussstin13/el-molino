@@ -60,7 +60,7 @@ export function Cart() {
 
                 return (
                   <div
-                    key={item.id}
+                    key={`${item.id}-${item.selectedGramage?.id || 'base'}`}
                     className="flex gap-3 p-3 bg-secondary/30 rounded-xl border border-border/50"
                   >
                     <img
@@ -69,7 +69,9 @@ export function Cart() {
                       className="w-20 h-20 object-cover rounded-lg flex-shrink-0"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium line-clamp-2 mb-1">{item.name}</p>
+                      <p className="text-sm font-medium line-clamp-2 mb-1">
+                        {item.name} {item.selectedGramage && `(${item.selectedGramage.grams >= 1000 ? `${item.selectedGramage.grams / 1000} kg` : `${item.selectedGramage.grams} g`})`}
+                      </p>
                       <div className="flex items-center gap-1.5 mb-2">
                         <span className="text-sm text-primary font-semibold">
                           {formatARS(unitPrice)}
@@ -83,7 +85,7 @@ export function Cart() {
                       <div className="flex items-center gap-2">
                         <div className="flex items-center border border-border rounded-lg bg-card overflow-hidden">
                           <button
-                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                            onClick={() => updateQuantity(item.id, item.quantity - 1, item.selectedGramage?.id)}
                             className="p-1.5 hover:bg-secondary transition-colors"
                           >
                             <Minus className="w-3 h-3" />
@@ -92,7 +94,18 @@ export function Cart() {
                             {item.quantity}
                           </span>
                           <button
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                            onClick={() => {
+                              // Calcular stock restante
+                              const currentUsed = items.filter(i => i.id === item.id).reduce((acc, i) => {
+                                if (i.measurementUnit === 'gramo' && i.selectedGramage) return acc + (i.quantity * i.selectedGramage.grams);
+                                return acc + i.quantity;
+                              }, 0);
+                              const remaining = item.stock - currentUsed;
+                              const required = item.measurementUnit === 'gramo' && item.selectedGramage ? item.selectedGramage.grams : 1;
+                              if (remaining >= required) {
+                                updateQuantity(item.id, item.quantity + 1, item.selectedGramage?.id);
+                              }
+                            }}
                             className="p-1.5 hover:bg-secondary transition-colors"
                           >
                             <Plus className="w-3 h-3" />
@@ -102,7 +115,7 @@ export function Cart() {
                           {formatARS(unitPrice * item.quantity)}
                         </span>
                         <button
-                          onClick={() => removeItem(item.id)}
+                          onClick={() => removeItem(item.id, item.selectedGramage?.id)}
                           className="p-1.5 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
                           aria-label="Eliminar"
                         >
@@ -120,36 +133,10 @@ export function Cart() {
         {/* Footer */}
         {items.length > 0 && (
           <div className="border-t-2 border-border p-4 space-y-4 bg-secondary/20">
-            {/* Barra de progreso envío gratis */}
-            {subtotal < FREE_SHIPPING_THRESHOLD && (
-              <div>
-                <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                  <span>Envío gratis a partir de {formatARS(FREE_SHIPPING_THRESHOLD)}</span>
-                  <span>{formatARS(FREE_SHIPPING_THRESHOLD - subtotal)} restante</span>
-                </div>
-                <div className="h-1.5 bg-border rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-accent rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min(100, (subtotal / FREE_SHIPPING_THRESHOLD) * 100)}%` }}
-                  />
-                </div>
-              </div>
-            )}
-
             <div className="space-y-1.5 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatARS(subtotal)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Envío</span>
-                <span className={shipping === 0 ? 'text-accent font-medium' : ''}>
-                  {shipping === 0 ? '¡Gratis!' : formatARS(SHIPPING_COST)}
-                </span>
-              </div>
-              <div className="flex justify-between pt-2 border-t border-border font-semibold">
+              <div className="flex justify-between font-semibold text-base">
                 <span>Total</span>
-                <span className="text-primary text-base">{formatARS(total)}</span>
+                <span className="text-primary">{formatARS(subtotal)}</span>
               </div>
             </div>
 
