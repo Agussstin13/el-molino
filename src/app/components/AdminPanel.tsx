@@ -25,6 +25,7 @@ import { motion, Reorder } from "motion/react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useAlert } from "../context/AlertContext";
+import { useSignalR } from "../context/SignalRContext";
 import { formatARS, formatInputPrice, parseInputPrice } from "../../lib/price";
 import type {
   CarouselImage,
@@ -152,6 +153,8 @@ export function AdminPanel() {
   const [offersFilter, setOffersFilter] = useState<"all" | "active" | "inactive">("all");
   const [isSavingOffers, setIsSavingOffers] = useState(false);
 
+  const { lastProductsUpdate, lastCategoriesUpdate } = useSignalR();
+
   useEffect(() => {
     if (currentView === "daily-offers") {
       const initialDraft: Record<string, { active: boolean; offerPrice: string | number }> = {};
@@ -251,6 +254,27 @@ export function AdminPanel() {
       return;
     }
 
+    for (const p of dirtyProducts) {
+      const draft = offersDraft[p.id];
+      if (draft.active) {
+        const parsedDraftPrice = parseInputPrice(draft.offerPrice);
+        if (parsedDraftPrice >= p.price) {
+          showError(
+            "Error de precio",
+            `El producto "${p.name}" tiene un precio de oferta (${formatARS(parsedDraftPrice)}) mayor o igual a su precio normal (${formatARS(p.price)}).`
+          );
+          return;
+        }
+        if (p.wholesalePrice && parsedDraftPrice <= p.wholesalePrice.price) {
+          showError(
+            "Error en promoción",
+            `El producto "${p.name}" tiene un precio de oferta (${formatARS(parsedDraftPrice)}) menor o igual a su precio mayorista (${formatARS(p.wholesalePrice.price)}).`
+          );
+          return;
+        }
+      }
+    }
+
     setIsSavingOffers(true);
     let successCount = 0;
     let failCount = 0;
@@ -268,6 +292,15 @@ export function AdminPanel() {
       formData.append("CategoryId", String(p.categoryId));
       formData.append("Active", String(p.active));
       formData.append("MeasurementUnit", p.measurementUnit ?? "unidad");
+
+      if (p.measurementUnit === "gramo" && Array.isArray(p.gramages)) {
+        p.gramages.forEach((g: any) => {
+          const gramsVal = typeof g === 'number' ? g : g.grams;
+          if (gramsVal) {
+            formData.append("Gramages", String(gramsVal));
+          }
+        });
+      }
 
       // Si la oferta está activa, enviamos el precio; si no, no enviamos nada (backend lo pone en null)
       if (draft.active && parsedDraftPrice > 0) {
@@ -506,7 +539,7 @@ export function AdminPanel() {
     };
 
     fetchData();
-  }, [adminToken]);
+  }, [adminToken, lastProductsUpdate, lastCategoriesUpdate]);
 
   const getAuthHeaders = (contentType: string | null = "application/json") => {
     const headers: Record<string, string> = {};
@@ -581,12 +614,22 @@ export function AdminPanel() {
   };
 
   const handleSaveProduct = async () => {
+    if (!productImageFile && !productImagePreview) {
+      showError("Imagen requerida", "El producto debe tener una imagen para poder guardarse.");
+      return;
+    }
+
     const selectedCategory = categories.find(
       (c) => c.nombre === productForm.category,
     );
 
     if (!selectedCategory) {
       showError("Categoría requerida", "Por favor selecciona una categoría válida para el producto.");
+      return;
+    }
+
+    if (productForm.measurementUnit === "gramo" && productForm.gramages.length === 0) {
+      showError("Faltan presentaciones", "Los productos por peso deben incluir al menos un gramaje.");
       return;
     }
 
@@ -1524,7 +1567,7 @@ export function AdminPanel() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setProductForm(p => ({ ...p, measurementUnit: "gramo" }))}
+                          onClick={() => setProductForm(p => ({ ...p, measurementUnit: "gramo", enableWholesale: false }))}
                           className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${
                             productForm.measurementUnit === "gramo"
                               ? "bg-foreground text-background border-foreground"
@@ -1582,43 +1625,47 @@ export function AdminPanel() {
                       </button>
                     </div>
 
-                    <div className="col-span-2 pt-2 border-t border-border/40 mt-2">
-                      <label className="flex items-center gap-2 text-sm font-medium cursor-pointer select-none text-foreground">
-                        <input
-                          type="checkbox"
-                          checked={productForm.enableWholesale}
-                          onChange={(e) => setProductForm(p => ({ ...p, enableWholesale: e.target.checked }))}
-                          className="accent-primary rounded border-border"
-                        />
-                        Habilitar precio mayorista
-                      </label>
-                    </div>
-
-                    {productForm.enableWholesale && (
+                    {productForm.measurementUnit === "unidad" && (
                       <>
-                        <div className="col-span-2 sm:col-span-1">
-                          <label className="block text-sm mb-1.5 font-medium">Precio mayorista *</label>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">$</span>
+                        <div className="col-span-2 pt-2 border-t border-border/40 mt-2">
+                          <label className="flex items-center gap-2 text-sm font-medium cursor-pointer select-none text-foreground">
                             <input
-                              type="text"
-                              value={formatInputPrice(productForm.wholesalePrice)}
-                              onChange={(e) => setProductForm(p => ({ ...p, wholesalePrice: formatInputPrice(e.target.value) }))}
-                              placeholder="0,00"
-                              className="w-full pl-7 pr-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                              type="checkbox"
+                              checked={productForm.enableWholesale}
+                              onChange={(e) => setProductForm(p => ({ ...p, enableWholesale: e.target.checked }))}
+                              className="accent-primary rounded border-border"
                             />
-                          </div>
+                            Habilitar precio mayorista
+                          </label>
                         </div>
-                        <div className="col-span-2 sm:col-span-1">
-                          <label className="block text-sm mb-1.5 font-medium">Cantidad mínima mayorista *</label>
-                          <input
-                            type="number"
-                            value={productForm.minimumWholesaleAmount || ""}
-                            onChange={(e) => setProductForm(p => ({ ...p, minimumWholesaleAmount: Number(e.target.value) }))}
-                            placeholder="10"
-                            className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
-                          />
-                        </div>
+
+                        {productForm.enableWholesale && (
+                          <>
+                            <div className="col-span-2 sm:col-span-1">
+                              <label className="block text-sm mb-1.5 font-medium">Precio mayorista *</label>
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">$</span>
+                                <input
+                                  type="text"
+                                  value={formatInputPrice(productForm.wholesalePrice)}
+                                  onChange={(e) => setProductForm(p => ({ ...p, wholesalePrice: formatInputPrice(e.target.value) }))}
+                                  placeholder="0,00"
+                                  className="w-full pl-7 pr-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                                />
+                              </div>
+                            </div>
+                            <div className="col-span-2 sm:col-span-1">
+                              <label className="block text-sm mb-1.5 font-medium">Cantidad mínima mayorista *</label>
+                              <input
+                                type="number"
+                                value={productForm.minimumWholesaleAmount || ""}
+                                onChange={(e) => setProductForm(p => ({ ...p, minimumWholesaleAmount: Number(e.target.value) }))}
+                                placeholder="10"
+                                className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                              />
+                            </div>
+                          </>
+                        )}
                       </>
                     )}
 
@@ -1766,7 +1813,7 @@ export function AdminPanel() {
                         isSaving ||
                         !productForm.name ||
                         !parseInputPrice(productForm.price) ||
-                        (!editingProductId && !productImageFile)
+                        (!productImageFile && !productImagePreview)
                       }
                       className="px-6 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-lg transition-colors text-sm font-semibold shadow-sm"
                     >

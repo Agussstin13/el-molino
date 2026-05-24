@@ -1,4 +1,4 @@
-import { Search, ShoppingCart, User, Menu, X, Home, Instagram, Phone, ChevronRight } from "lucide-react";
+import { Search, ShoppingCart, User, Menu, X, Home, Instagram, Phone, ChevronRight, List, ChevronDown } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { createPortal } from "react-dom";
@@ -19,6 +19,7 @@ export function Header() {
   const [search, setSearch] = useState("");
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
@@ -151,23 +152,37 @@ export function Header() {
                   Inicio
                 </Link>
                 
-                <div className="pt-4 pb-2 px-3">
-                  <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Categorías</p>
-                  {categories.length === 0 ? (
-                    <p className="text-sm text-muted-foreground italic py-2">No hay categorías</p>
-                  ) : (
-                    <div className="space-y-1">
-                      {categories.map(cat => (
-                        <Link 
-                          key={cat.id} 
-                          to={`/?categoria=${cat.id}#productos-lista`}
-                          onClick={() => setIsMenuOpen(false)}
-                          className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-primary/5 hover:text-primary transition-colors text-sm"
-                        >
-                          {cat.name}
-                          <ChevronRight className="w-4 h-4 opacity-50" />
-                        </Link>
-                      ))}
+                <div className="pt-2 pb-2">
+                  <button 
+                    onClick={() => setIsCategoriesOpen(!isCategoriesOpen)}
+                    className="w-full flex items-center justify-between px-3 py-3 rounded-xl hover:bg-secondary transition-colors text-foreground font-medium"
+                  >
+                    <div className="flex items-center gap-3">
+                      <List className="w-5 h-5 text-primary" />
+                      Categorías
+                    </div>
+                    <ChevronDown className={`w-4 h-4 opacity-70 transition-transform duration-200 ${isCategoriesOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  
+                  {isCategoriesOpen && (
+                    <div className="mt-1 animate-in slide-in-from-top-2 fade-in duration-200">
+                      {categories.length === 0 ? (
+                        <p className="text-sm text-muted-foreground italic py-2 pl-11">No hay categorías</p>
+                      ) : (
+                        <div className="space-y-1">
+                          {categories.map(cat => (
+                            <Link 
+                              key={cat.id} 
+                              to={`/?categoria=${cat.id}#productos-lista`}
+                              onClick={() => setIsMenuOpen(false)}
+                              className="flex items-center justify-between pl-11 pr-3 py-2.5 rounded-lg hover:bg-primary/5 hover:text-primary transition-colors text-sm"
+                            >
+                              {cat.name}
+                              <ChevronRight className="w-4 h-4 opacity-50" />
+                            </Link>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

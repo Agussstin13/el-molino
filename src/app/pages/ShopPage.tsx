@@ -6,6 +6,7 @@ import { ProductSection } from '../components/ProductSection';
 import { Footer } from '../components/Footer';
 import { Cart } from '../components/Cart';
 import { ShopFilters } from '../components/ShopFilters';
+import { useSignalR } from '../context/SignalRContext';
 import type { Product } from '../../lib/types';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
@@ -20,6 +21,7 @@ export function ShopPage() {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'grid-sm' | 'grid-lg'>('grid-sm');
   const [sortBy, setSortBy] = useState('default');
+  const { lastProductsUpdate, lastCategoriesUpdate } = useSignalR();
 
   useEffect(() => {
     fetch(`${API_BASE}/api/categories?onlyActive=true`)
@@ -28,7 +30,7 @@ export function ShopPage() {
         if (Array.isArray(data)) setCategories(data);
       })
       .catch(err => console.error("Error fetching categories:", err));
-  }, []);
+  }, [lastCategoriesUpdate]);
 
   useEffect(() => {
     setLoading(true);
@@ -76,7 +78,7 @@ export function ShopPage() {
       })
       .catch(err => console.error("Error fetching products:", err))
       .finally(() => setLoading(false));
-  }, [categoryId]);
+  }, [categoryId, lastProductsUpdate]);
 
   useEffect(() => {
     if (!loading && window.location.hash) {
