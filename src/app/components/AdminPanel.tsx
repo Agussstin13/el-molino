@@ -51,6 +51,7 @@ const EMPTY_CAROUSEL: Omit<CarouselImage, "id"> = {
   subtitulo: "",
   orden: 0,
   activo: true,
+  redirectUrl: "",
 };
 
 const STATUS_LABELS: Record<Order["status"], string> = {
@@ -156,6 +157,7 @@ export function AdminPanel() {
   const { lastProductsUpdate, lastCategoriesUpdate } = useSignalR();
 
   useEffect(() => {
+    document.title = 'El Molino - Admin';
     if (currentView === "daily-offers") {
       const initialDraft: Record<string, { active: boolean; offerPrice: string | number }> = {};
       products.forEach(p => {
@@ -414,6 +416,7 @@ export function AdminPanel() {
               subtitulo: item.description ?? "",
               orden: i + 1, // Siempre secuencial para evitar duplicados
               activo: item.active ?? true,
+              redirectUrl: item.redirectUrl ?? "",
             }),
           );
           setCarouselImages(mapped);
@@ -427,7 +430,7 @@ export function AdminPanel() {
               description: img.subtitulo ?? null,
               displayOrder: img.orden,
               active: img.activo,
-              redirectUrl: null,
+              redirectUrl: img.redirectUrl ?? null,
               creationDate: new Date().toISOString(),
             }));
             fetch(`${API_BASE}/api/carousel/reorder`, {
@@ -909,7 +912,7 @@ export function AdminPanel() {
       description: img.subtitulo ?? null,
       displayOrder: img.orden,
       active: img.activo,
-      redirectUrl: null,
+      redirectUrl: img.redirectUrl ?? null,
       creationDate: new Date().toISOString(),
     }));
 
@@ -926,6 +929,7 @@ export function AdminPanel() {
         formData.append("Title", carouselForm.titulo || "");
         formData.append("Description", carouselForm.subtitulo || "");
         formData.append("ExistingImageUrl", carouselForm.imagenNombre);
+        formData.append("RedirectUrl", carouselForm.redirectUrl || "");
         formData.append("DisplayOrder", String(carouselForm.orden));
         formData.append("Active", String(carouselForm.activo));
         if (carouselImageFile) formData.append("Image", carouselImageFile);
@@ -944,6 +948,7 @@ export function AdminPanel() {
         formData.append("Image", carouselImageFile);
         formData.append("Title", carouselForm.titulo || "");
         formData.append("Description", carouselForm.subtitulo || "");
+        formData.append("RedirectUrl", carouselForm.redirectUrl || "");
         formData.append("DisplayOrder", String(carouselForm.orden));
         formData.append("Active", String(carouselForm.activo));
         res = await fetch(`${API_BASE}/api/carousel`, {
@@ -969,6 +974,7 @@ export function AdminPanel() {
               subtitulo: updated.description ?? "",
               orden: updated.displayOrder,
               activo: updated.active,
+              redirectUrl: updated.redirectUrl ?? "",
             };
           } else {
             // Sin nueva imagen — construimos el estado localmente
@@ -979,6 +985,7 @@ export function AdminPanel() {
               subtitulo: carouselForm.subtitulo,
               orden: carouselForm.orden,
               activo: carouselForm.activo,
+              redirectUrl: carouselForm.redirectUrl,
             };
           }
         } else {
@@ -990,6 +997,7 @@ export function AdminPanel() {
             subtitulo: json.description ?? "",
             orden: json.displayOrder,
             activo: json.active,
+            redirectUrl: json.redirectUrl ?? "",
           };
         }
 
@@ -1067,6 +1075,7 @@ export function AdminPanel() {
       subtitulo: img.subtitulo ?? "",
       orden: img.orden,
       activo: img.activo,
+      redirectUrl: img.redirectUrl ?? "",
     });
     setCarouselImageFile(null);
     setCarouselImagePreview("");
@@ -2660,6 +2669,20 @@ export function AdminPanel() {
                           }))
                         }
                         placeholder="Ej: Más de 70 años llevando lo mejor de la naturaleza"
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm mb-1.5">URL de Redirección (Opcional)</label>
+                      <input
+                        value={carouselForm.redirectUrl ?? ""}
+                        onChange={(e) =>
+                          setCarouselForm((p) => ({
+                            ...p,
+                            redirectUrl: e.target.value,
+                          }))
+                        }
+                        placeholder="Ej: /producto/1, o /?categoria=2"
                         className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                       />
                     </div>

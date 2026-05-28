@@ -34,18 +34,64 @@ const EMPTY_FORM: FormData = {
 
 const FORM_STORAGE_KEY = "el-molino-checkout-form";
 
+const InputField = ({
+  label,
+  field,
+  type = "text",
+  placeholder,
+  half = false,
+  readOnly = false,
+  showUpdateBtn = false,
+  value,
+  onChange,
+  error,
+  onUpdate,
+}: {
+  label: string;
+  field: keyof FormData;
+  type?: string;
+  placeholder?: string;
+  half?: boolean;
+  readOnly?: boolean;
+  showUpdateBtn?: boolean;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  error?: string;
+  onUpdate?: () => void;
+}) => (
+  <div className={half ? "" : "col-span-2"}>
+    <label className="block text-sm mb-1.5">{label}</label>
+    <div className="flex items-center gap-2">
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        readOnly={readOnly}
+        className={`w-full px-3 py-2.5 bg-input-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-sm transition-colors ${
+          error ? "border-destructive" : "border-border"
+        } ${readOnly ? "opacity-70 cursor-not-allowed bg-secondary/50" : ""}`}
+      />
+      {showUpdateBtn && onUpdate && (
+        <button
+          type="button"
+          onClick={onUpdate}
+          className="px-3 py-2.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg text-sm font-medium transition-colors"
+        >
+          Actualizar
+        </button>
+      )}
+    </div>
+    {error && (
+      <p className="text-xs text-destructive mt-1">{error}</p>
+    )}
+  </div>
+);
+
 export function Checkout() {
-  const {
-    items,
-    isCheckoutOpen,
-    closeCheckout,
-    total,
-    subtotal,
-    shipping,
-    clearCart,
-  } = useCart();
-  const { clientUser } = useAuth();
-  const { showError } = useAlert();
+  const { isCheckoutOpen, items, closeCheckout, subtotal, shipping, total, clearCart } = useCart();
+  const { isClientAuthenticated, clientUser, updateClientProfile } = useAuth();
+  const { showError, showSuccess } = useAlert();
   const [step, setStep] = useState<"datos" | "pago" | "confirmado">("datos");
   const [form, setForm] = useState<FormData>(() => {
     try {
@@ -62,12 +108,20 @@ export function Checkout() {
       setForm((f) => {
         const newForm = { ...f };
         let changed = false;
-        if (!newForm.nombre) {
+        if (clientUser.nombre && newForm.nombre !== clientUser.nombre) {
           newForm.nombre = clientUser.nombre;
           changed = true;
         }
-        if (!newForm.apellido) {
+        if (clientUser.apellido && newForm.apellido !== clientUser.apellido) {
           newForm.apellido = clientUser.apellido;
+          changed = true;
+        }
+        if (clientUser.dni && newForm.dni !== clientUser.dni) {
+          newForm.dni = clientUser.dni;
+          changed = true;
+        }
+        if (clientUser.telefono && newForm.telefono !== clientUser.telefono) {
+          newForm.telefono = clientUser.telefono;
           changed = true;
         }
         if (changed) {
@@ -109,19 +163,12 @@ export function Checkout() {
     if (!form.telefono.trim()) newErrors.telefono = "Requerido";
     if (!form.calle.trim()) newErrors.calle = "Requerido";
     if (!form.nro_calle.trim()) newErrors.nro_calle = "Requerido";
-    if (!form.ciudad.trim()) newErrors.ciudad = "Requerido";
-    if (!form.codigo_postal.trim()) newErrors.codigo_postal = "Requerido";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const calcularEnvio = async () => {
-    if (!form.codigo_postal || form.codigo_postal.length < 4) return;
-    setCalculatingShipping(true);
-    await new Promise((r) => setTimeout(r, 800));
-    // Mock: costo aleatorio entre $400 y $1200
-    setShippingCost(Math.floor(Math.random() * 800) + 400);
-    setCalculatingShipping(false);
+    // Envío deshabilitado - Solo Mar del Plata
   };
 
   const handleConfirm = async () => {
@@ -133,7 +180,7 @@ export function Checkout() {
       buyerPhone: form.telefono,
       buyerDocument: form.dni,
       shippingAddress:
-        `${form.calle} ${form.nro_calle}, ${form.ciudad}, ${form.codigo_postal}${form.info_adicional ? " - " + form.info_adicional : ""}`.trim(),
+        `${form.calle} ${form.nro_calle}, Mar del Plata${form.info_adicional ? " - " + form.info_adicional : ""}`.trim(),
       paymentMethod: form.metodo_pago,
       items: items.map((i) => ({
         productId: parseInt(i.id, 10),
@@ -180,36 +227,6 @@ export function Checkout() {
   };
 
   const finalTotal = total + (shippingCost ?? 0);
-
-  const InputField = ({
-    label,
-    field,
-    type = "text",
-    placeholder,
-    half = false,
-  }: {
-    label: string;
-    field: keyof FormData;
-    type?: string;
-    placeholder?: string;
-    half?: boolean;
-  }) => (
-    <div className={half ? "" : "col-span-2"}>
-      <label className="block text-sm mb-1.5">{label}</label>
-      <input
-        type={type}
-        value={form[field] as string}
-        onChange={set(field)}
-        placeholder={placeholder}
-        className={`w-full px-3 py-2.5 bg-input-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-sm transition-colors ${
-          errors[field] ? "border-destructive" : "border-border"
-        }`}
-      />
-      {errors[field] && (
-        <p className="text-xs text-destructive mt-1">{errors[field]}</p>
-      )}
-    </div>
-  );
 
   return (
     <>
@@ -272,85 +289,79 @@ export function Checkout() {
               <div className="md:col-span-3 space-y-5">
                 {step === "datos" && (
                   <>
+                    <div className="bg-primary/10 text-primary p-3 rounded-lg border border-primary/20 mb-4 text-sm font-medium flex items-center gap-2">
+                      <MapPin className="w-4 h-4" />
+                      Atención: Solo se realizan compras y entregas dentro de Mar del Plata.
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
                       <InputField
                         label="Nombre *"
                         field="nombre"
                         placeholder="Juan"
                         half
+                        readOnly={!!clientUser?.nombre}
+                        value={form.nombre}
+                        onChange={set("nombre")}
+                        error={errors.nombre}
                       />
                       <InputField
                         label="Apellido *"
                         field="apellido"
                         placeholder="Pérez"
                         half
+                        readOnly={!!clientUser?.apellido}
+                        value={form.apellido}
+                        onChange={set("apellido")}
+                        error={errors.apellido}
                       />
                       <InputField
                         label="DNI *"
                         field="dni"
                         placeholder="30123456"
                         half
+                        readOnly={!!clientUser?.dni}
+                        value={form.dni}
+                        onChange={set("dni")}
+                        error={errors.dni}
                       />
                       <InputField
                         label="Teléfono *"
                         field="telefono"
                         placeholder="+54 9 11 1234-5678"
                         half
+                        value={form.telefono}
+                        onChange={set("telefono")}
+                        error={errors.telefono}
                       />
                       <InputField
                         label="Calle *"
                         field="calle"
                         placeholder="Av. Corrientes"
+                        value={form.calle}
+                        onChange={set("calle")}
+                        error={errors.calle}
                       />
                       <InputField
                         label="Número *"
                         field="nro_calle"
                         placeholder="1234"
                         half
+                        value={form.nro_calle}
+                        onChange={set("nro_calle")}
+                        error={errors.nro_calle}
                       />
                       <InputField
                         label="Info adicional"
                         field="info_adicional"
                         placeholder="Piso 4 Depto B"
                         half
-                      />
-                      <InputField
-                        label="Ciudad *"
-                        field="ciudad"
-                        placeholder="Buenos Aires"
-                        half
-                      />
-                      <InputField
-                        label="Código Postal *"
-                        field="codigo_postal"
-                        placeholder="1043"
-                        half
+                        value={form.info_adicional}
+                        onChange={set("info_adicional")}
+                        error={errors.info_adicional}
                       />
                     </div>
 
-                    {/* Calculadora envío */}
-                    <div className="bg-secondary/50 p-4 rounded-xl border border-border">
-                      <div className="flex items-center gap-2 mb-3">
-                        <MapPin className="w-4 h-4 text-primary" />
-                        <span className="text-sm font-medium">
-                          Calcular costo de envío
-                        </span>
-                      </div>
-                      <button
-                        onClick={calcularEnvio}
-                        disabled={
-                          calculatingShipping || form.codigo_postal.length < 4
-                        }
-                        className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground py-2 rounded-lg transition-colors text-sm"
-                      >
-                        {calculatingShipping ? "Calculando..." : "Calcular"}
-                      </button>
-                      {shippingCost !== null && (
-                        <p className="text-sm text-accent mt-2 font-medium">
-                          Costo estimado: {formatARS(shippingCost)}
-                        </p>
-                      )}
-                    </div>
+                    {/* Calculadora envío removida ya que es solo para Mar del Plata */}
 
                     <button
                       onClick={() => validateDatos() && setStep("pago")}

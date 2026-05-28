@@ -1,5 +1,5 @@
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { Plus, Minus, ShoppingCart, Heart, Home, Share2 } from "lucide-react";
+import { Plus, Minus, ShoppingCart, Home, Share2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import type { Product, ProductGramage } from "../../lib/types";
 import {
@@ -78,47 +78,102 @@ function MailSvg() {
 
 function SmallProductCard({ product }: { product: Product }) {
   const navigate = useNavigate();
+  const isGramProduct = product.measurementUnit === "gramo";
+  const hasOffer = product.onOffer && product.offerPrice;
+  const effectivePrice = hasOffer ? product.offerPrice! : product.price;
+  const discountPct = hasOffer
+    ? Math.round(((product.price - product.offerPrice!) / product.price) * 100)
+    : 0;
+
   return (
-    <button
+    <div
+      className="relative bg-card rounded-3xl overflow-hidden border border-border/50 shadow-sm cursor-pointer flex flex-col transition-all duration-300 hover:shadow-lg hover:-translate-y-1 hover:border-primary/20"
       onClick={() => navigate(`/producto/${product.id}`)}
-      className="group flex flex-col bg-card border border-border rounded-xl overflow-hidden hover:shadow-lg hover:border-primary/30 transition-all duration-300 text-left w-full"
+      id={`product-card-${product.id}`}
     >
-      <div className="relative aspect-square bg-secondary/20 overflow-hidden">
-        {product.image ? (
-          <img
-            src={product.image}
-            alt={product.name}
-            className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-500"
+      {/* ── Imagen ─────────────────────────────────────────────────────────── */}
+      <div className="relative w-full aspect-square bg-secondary/20 overflow-hidden">
+        {/* Fondo fantasma */}
+        {product.image && (
+          <div
+            className="absolute inset-0 bg-center bg-cover opacity-10 blur-xl scale-110 pointer-events-none"
+            style={{ backgroundImage: `url('${product.image}')` }}
           />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-5xl text-muted-foreground">
-            📦
+        )}
+
+        <img
+          src={product.image || 'https://via.placeholder.com/300?text=Sin+Imagen'}
+          alt={product.name}
+          className="relative z-0 w-full h-full object-cover"
+        />
+
+        {/* Badge mayorista */}
+        {product.wholesalePrice && !hasOffer && (
+          <div className="absolute top-3 right-3 z-10 bg-amber-500 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-sm">
+            Mayorista
           </div>
         )}
       </div>
-      <div className="p-3 flex flex-col gap-1">
-        <p className="text-sm font-medium text-foreground line-clamp-2 group-hover:text-primary transition-colors leading-snug">
+
+      {/* ── Separador decorativo ────────────────────────────────────────────── */}
+      <div className="h-px bg-border/40 mx-4" />
+
+      {/* ── Contenido ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-col flex-1 px-4 pt-3 pb-4 gap-1">
+
+        {/* Nombre */}
+        <h3 className="text-[14px] font-normal text-foreground truncate mb-1">
           {product.name}
-        </p>
-        {product.category && (
-          <p className="text-xs text-muted-foreground">{product.category}</p>
-        )}
-        {product.offerPrice ? (
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-xs text-muted-foreground/60 line-through">
-              {formatARS(product.price)}
-            </span>
-            <span className="text-sm font-semibold text-accent">
-              {formatARS(product.offerPrice)}
-            </span>
+        </h3>
+
+        {/* Precio y Mayorista agrupados */}
+        <div className="flex flex-col">
+          {hasOffer && (
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="text-[13px] text-muted-foreground line-through decoration-muted-foreground/50 font-medium">
+                {formatARS(product.price)}
+              </span>
+              <span className="text-[11px] bg-destructive text-white font-bold px-1.5 py-0.5 rounded-sm leading-none tracking-wide">
+                {discountPct}% OFF
+              </span>
+            </div>
+          )}
+          <span className="text-2xl font-black text-black leading-none">{formatARS(effectivePrice)}</span>
+          
+          <div className="flex flex-col mt-0.5">
+            {product.wholesalePrice && !isGramProduct ? (
+              <span className="text-[11px] text-amber-600/90 font-medium">
+                Venta mayorista a partir de {product.wholesalePrice.quantity} u.
+              </span>
+            ) : isGramProduct ? (
+              <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
+                ⚖️ Se vende por peso
+              </span>
+            ) : (
+              <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
+                📦 Se vende por unidad
+              </span>
+            )}
           </div>
-        ) : (
-          <p className="text-sm font-semibold text-primary mt-1">
-            {formatARS(product.price)}
-          </p>
+        </div>
+
+        {/* Stock bajo */}
+        {product.stock <= 5 && product.stock > 0 && (
+          <div className="mt-1">
+            <span className="text-[10px] text-amber-600 font-medium">⚡ Solo {product.stock} disponibles</span>
+          </div>
         )}
       </div>
-    </button>
+
+      {/* Sin stock overlay */}
+      {product.stock === 0 && (
+        <div className="absolute inset-0 bg-background/70 backdrop-blur-[2px] flex items-center justify-center rounded-3xl z-20">
+          <span className="bg-foreground text-background text-[10px] font-bold px-4 py-1.5 rounded-full uppercase tracking-wider">
+            Agotado
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -131,7 +186,6 @@ export function ProductDetailPage() {
 
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
-  const [favorited, setFavorited] = useState(false);
   const [selectedGramage, setSelectedGramage] = useState<ProductGramage | null>(null);
 
   const [product, setProduct] = useState<Product | null>(null);
@@ -146,6 +200,7 @@ export function ProductDetailPage() {
     setRelated([]);
     setQuantity(1);
     setAdded(false);
+    window.scrollTo(0, 0);
 
     fetch(`${API_BASE}/api/products/${id}`)
       .then((res) => {
@@ -177,6 +232,7 @@ export function ProductDetailPage() {
           active: p.active ?? true,
         };
         setProduct(cur);
+        document.title = `El Molino - ${cur.name}`;
         // Pre-seleccionar el primer gramaje si aplica
         if (cur.measurementUnit === "gramo" && cur.gramages && cur.gramages.length > 0) {
           setSelectedGramage(cur.gramages[0]);
@@ -389,40 +445,18 @@ export function ProductDetailPage() {
         </nav>
 
         {/* ── Bloque principal ── */}
-        <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm mb-8">
-          <div className="grid md:grid-cols-2">
+        <div className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-sm mb-8 transition-shadow hover:shadow-md">
+          <div className="grid md:grid-cols-12">
 
             {/* ── Columna imagen ── */}
-            <div className="relative flex flex-col border-b md:border-b-0 md:border-r border-border">
-
-              {/* Badges fuera de la imagen, en la parte superior del panel */}
-              <div className="flex items-center gap-2 px-5 pt-5 pb-0 flex-wrap">
-                <span className="inline-flex items-center gap-1.5 bg-emerald-500 text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-sm">
-                  NUEVO
-                </span>
-                {product.offerPrice && (
-                  <span className="inline-flex items-center gap-1 bg-red-500 text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-sm">
-                    -{Math.round(((product.price - product.offerPrice) / product.price) * 100)}% OFF
-                  </span>
-                )}
-                {product.stock > 0 && product.stock <= 5 && (
-                  <span className="inline-flex items-center gap-1 bg-amber-500 text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-sm">
-                    Últimas {product.stock} unidades
-                  </span>
-                )}
-                {product.stock === 0 && (
-                  <span className="inline-flex items-center gap-1 bg-muted text-muted-foreground text-[11px] font-semibold px-3 py-1 rounded-full border border-border">
-                    Sin stock
-                  </span>
-                )}
-              </div>
+            <div className="md:col-span-5 relative flex flex-col border-b md:border-b-0 md:border-r border-border">
 
               {/* Contenedor imagen */}
-              <div className="relative flex items-center justify-center p-8 flex-1 min-h-[340px] bg-secondary/10 overflow-hidden mx-5 my-4 rounded-2xl">
+              <div className="relative flex-1 min-h-[340px] bg-secondary/20 overflow-hidden mx-5 my-4 rounded-3xl border border-border/40">
                 {/* Ghost background blur */}
                 {product.image && (
                   <div
-                    className="absolute inset-0 bg-center bg-cover opacity-[0.07] blur-2xl scale-110 pointer-events-none"
+                    className="absolute inset-0 bg-center bg-cover opacity-10 blur-2xl scale-110 pointer-events-none"
                     style={{ backgroundImage: `url('${product.image}')` }}
                   />
                 )}
@@ -431,7 +465,7 @@ export function ProductDetailPage() {
                   <img
                     src={product.image}
                     alt={product.name}
-                    className="relative z-10 w-full max-w-[300px] aspect-square object-contain drop-shadow-2xl"
+                    className="relative z-10 w-full h-full object-cover"
                   />
                 ) : (
                   <div className="text-8xl text-muted-foreground">📦</div>
@@ -461,25 +495,14 @@ export function ProductDetailPage() {
             </div>
 
             {/* ── Columna info ── */}
-            <div className="p-8 flex flex-col gap-5">
+            <div className="md:col-span-7 p-8 flex flex-col gap-5">
               {/* Nombre + Favorito */}
               <div className="flex items-start gap-3">
                 <h1
-                  className="flex-1 text-2xl md:text-3xl text-foreground leading-tight"
-                  style={{ fontFamily: "Georgia, serif" }}
+                  className="flex-1 text-2xl md:text-3xl text-foreground leading-tight font-normal"
                 >
                   {product.name}
                 </h1>
-                <button
-                  onClick={() => setFavorited((v) => !v)}
-                  id="detail-favorite-btn"
-                  className="flex-shrink-0 mt-1 p-2.5 rounded-full border border-border hover:bg-secondary transition-all shadow-sm"
-                  title={favorited ? "Quitar de favoritos" : "Agregar a favoritos"}
-                >
-                  <Heart
-                    className={`w-5 h-5 transition-colors ${favorited ? "fill-destructive text-destructive" : "text-muted-foreground"}`}
-                  />
-                </button>
               </div>
 
               <hr className="border-border" />
@@ -487,7 +510,7 @@ export function ProductDetailPage() {
               {/* Categoría */}
               {product.category && (
                 <div className="flex items-center gap-2 text-sm flex-wrap">
-                  <span className="text-muted-foreground">🏷 Categoría:</span>
+                  <span className="text-muted-foreground">Categoría:</span>
                   <Link
                     to={`/?categoria=${product.categoryId}`}
                     className="text-primary font-medium uppercase text-xs tracking-wide bg-primary/10 px-2.5 py-0.5 rounded-full hover:bg-primary/20 transition-colors"
@@ -498,31 +521,43 @@ export function ProductDetailPage() {
               )}
 
               {/* Precio */}
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1.5">
                 {isDiscounted && (
-                  <span className="text-base text-muted-foreground line-through">
-                    {isGramProduct && selectedGramage
-                      ? formatARS(selectedGramage.price)
-                      : formatARS(product.price)}
-                  </span>
-                )}
-                <div className="flex items-baseline gap-3 flex-wrap">
-                  <span className={`text-3xl font-bold ${isDiscounted ? "text-red-500" : "text-foreground"}`}>
-                    {formatARS(effectivePrice)}
-                  </span>
-                  {isGramProduct && (
-                    <span className="text-sm text-muted-foreground">/ {selectedGramage ? `${selectedGramage.grams}g` : "kg"}</span>
-                  )}
-                  {isDiscounted && (
-                    <span className="text-sm bg-red-50 text-red-500 border border-red-200 px-2 py-0.5 rounded-full font-semibold">
-                      -{isGramProduct && selectedGramage && selectedGramage.price > 0
+                  <div className="flex items-center gap-2">
+                    <span className="text-base text-muted-foreground line-through decoration-muted-foreground/50 font-medium">
+                      {isGramProduct && selectedGramage
+                        ? formatARS(selectedGramage.price)
+                        : formatARS(product.price)}
+                    </span>
+                    <span className="text-xs bg-destructive text-white font-bold px-2 py-0.5 rounded-md leading-none tracking-wide">
+                      {isGramProduct && selectedGramage && selectedGramage.price > 0
                         ? Math.round(((selectedGramage.price - getEffectiveGramagePrice(selectedGramage)) / selectedGramage.price) * 100)
                         : product.discount}% OFF
                     </span>
-                  )}
-                  {wholesale && (
-                    <span className="text-sm bg-accent/20 text-accent px-2 py-0.5 rounded-full font-medium">
-                      Precio mayorista
+                  </div>
+                )}
+                <div className="flex items-baseline gap-3 flex-wrap">
+                  <span className="text-4xl font-black text-black leading-none">
+                    {formatARS(effectivePrice)}
+                  </span>
+                </div>
+                
+                <div className="flex flex-col mt-1 gap-1">
+                  {wholesale ? (
+                    <span className="text-xs text-amber-600 font-medium bg-amber-500/10 px-2 py-1 rounded-md self-start">
+                      Precio mayorista activo
+                    </span>
+                  ) : product.wholesalePrice && !isGramProduct ? (
+                    <span className="text-[13px] text-amber-600/90 font-medium">
+                      Venta mayorista a partir de {product.wholesalePrice.quantity} u.
+                    </span>
+                  ) : isGramProduct ? (
+                    <span className="text-[13px] text-muted-foreground font-medium flex items-center gap-1.5">
+                      ⚖️ Se vende por {selectedGramage ? `${selectedGramage.grams >= 1000 ? `${selectedGramage.grams / 1000} kg` : `${selectedGramage.grams} g`}` : 'peso'}
+                    </span>
+                  ) : (
+                    <span className="text-[13px] text-muted-foreground font-medium flex items-center gap-1.5">
+                      📦 Se vende por unidad
                     </span>
                   )}
                 </div>
@@ -543,10 +578,13 @@ export function ProductDetailPage() {
                 target="_blank"
                 rel="noopener noreferrer"
                 id="detail-whatsapp-btn"
-                className="inline-flex items-center gap-3 self-start bg-[#25D366] hover:bg-[#20ba58] text-white px-5 py-3 rounded-xl font-medium text-sm transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0"
+                title="Consultar por WhatsApp"
+                className="inline-flex items-center justify-center self-start bg-[#25D366] hover:bg-[#20ba58] text-white p-3.5 rounded-full transition-all hover:-translate-y-0.5 active:translate-y-0"
+                style={{
+                  boxShadow: '0 4px 15px rgba(37, 211, 102, 0.4)'
+                }}
               >
                 <WhatsAppSvg large />
-                Consultar por WhatsApp
               </a>
 
               <hr className="border-border" />
@@ -619,17 +657,17 @@ export function ProductDetailPage() {
                 onClick={handleAdd}
                 disabled={product.stock === 0 || maxQtyAllowed === 0 || quantity > maxQtyAllowed}
                 id="detail-add-to-cart"
-                className={`flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl font-medium transition-all shadow-md text-base ${
+                className={`mt-2 flex items-center justify-center gap-2 py-3.5 px-6 rounded-2xl font-medium transition-all duration-300 text-base active:scale-[0.98] ${
                   product.stock === 0 || maxQtyAllowed === 0 || quantity > maxQtyAllowed
-                    ? "bg-muted text-muted-foreground cursor-not-allowed"
+                    ? "bg-muted/50 text-muted-foreground border border-border/50 cursor-not-allowed"
                     : added
-                      ? "bg-emerald-500 text-white scale-[0.98]"
-                      : "bg-primary hover:bg-primary/90 text-primary-foreground hover:-translate-y-0.5 hover:shadow-lg"
+                      ? "bg-primary text-primary-foreground shadow-md"
+                      : "bg-primary/5 text-primary border border-primary/20 hover:bg-primary hover:text-primary-foreground hover:shadow-lg"
                 }`}
               >
                 <ShoppingCart className="w-5 h-5" />
                 {product.stock === 0
-                  ? "Sin stock"
+                  ? "Agotado"
                   : maxQtyAllowed === 0 || quantity > maxQtyAllowed
                     ? "Stock máximo alcanzado"
                     : added

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { X, User as UserIcon, Mail, Lock, Phone, Calendar, Fingerprint } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
+import { useAlert } from '../context/AlertContext';
 
 interface ClientLoginModalProps {
   isOpen: boolean;
@@ -10,6 +12,8 @@ interface ClientLoginModalProps {
 
 export function ClientLoginModal({ isOpen, onClose }: ClientLoginModalProps) {
   const { isClientAuthenticated, clientUser, loginClient, registerClient, logoutClient } = useAuth();
+  const { items, clearCart } = useCart();
+  const { showConfirm } = useAlert();
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -102,9 +106,23 @@ export function ClientLoginModal({ isOpen, onClose }: ClientLoginModalProps) {
               
               <div className="space-y-3 pt-2">
                 <button
+                  type="button"
                   onClick={() => {
-                    logoutClient();
-                    onClose();
+                    const doLogout = () => {
+                      logoutClient();
+                      clearCart();
+                      onClose();
+                    };
+
+                    if (items.length > 0) {
+                      showConfirm(
+                        "Carrito con productos",
+                        "Tenés productos en el carrito. Si cerrás sesión los perderás. ¿Querés continuar?",
+                        doLogout
+                      );
+                    } else {
+                      doLogout();
+                    }
                   }}
                   className="w-full bg-destructive/10 text-destructive hover:bg-destructive/20 py-3 rounded-xl transition-colors font-medium flex items-center justify-center gap-2"
                 >

@@ -15,6 +15,7 @@ export function AdminLoginPage() {
 
   // Si ya está logueado, redirigir al panel
   useEffect(() => {
+    document.title = 'El Molino - Admin';
     if (isAdminAuthenticated) {
       navigate('/admin', { replace: true });
     }

@@ -12,6 +12,7 @@ interface CarouselSlide {
   description: string | null;
   displayOrder: number;
   active: boolean;
+  redirectUrl?: string | null;
 }
 
 export function HeroSection() {
@@ -19,7 +20,7 @@ export function HeroSection() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loading, setLoading] = useState(true);
   const [slides, setSlides] = useState<
-    { id: number; image: string; titulo: string; subtitulo: string }[]
+    { id: number; image: string; titulo: string; subtitulo: string; redirectUrl: string | null }[]
   >([]);
 
   const DEFAULT_SLIDE = {
@@ -27,6 +28,7 @@ export function HeroSection() {
     image: "",
     titulo: "Bienvenidos a El Molino",
     subtitulo: "Descubrí la mejor calidad en productos naturales y artesanales.",
+    redirectUrl: null,
   };
 
   useEffect(() => {
@@ -36,15 +38,16 @@ export function HeroSection() {
         if (!data || data.length === 0) {
           setSlides([]);
         } else {
-          setSlides(
-            data.map((s) => ({
-              id: s.id,
-              // imageUrl ya incluye /images/... así que se concatena directo al host
-              image: s.imageUrl ? `${API_BASE}${s.imageUrl}` : "",
-              titulo: s.title ?? "",
-              subtitulo: s.description ?? "",
-            }))
-          );
+            setSlides(
+              data.map((s) => ({
+                id: s.id,
+                // imageUrl ya incluye /images/... así que se concatena directo al host
+                image: s.imageUrl ? `${API_BASE}${s.imageUrl}` : "",
+                titulo: s.title ?? "",
+                subtitulo: s.description ?? "",
+                redirectUrl: s.redirectUrl ?? null,
+              }))
+            );
         }
       })
       .catch(() => {
@@ -79,20 +82,29 @@ export function HeroSection() {
 
   if (loading) {
     return (
-      <section className="relative h-[440px] md:h-[520px] overflow-hidden bg-secondary animate-pulse" />
+      <section className="relative h-[500px] md:h-[625px] overflow-hidden bg-secondary animate-pulse" />
     );
   }
 
   return (
-    <section className="relative h-[440px] md:h-[520px] overflow-hidden">
+    <section className="relative h-[500px] md:h-[625px] overflow-hidden">
       {/* Slides container */}
       <div className="relative w-full h-full">
         {displaySlides.map((banner, idx) => (
           <div
             key={banner.id}
+            onClick={() => {
+              if (banner.redirectUrl) {
+                if (banner.redirectUrl.startsWith("http")) {
+                  window.open(banner.redirectUrl, "_blank");
+                } else {
+                  navigate(banner.redirectUrl);
+                }
+              }
+            }}
             className={`absolute inset-0 transition-opacity duration-1000 ${
-              idx === currentSlide ? "opacity-100" : "opacity-0"
-            }`}
+              idx === currentSlide ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"
+            } ${banner.redirectUrl && idx === currentSlide ? "cursor-pointer" : ""}`}
           >
             {/* Background image */}
             <div
@@ -102,9 +114,7 @@ export function HeroSection() {
                 backgroundColor: banner.image ? undefined : "hsl(var(--secondary))",
               }}
             />
-            {/* Gradient overlays */}
-            <div className="absolute inset-0 bg-gradient-to-r from-background/70 via-background/40 to-background/20" />
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-background/30" />
+            {/* Gradient overlays removed so the image is fully visible */}
           </div>
         ))}
       </div>

@@ -10,6 +10,7 @@ interface AuthContextType {
   loginClient: (email: string, password: string) => Promise<boolean>;
   registerClient: (userData: any) => Promise<boolean>;
   logoutClient: () => void;
+  updateClientProfile: (updates: any) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -105,7 +106,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const userId = payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] || payload.sub;
           const nombre = payload.nombre;
           const apellido = payload.apellido;
-          setClientUser({ email, token, id: userId ? parseInt(userId, 10) : null, nombre, apellido });
+          const dni = payload.dni;
+          const telefono = payload.telefono;
+          setClientUser({ email, token, id: userId ? parseInt(userId, 10) : null, nombre, apellido, dni, telefono });
         } catch {
           setClientUser({ email, token });
         }
@@ -140,7 +143,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logoutClient = () => {
     localStorage.removeItem('userToken');
+    localStorage.removeItem('el-molino-checkout-form');
     setClientUser(null);
+  };
+
+  const updateClientProfile = (updates: any) => {
+    setClientUser((prev: any) => prev ? { ...prev, ...updates } : prev);
   };
 
   return (
@@ -155,6 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginClient,
         registerClient,
         logoutClient,
+        updateClientProfile,
       }}
     >
       {children}

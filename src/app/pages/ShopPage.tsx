@@ -5,6 +5,7 @@ import { HeroSection } from '../components/HeroSection';
 import { ProductSection } from '../components/ProductSection';
 import { Footer } from '../components/Footer';
 import { Cart } from '../components/Cart';
+import { Checkout } from '../components/Checkout';
 import { ShopFilters } from '../components/ShopFilters';
 import { useSignalR } from '../context/SignalRContext';
 import type { Product } from '../../lib/types';
@@ -16,6 +17,7 @@ const imgUrl = (path: string) =>
 export function ShopPage() {
   const [searchParams] = useSearchParams();
   const categoryId = searchParams.get('categoria');
+  const searchQuery = searchParams.get('q');
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<{id: number, name: string}[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +26,7 @@ export function ShopPage() {
   const { lastProductsUpdate, lastCategoriesUpdate } = useSignalR();
 
   useEffect(() => {
+    document.title = 'El Molino - Tienda';
     fetch(`${API_BASE}/api/categories?onlyActive=true`)
       .then(res => res.json())
       .then(data => {
@@ -72,13 +75,21 @@ export function ShopPage() {
 
         if (categoryId) {
           setProducts(mapped.filter((p: any) => p.categoryId?.toString() === categoryId));
+        } else if (searchQuery) {
+          const normalize = (t: string) => t ? t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : "";
+          const queryWords = normalize(searchQuery).split(/\s+/).map(w => w.endsWith('s') && w.length > 3 ? w.slice(0, -1) : w);
+          
+          setProducts(mapped.filter((p: any) => {
+            const searchableText = normalize(`${p.name} ${p.description || ""} ${p.category || ""}`);
+            return queryWords.every(qw => searchableText.includes(qw));
+          }));
         } else {
           setProducts(mapped);
         }
       })
       .catch(err => console.error("Error fetching products:", err))
       .finally(() => setLoading(false));
-  }, [categoryId, lastProductsUpdate]);
+  }, [categoryId, searchQuery, lastProductsUpdate]);
 
   useEffect(() => {
     if (!loading && window.location.hash) {
@@ -90,10 +101,10 @@ export function ShopPage() {
           window.scrollTo({ top: y, behavior: 'smooth' });
         }, 100);
       }
-    } else if (!loading && !categoryId) {
+    } else if (!loading && !categoryId && !searchQuery) {
        window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [loading, categoryId, window.location.hash]);
+  }, [loading, categoryId, searchQuery, window.location.hash]);
 
   const sortedProducts = useMemo(() => {
     const list = [...products];
@@ -122,12 +133,12 @@ export function ShopPage() {
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
       <main className="flex-1">
-        {!categoryId && <HeroSection />}
+        {!categoryId && !searchQuery && <HeroSection />}
         
-        {categoryId && (
+        {(categoryId || searchQuery) && (
           <div className="pt-8 pb-4" id="productos-lista">
             <ShopFilters 
-              categoryName={categoryName}
+              categoryName={categoryId ? categoryName : `Resultados para "${searchQuery}"`}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               sortBy={sortBy}
@@ -136,9 +147,9 @@ export function ShopPage() {
           </div>
         )}
 
-        {categoryId ? (
+        {(categoryId || searchQuery) ? (
           <ProductSection 
-            title={categoryName || "Productos"}
+            title={categoryId ? (categoryName || "Productos") : `Búsqueda: ${searchQuery}`}
             products={sortedProducts} 
             viewMode={viewMode}
           />
@@ -162,6 +173,7 @@ export function ShopPage() {
       </main>
       <Footer />
       <Cart />
+      <Checkout />
     </div>
   );
 }

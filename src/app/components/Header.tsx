@@ -1,11 +1,10 @@
 import { Search, ShoppingCart, User, Menu, X, Home, Instagram, Phone, ChevronRight, List, ChevronDown } from "lucide-react";
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { ClientLoginModal } from "./ClientLoginModal";
-import logo from "../../imports/image.png";
 const API_BASE = import.meta.env.VITE_API_BASE;
 
 interface Category {
@@ -14,6 +13,7 @@ interface Category {
 }
 
 export function Header() {
+  const navigate = useNavigate();
   const { cartCount, openCart } = useCart();
   const { isClientAuthenticated, clientUser } = useAuth();
   const [search, setSearch] = useState("");
@@ -33,7 +33,12 @@ export function Header() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: conectar con backend/filtrado
+    if (search.trim()) {
+      navigate(`/?q=${encodeURIComponent(search.trim())}#productos-lista`);
+      setIsMenuOpen(false);
+    } else {
+      navigate(`/`);
+    }
   };
 
   return (
@@ -51,13 +56,13 @@ export function Header() {
             </button>
             <Link to="/" className="flex items-center gap-3">
               <img
-                src={logo}
+                src="/logo.svg"
                 alt="El Molino"
                 className="h-12 w-12 object-contain"
               />
               <span
-                className="hidden sm:block text-xl text-primary font-medium"
-                style={{ fontFamily: "Georgia, serif" }}
+                className="hidden sm:block text-2xl text-primary font-bold italic tracking-wide"
+                style={{ fontFamily: "'Playfair Display', serif" }}
               >
                 El Molino
               </span>

@@ -67,4 +67,5 @@ export interface CarouselImage {
   subtitulo: string | null;
   orden: number;
   activo: boolean;
+  redirectUrl?: string | null;
 }
