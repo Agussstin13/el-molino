@@ -53,7 +53,7 @@ export function CustomAlert({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
+            onClick={type === 'confirm' ? undefined : onClose}
             className="fixed inset-0 bg-black/40 backdrop-blur-sm"
           />
           
@@ -96,13 +96,12 @@ export function CustomAlert({
                 </button>
               )}
               <button
-                onClick={() => {
-                  onConfirm();
-                  onClose();
-                }}
+                onClick={onConfirm}
                 className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-medium shadow-lg transition-all active:scale-[0.98] ${
                   type === 'error' 
                     ? 'bg-destructive text-destructive-foreground shadow-destructive/20' 
+                    : type === 'confirm'
+                    ? 'bg-primary text-primary-foreground shadow-primary/20'
                     : 'bg-primary text-primary-foreground shadow-primary/20'
                 }`}
               >

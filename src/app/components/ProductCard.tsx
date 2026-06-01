@@ -159,13 +159,6 @@ export function ProductCard({ product, viewMode = 'grid-sm' }: ProductCardProps)
         />
 
         {/* Badge descuento (movido al precio) */}
-
-        {/* Badge mayorista */}
-        {product.wholesalePrice && !hasOffer && (
-          <div className="absolute top-3 right-3 z-10 bg-amber-500 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-sm">
-            Mayorista
-          </div>
-        )}
       </div>
 
       {/* ── Separador decorativo ────────────────────────────────────────────── */}

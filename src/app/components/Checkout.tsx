@@ -12,11 +12,20 @@ interface FormData {
   dni: string;
   telefono: string;
   calle: string;
-  nro_calle: string;
   info_adicional: string;
   ciudad: string;
   codigo_postal: string;
-  metodo_pago: "mercadopago" | "transferencia";
+  metodo_entrega: "envio" | "retiro";
+  metodo_pago: "mercadopago" | "transferencia" | "efectivo";
+  monto_efectivo: string;
+}
+
+interface AddressSuggestion {
+  display_name: string;
+  address: {
+    road?: string;
+    house_number?: string;
+  };
 }
 
 const EMPTY_FORM: FormData = {
@@ -25,11 +34,12 @@ const EMPTY_FORM: FormData = {
   dni: "",
   telefono: "",
   calle: "",
-  nro_calle: "",
   info_adicional: "",
   ciudad: "",
   codigo_postal: "",
+  metodo_entrega: "envio",
   metodo_pago: "mercadopago",
+  monto_efectivo: "",
 };
 
 const FORM_STORAGE_KEY = "el-molino-checkout-form";
@@ -138,6 +148,48 @@ export function Checkout() {
   const [shippingCost, setShippingCost] = useState<number | null>(null);
   const [calculatingShipping, setCalculatingShipping] = useState(false);
 
+  // Estados para autocompletado de dirección
+  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  useEffect(() => {
+    if (form.metodo_entrega === "envio" && form.calle.trim().length > 3 && showSuggestions) {
+      const timeoutId = setTimeout(async () => {
+        setIsSearchingAddress(true);
+        try {
+          // Búsqueda más flexible en lugar de restrictiva por 'city='
+          const query = encodeURIComponent(`${form.calle.trim()}, Mar del Plata, Argentina`);
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&addressdetails=1&limit=5&email=test@elmolino.com`);
+          if (res.ok) {
+            const data = await res.json();
+            setAddressSuggestions(data);
+          }
+        } catch (e) {
+          console.error("Error fetching address:", e);
+        } finally {
+          setIsSearchingAddress(false);
+        }
+      }, 600);
+      return () => clearTimeout(timeoutId);
+    } else {
+      setAddressSuggestions([]);
+    }
+  }, [form.calle, form.metodo_entrega, showSuggestions]);
+
+  const handleAddressSelect = (suggestion: AddressSuggestion) => {
+    const fullAddress = suggestion.display_name;
+    
+    setForm((f) => {
+      const newForm = { ...f, calle: fullAddress };
+      localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(newForm));
+      return newForm;
+    });
+    setShowSuggestions(false);
+    setAddressSuggestions([]);
+    if (errors.calle) setErrors((err) => ({ ...err, calle: "" }));
+  };
+
   if (!isCheckoutOpen) return null;
 
   const set =
@@ -161,8 +213,9 @@ export function Checkout() {
     if (!form.apellido.trim()) newErrors.apellido = "Requerido";
     if (!form.dni.trim()) newErrors.dni = "Requerido";
     if (!form.telefono.trim()) newErrors.telefono = "Requerido";
-    if (!form.calle.trim()) newErrors.calle = "Requerido";
-    if (!form.nro_calle.trim()) newErrors.nro_calle = "Requerido";
+    if (form.metodo_entrega === "envio") {
+      if (!form.calle.trim()) newErrors.calle = "Requerido";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -180,8 +233,13 @@ export function Checkout() {
       buyerPhone: form.telefono,
       buyerDocument: form.dni,
       shippingAddress:
-        `${form.calle} ${form.nro_calle}, Mar del Plata${form.info_adicional ? " - " + form.info_adicional : ""}`.trim(),
-      paymentMethod: form.metodo_pago,
+        form.metodo_entrega === "retiro" 
+          ? "Retiro por sucursal" 
+          : `${form.calle}${form.info_adicional ? " - " + form.info_adicional : ""}`.trim(),
+      paymentMethod: form.metodo_pago === "mercadopago" ? 0 : form.metodo_pago === "efectivo" ? 1 : 2,
+      orderInformation: form.metodo_pago === "efectivo" && form.monto_efectivo
+        ? `Paga con $${form.monto_efectivo}`
+        : undefined,
       items: items.map((i) => ({
         productId: parseInt(i.id, 10),
         quantity: i.quantity,
@@ -256,8 +314,22 @@ export function Checkout() {
             <p className="text-muted-foreground max-w-sm">
               {form.metodo_pago === "mercadopago"
                 ? "Te redirigiremos al link de pago de Mercado Pago para completar la transacción."
-                : "Recibirás los datos para realizar la transferencia bancaria por WhatsApp."}
+                : form.metodo_pago === "transferencia"
+                ? "Recibirás los datos para realizar la transferencia bancaria por WhatsApp."
+                : "Abonarás en efectivo al recibir o retirar tu pedido."}
             </p>
+            {form.metodo_pago === "efectivo" && (
+              <a
+                href={`https://wa.me/5492236927799?text=${encodeURIComponent(
+                  `¡Hola! Acabo de hacer un pedido con pago en efectivo. Mi nombre es ${form.nombre} ${form.apellido} y el total es de $${finalTotal}.`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 bg-[#25D366] hover:bg-[#1ebd5a] text-white px-6 py-2.5 rounded-xl transition-colors font-medium flex items-center gap-2"
+              >
+                Coordinar entrega por WhatsApp
+              </a>
+            )}
             <button
               onClick={handleClose}
               className="mt-4 bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3 rounded-xl transition-colors"
@@ -293,6 +365,22 @@ export function Checkout() {
                       <MapPin className="w-4 h-4" />
                       Atención: Solo se realizan compras y entregas dentro de Mar del Plata.
                     </div>
+
+                    {/* Método de Entrega */}
+                    <div className="mb-6">
+                      <p className="text-sm font-medium mb-3">Método de entrega</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <label className={`flex items-center justify-center p-3 rounded-xl border-2 cursor-pointer transition-colors text-sm font-medium ${form.metodo_entrega === "envio" ? "border-primary bg-primary/5 text-primary" : "border-border hover:border-primary/40"}`}>
+                          <input type="radio" name="entrega" value="envio" checked={form.metodo_entrega === "envio"} onChange={set("metodo_entrega")} className="hidden" />
+                          Envío a domicilio
+                        </label>
+                        <label className={`flex items-center justify-center p-3 rounded-xl border-2 cursor-pointer transition-colors text-sm font-medium ${form.metodo_entrega === "retiro" ? "border-primary bg-primary/5 text-primary" : "border-border hover:border-primary/40"}`}>
+                          <input type="radio" name="entrega" value="retiro" checked={form.metodo_entrega === "retiro"} onChange={set("metodo_entrega")} className="hidden" />
+                          Retiro por sucursal
+                        </label>
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-3">
                       <InputField
                         label="Nombre *"
@@ -333,32 +421,65 @@ export function Checkout() {
                         onChange={set("telefono")}
                         error={errors.telefono}
                       />
-                      <InputField
-                        label="Calle *"
-                        field="calle"
-                        placeholder="Av. Corrientes"
-                        value={form.calle}
-                        onChange={set("calle")}
-                        error={errors.calle}
-                      />
-                      <InputField
-                        label="Número *"
-                        field="nro_calle"
-                        placeholder="1234"
-                        half
-                        value={form.nro_calle}
-                        onChange={set("nro_calle")}
-                        error={errors.nro_calle}
-                      />
-                      <InputField
-                        label="Info adicional"
-                        field="info_adicional"
-                        placeholder="Piso 4 Depto B"
-                        half
-                        value={form.info_adicional}
-                        onChange={set("info_adicional")}
-                        error={errors.info_adicional}
-                      />
+                      {form.metodo_entrega === "envio" && (
+                        <>
+                          <div className="col-span-2 relative">
+                            <label className="block text-sm mb-1.5">Calle *</label>
+                            <div className="relative">
+                              <input
+                                type="text"
+                                value={form.calle}
+                                onChange={(e) => {
+                                  set("calle")(e);
+                                  setShowSuggestions(true);
+                                }}
+                                placeholder="Ej: Av. Independencia"
+                                className={`w-full px-3 py-2.5 bg-input-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-sm transition-colors ${
+                                  errors.calle ? "border-destructive" : "border-border"
+                                }`}
+                              />
+                              {isSearchingAddress && (
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                  <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                                </div>
+                              )}
+                            </div>
+                            {errors.calle && (
+                              <p className="text-xs text-destructive mt-1">{errors.calle}</p>
+                            )}
+
+                            {/* Dropdown de Sugerencias */}
+                            {showSuggestions && form.calle.trim().length > 3 && (isSearchingAddress || addressSuggestions.length > 0) && (
+                              <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                {isSearchingAddress && addressSuggestions.length === 0 ? (
+                                  <div className="p-3 text-sm text-muted-foreground text-center">Buscando direcciones...</div>
+                                ) : (
+                                  addressSuggestions.map((suggestion, idx) => (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      onClick={() => handleAddressSelect(suggestion)}
+                                      className="w-full text-left px-3 py-2 text-sm hover:bg-secondary/50 border-b border-border/50 last:border-0 transition-colors"
+                                    >
+                                      <p className="font-medium truncate">{suggestion.address?.road || suggestion.display_name.split(',')[0]}</p>
+                                      <p className="text-xs text-muted-foreground truncate">{suggestion.display_name}</p>
+                                    </button>
+                                  ))
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          
+                          <InputField
+                            label="Info adicional (opcional)"
+                            field="info_adicional"
+                            placeholder="Ej: Piso 4 Depto B"
+                            value={form.info_adicional}
+                            onChange={set("info_adicional")}
+                            error={errors.info_adicional}
+                          />
+                        </>
+                      )}
                     </div>
 
                     {/* Calculadora envío removida ya que es solo para Mar del Plata */}
@@ -422,6 +543,48 @@ export function Checkout() {
                         </p>
                       </div>
                     </label>
+
+                    {/* Efectivo */}
+                    <div className={`rounded-xl border-2 transition-colors ${form.metodo_pago === "efectivo" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}>
+                      <label className="flex items-center gap-4 p-4 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="pago"
+                          value="efectivo"
+                          checked={form.metodo_pago === "efectivo"}
+                          onChange={set("metodo_pago")}
+                          className="accent-primary"
+                        />
+                        <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm flex-shrink-0">
+                          <span className="text-2xl">💵</span>
+                        </div>
+                        <div>
+                          <p className="font-medium">Efectivo</p>
+                          <p className="text-sm text-muted-foreground">
+                            Pagás al momento de la entrega o retiro
+                          </p>
+                        </div>
+                      </label>
+                      {form.metodo_pago === "efectivo" && (
+                        <div className="px-4 pb-4 pl-20">
+                          <div className="bg-white/50 p-3 rounded-lg border border-border/50">
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">
+                              ¿Con cuánto vas a abonar? (Opcional)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">$</span>
+                              <input
+                                type="number"
+                                value={form.monto_efectivo}
+                                onChange={set("monto_efectivo")}
+                                placeholder={`${finalTotal}`}
+                                className="w-full pl-7 pr-3 py-1.5 border border-border rounded bg-input-background text-sm focus:ring-1 focus:ring-primary/50 transition-all"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     <button
                       id="confirm-order-btn"

@@ -61,10 +61,10 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
             alert.onConfirm?.();
             handleClose();
           }}
-          onCancel={() => {
+          onCancel={alert.type === 'confirm' ? () => {
             alert.onCancel?.();
             handleClose();
-          }}
+          } : undefined}
           onClose={handleClose}
         />
       )}

@@ -18,6 +18,7 @@ export function ShopPage() {
   const [searchParams] = useSearchParams();
   const categoryId = searchParams.get('categoria');
   const searchQuery = searchParams.get('q');
+  const seccion = searchParams.get('seccion');
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<{id: number, name: string}[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,7 +93,9 @@ export function ShopPage() {
   }, [categoryId, searchQuery, lastProductsUpdate]);
 
   useEffect(() => {
-    if (!loading && window.location.hash) {
+    if (loading) return;
+
+    if (window.location.hash) {
       const id = window.location.hash.replace('#', '');
       const el = document.getElementById(id);
       if (el) {
@@ -101,10 +104,20 @@ export function ShopPage() {
           window.scrollTo({ top: y, behavior: 'smooth' });
         }, 100);
       }
-    } else if (!loading && !categoryId && !searchQuery) {
+    } else if (categoryId || searchQuery || seccion) {
+      const el = document.getElementById('productos-lista');
+      if (el) {
+        setTimeout(() => {
+          const y = el.getBoundingClientRect().top + window.scrollY - 100;
+          window.scrollTo({ top: y, behavior: 'smooth' });
+        }, 100);
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } else {
        window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [loading, categoryId, searchQuery, window.location.hash]);
+  }, [loading, categoryId, searchQuery, seccion, window.location.hash]);
 
   const sortedProducts = useMemo(() => {
     const list = [...products];
@@ -129,16 +142,20 @@ export function ShopPage() {
     return cat ? cat.name : undefined;
   }, [categoryId, categories]);
 
+  const displayProducts = seccion === 'ofertas' ? offers : seccion === 'destacados' ? others : sortedProducts;
+  const isFilteredView = categoryId || searchQuery || seccion;
+  const sectionTitle = seccion === 'ofertas' ? 'Ofertas del Día' : seccion === 'destacados' ? 'Productos Destacados' : 'Todos los Productos';
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
       <main className="flex-1">
-        {!categoryId && !searchQuery && <HeroSection />}
+        {!isFilteredView && <HeroSection />}
         
-        {(categoryId || searchQuery) && (
+        {isFilteredView && (
           <div className="pt-8 pb-4" id="productos-lista">
             <ShopFilters 
-              categoryName={categoryId ? categoryName : `Resultados para "${searchQuery}"`}
+              categoryName={categoryId ? categoryName : searchQuery ? `Resultados para "${searchQuery}"` : sectionTitle}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               sortBy={sortBy}
@@ -147,11 +164,12 @@ export function ShopPage() {
           </div>
         )}
 
-        {(categoryId || searchQuery) ? (
+        {isFilteredView ? (
           <ProductSection 
-            title={categoryId ? (categoryName || "Productos") : `Búsqueda: ${searchQuery}`}
-            products={sortedProducts} 
+            title={categoryId ? (categoryName || "Productos") : searchQuery ? `Búsqueda: ${searchQuery}` : sectionTitle}
+            products={displayProducts} 
             viewMode={viewMode}
+            paginated={!!seccion}
           />
         ) : (
           <div className="space-y-0">
@@ -161,12 +179,14 @@ export function ShopPage() {
               highlightDeals
               id="ofertas"
               viewMode={viewMode}
+              viewAllLink="/?seccion=ofertas"
             />
             <ProductSection 
               title="Productos Destacados" 
               products={others} 
               id="productos-lista"
               viewMode={viewMode}
+              viewAllLink="/?seccion=destacados"
             />
           </div>
         )}

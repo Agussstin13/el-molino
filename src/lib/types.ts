@@ -43,13 +43,29 @@ export interface Coupon {
   valido_mayorista: boolean;
 }
 
+export interface OrderItem {
+  productId: number;
+  productName: string;
+  quantity: number;
+  price: number;
+  wholesalePrice: boolean;
+  productGramageId?: number;
+  gramageGrams?: number;
+}
+
 export interface Order {
   id: string;
   customer: string;
   total: number;
-  status: "pendiente" | "procesando" | "enviado" | "entregado" | "cancelado";
+  status: "pendiente" | "enviado";
   date: string;
   metodo_pago: string;
+  informacion?: string;
+  telefono?: string;
+  dni?: string;
+  direccionEnvio?: string;
+  estadoPago?: string;
+  items?: OrderItem[];
 }
 
 export interface Category {

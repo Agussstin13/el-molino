@@ -20,6 +20,14 @@ import {
   Percent,
   Search,
   Calendar,
+  ChevronDown,
+  ChevronUp,
+  User,
+  MapPin,
+  CreditCard,
+  FileText,
+  Phone,
+  Hash,
 } from "lucide-react";
 import { motion, Reorder } from "motion/react";
 import { useNavigate } from "react-router-dom";
@@ -35,7 +43,7 @@ import type {
   Product,
 } from "../../lib/types";
 const API_BASE = import.meta.env.VITE_API_BASE;
-import logo from "../../imports/image.png";
+
 
 type AdminView =
   | "products"
@@ -56,18 +64,12 @@ const EMPTY_CAROUSEL: Omit<CarouselImage, "id"> = {
 
 const STATUS_LABELS: Record<Order["status"], string> = {
   pendiente: "Pendiente",
-  procesando: "Procesando",
   enviado: "Enviado",
-  entregado: "Entregado",
-  cancelado: "Cancelado",
 };
 
 const STATUS_COLORS: Record<Order["status"], string> = {
   pendiente: "bg-chart-4/20 text-chart-4",
-  procesando: "bg-chart-1/20 text-chart-1",
   enviado: "bg-chart-2/20 text-chart-2",
-  entregado: "bg-accent/20 text-accent",
-  cancelado: "bg-destructive/20 text-destructive",
 };
 
 const EMPTY_COUPON: Omit<Coupon, "id"> = {
@@ -120,9 +122,12 @@ export function AdminPanel() {
     newGramageInput: "",       // input temporal para agregar un gramaje
     active: true,
   });
+
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [productImageFile, setProductImageFile] = useState<File | null>(null);
   const [productImagePreview, setProductImagePreview] = useState<string>("");
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [productSearchTerm, setProductSearchTerm] = useState("");
 
   // Carousel state
   const [carouselImages, setCarouselImages] = useState<CarouselImage[]>([]);
@@ -518,24 +523,6 @@ export function AdminPanel() {
           setCoupons(mappedCoupons);
         }
 
-        // Orders
-        const ordersRes = await fetch(`${API_BASE}/api/orders`, {
-          headers: authHeader,
-        });
-        if (ordersRes.status === 401) return handleSessionExpired();
-
-        if (ordersRes.ok) {
-          const data = await ordersRes.json();
-          const mappedOrders = data.map((o: any) => ({
-            id: o.id.toString(),
-            customer: o.nombreComprador + " " + o.apellidoComprador,
-            total: o.total,
-            status: o.estadoPedido,
-            date: new Date(o.fechaCreacion).toLocaleDateString(),
-            metodo_pago: o.metodoPago,
-          }));
-          setOrders(mappedOrders);
-        }
       } catch (err) {
         console.error("Critical error fetching admin data:", err);
       }
@@ -543,6 +530,52 @@ export function AdminPanel() {
 
     fetchData();
   }, [adminToken, lastProductsUpdate, lastCategoriesUpdate]);
+
+  React.useEffect(() => {
+    if (!adminToken) return;
+
+    const fetchOrders = async () => {
+      try {
+        const ordersRes = await fetch(`${API_BASE}/api/orders`, {
+          headers: { Authorization: `Bearer ${adminToken}` },
+        });
+        
+        if (ordersRes.status === 401) return handleSessionExpired();
+
+        if (ordersRes.ok) {
+          const data = await ordersRes.json();
+          const mappedOrders = data.map((o: any) => ({
+            id: o.id?.toString(),
+            customer: o.buyerFirstName + " " + o.buyerLastName,
+            total: o.total,
+            status: o.orderStatus || o.estadoPedido, // Fallback por las dudas
+            date: new Date(o.createdAt || o.fechaCreacion).toLocaleDateString(),
+            metodo_pago: o.paymentMethod === "mercado_pago" ? "mercadopago" : o.paymentMethod || o.metodoPago,
+            informacion: o.orderInformation,
+            telefono: o.buyerPhone,
+            dni: o.buyerDocument,
+            direccionEnvio: o.shippingAddress,
+            estadoPago: o.paymentStatus,
+            items: o.items,
+            fechaCreacion: o.createdAt || o.fechaCreacion,
+          }));
+          
+          // Ordenar de más reciente a más antiguo
+          mappedOrders.sort((a: any, b: any) => 
+            new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime()
+          );
+          
+          setOrders(mappedOrders);
+        }
+      } catch (err) {
+        console.error("Error fetching orders:", err);
+      }
+    };
+
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 10000); // 10 segundos
+    return () => clearInterval(interval);
+  }, [adminToken]);
 
   const getAuthHeaders = (contentType: string | null = "application/json") => {
     const headers: Record<string, string> = {};
@@ -559,6 +592,27 @@ export function AdminPanel() {
   const handleLogout = () => {
     logout();
     navigate("/admin/login");
+  };
+
+  const handleUpdateOrderStatus = async (orderId: string, currentStatus: Order["status"]) => {
+    const newStatus = currentStatus === "pendiente" ? "enviado" : "pendiente";
+    try {
+      const res = await fetch(`${API_BASE}/api/orders/${orderId}/status`, {
+        method: "PUT",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(newStatus),
+      });
+
+      if (res.ok) {
+        setOrders(orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+        showSuccess("Éxito", `El pedido ahora está ${newStatus === "enviado" ? "Enviado" : "Pendiente"}`);
+      } else {
+        const errorData = await res.json().catch(() => null);
+        showError("Error", errorData?.detail || "No se pudo actualizar el estado.");
+      }
+    } catch (e) {
+      showError("Error", "Error de conexión al actualizar estado.");
+    }
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -794,15 +848,22 @@ export function AdminPanel() {
             setProducts((prev) => prev.filter((p) => p.id !== id));
             showSuccess("¡Borrado!", "El producto ya no está en la lista.");
           } else {
-            const errorData = await res.json().catch(() => ({}));
-            showError(
-              "No se pudo borrar",
-              errorData.title ||
-                "Hubo un problema al intentar eliminar el producto.",
-            );
+            const text = await res.text().catch(() => "");
+            const isForeignKey = text.includes("23503") || text.toLowerCase().includes("fk_") || text.toLowerCase().includes("foreign key");
+            if (isForeignKey) {
+              showError(
+                "No se puede eliminar este producto",
+                "Este producto forma parte de uno o más pedidos existentes. Para proteger el historial de ventas no es posible eliminarlo. Podés desactivarlo desde la columna de estado para ocultarlo de la tienda."
+              );
+            } else {
+              const errorData = (() => { try { return JSON.parse(text); } catch { return {}; } })();
+              showError(
+                "No se pudo borrar",
+                errorData.title || "Hubo un problema al intentar eliminar el producto."
+              );
+            }
           }
-        } catch (e) {
-          console.error(e);
+        } catch {
           showError("Problema de red", "No pudimos conectar con el servidor.");
         }
       },
@@ -1434,14 +1495,14 @@ export function AdminPanel() {
       <aside className="w-60 bg-sidebar border-r border-sidebar-border p-4 flex flex-col flex-shrink-0">
         <div className="flex items-center gap-3 mb-8">
           <img
-            src={logo}
+            src="/logo.svg"
             alt="El Molino"
-            className="h-10 w-10 object-contain"
+            className="h-12 w-12 object-contain"
           />
           <div>
             <p
-              className="text-sidebar-foreground font-medium"
-              style={{ fontFamily: "Georgia, serif" }}
+              className="text-sidebar-foreground font-bold italic tracking-wide text-2xl"
+              style={{ fontFamily: "'Playfair Display', serif" }}
             >
               El Molino
             </p>
@@ -1836,6 +1897,16 @@ export function AdminPanel() {
                 </div>
               )}
 
+              <div className="mb-4">
+                <input
+                  type="text"
+                  placeholder="Buscar producto por nombre o categoría..."
+                  value={productSearchTerm}
+                  onChange={(e) => setProductSearchTerm(e.target.value)}
+                  className="w-full px-4 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                />
+              </div>
+
               <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
                 <table className="w-full">
                   <thead className="bg-secondary/50">
@@ -1858,7 +1929,10 @@ export function AdminPanel() {
                     </tr>
                   </thead>
                   <tbody>
-                    {products.map((product) => (
+                    {products.filter(p => 
+                      p.name.toLowerCase().includes(productSearchTerm.toLowerCase()) || 
+                      (p.category && p.category.toLowerCase().includes(productSearchTerm.toLowerCase()))
+                    ).map((product) => (
                       <tr
                         key={product.id}
                         className="border-t border-border hover:bg-secondary/20 transition-colors"
@@ -2516,33 +2590,191 @@ export function AdminPanel() {
                       <th className="text-left p-4 text-sm font-medium">
                         Fecha
                       </th>
+                      <th className="p-4 w-10"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {orders.map((order) => (
-                      <tr
-                        key={order.id}
-                        className="border-t border-border hover:bg-secondary/20 transition-colors"
-                      >
-                        <td className="p-4 text-sm font-mono">{order.id}</td>
-                        <td className="p-4 text-sm">{order.customer}</td>
-                        <td className="p-4 text-sm font-medium">
-                          {formatARS(order.total)}
-                        </td>
-                        <td className="p-4 text-sm text-muted-foreground capitalize">
-                          {order.metodo_pago}
-                        </td>
-                        <td className="p-4">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[order.status]}`}
-                          >
-                            {STATUS_LABELS[order.status]}
-                          </span>
-                        </td>
-                        <td className="p-4 text-sm text-muted-foreground">
-                          {order.date}
-                        </td>
-                      </tr>
+                      <React.Fragment key={order.id}>
+                        <tr
+                          className="border-t border-border hover:bg-secondary/20 transition-colors cursor-pointer"
+                          onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
+                        >
+                          <td className="p-4 text-sm font-mono">{order.id}</td>
+                          <td className="p-4 text-sm">{order.customer}</td>
+                          <td className="p-4 text-sm font-medium">
+                            {formatARS(order.total)}
+                          </td>
+                          <td className="p-4 text-sm text-muted-foreground capitalize">
+                            {order.metodo_pago}
+                            {order.informacion && (
+                              <div className="text-xs text-primary font-medium mt-1 normal-case">
+                                {order.informacion}
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-4">
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[order.status]}`}
+                            >
+                              {STATUS_LABELS[order.status]}
+                            </span>
+                          </td>
+                          <td className="p-4 text-sm text-muted-foreground">
+                            {order.date}
+                          </td>
+                          <td className="p-4 text-muted-foreground">
+                            {expandedOrderId === order.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                          </td>
+                        </tr>
+                        {expandedOrderId === order.id && (
+                          <tr className="bg-secondary/10">
+                            <td colSpan={7} className="p-0 border-b border-border">
+                              <motion.div 
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="p-6"
+                              >
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                  
+                                  {/* Columna Cliente y Envío */}
+                                  <div className="bg-card p-5 rounded-xl border border-border/50 shadow-sm space-y-4">
+                                    <div className="flex items-center gap-2 pb-3 border-b border-border/50">
+                                      <div className="p-2 bg-primary/10 text-primary rounded-lg">
+                                        <User size={18} />
+                                      </div>
+                                      <h4 className="font-semibold text-foreground">Datos del Cliente</h4>
+                                    </div>
+                                    <div className="space-y-3 text-sm">
+                                      <div className="flex items-start gap-3">
+                                        <User size={16} className="text-muted-foreground mt-0.5 shrink-0" />
+                                        <div>
+                                          <p className="text-muted-foreground text-xs">Nombre completo</p>
+                                          <p className="font-medium text-foreground">{order.customer}</p>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-start gap-3">
+                                        <Hash size={16} className="text-muted-foreground mt-0.5 shrink-0" />
+                                        <div>
+                                          <p className="text-muted-foreground text-xs">Documento (DNI)</p>
+                                          <p className="font-medium text-foreground">{order.dni || "No especificado"}</p>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-start gap-3">
+                                        <Phone size={16} className="text-muted-foreground mt-0.5 shrink-0" />
+                                        <div>
+                                          <p className="text-muted-foreground text-xs">Teléfono de contacto</p>
+                                          <p className="font-medium text-foreground">{order.telefono || "No especificado"}</p>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-start gap-3">
+                                        <MapPin size={16} className="text-muted-foreground mt-0.5 shrink-0" />
+                                        <div>
+                                          <p className="text-muted-foreground text-xs">Dirección de entrega</p>
+                                          <p className="font-medium text-foreground">{order.direccionEnvio || "Retiro por sucursal"}</p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Columna Pago y Detalles */}
+                                  <div className="bg-card p-5 rounded-xl border border-border/50 shadow-sm space-y-4">
+                                    <div className="flex items-center gap-2 pb-3 border-b border-border/50">
+                                      <div className="p-2 bg-primary/10 text-primary rounded-lg">
+                                        <CreditCard size={18} />
+                                      </div>
+                                      <h4 className="font-semibold text-foreground">Información de Pago</h4>
+                                    </div>
+                                    <div className="space-y-3 text-sm">
+                                      <div className="flex items-start gap-3">
+                                        <CreditCard size={16} className="text-muted-foreground mt-0.5 shrink-0" />
+                                        <div>
+                                          <p className="text-muted-foreground text-xs">Método seleccionado</p>
+                                          <p className="font-medium text-foreground capitalize">{order.metodo_pago}</p>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-start gap-3">
+                                        <Tag size={16} className="text-muted-foreground mt-0.5 shrink-0" />
+                                        <div>
+                                          <p className="text-muted-foreground text-xs">Estado del cobro</p>
+                                          <span className="inline-block mt-0.5 px-2 py-0.5 bg-secondary text-secondary-foreground text-xs font-medium rounded-full capitalize">
+                                            {order.estadoPago || "Pendiente"}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-start gap-3">
+                                        <FileText size={16} className="text-muted-foreground mt-0.5 shrink-0" />
+                                        <div>
+                                          <p className="text-muted-foreground text-xs">Aclaraciones adicionales</p>
+                                          <p className="font-medium text-foreground mt-0.5 bg-primary/5 px-2 py-1.5 rounded text-primary">
+                                            {order.informacion || "Sin aclaraciones adicionales"}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <div className="pt-3 mt-1 border-t border-border/50">
+                                        <p className="text-muted-foreground text-xs mb-2">Acción rápida</p>
+                                        <button 
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleUpdateOrderStatus(order.id, order.status);
+                                          }}
+                                          className={`w-full py-2 px-3 rounded-md text-sm font-medium shadow-sm transition-all hover:opacity-90 active:scale-[0.98] flex items-center justify-center gap-2 ${
+                                            order.status === "pendiente" 
+                                              ? "bg-chart-2 text-white" 
+                                              : "bg-chart-4 text-white"
+                                          }`}
+                                        >
+                                          {order.status === "pendiente" ? "Marcar como Enviado" : "Devolver a Pendiente"}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Columna Resumen del Pedido */}
+                                  <div className="bg-card p-5 rounded-xl border border-border/50 shadow-sm flex flex-col h-full">
+                                    <div className="flex items-center gap-2 pb-3 border-b border-border/50 mb-4">
+                                      <div className="p-2 bg-primary/10 text-primary rounded-lg">
+                                        <ShoppingBag size={18} />
+                                      </div>
+                                      <h4 className="font-semibold text-foreground">Resumen de Productos</h4>
+                                    </div>
+                                    
+                                    <div className="flex-1 overflow-y-auto max-h-[220px] pr-2 custom-scrollbar">
+                                      <ul className="space-y-3">
+                                        {order.items?.map((item, idx) => (
+                                          <li key={idx} className="flex justify-between items-center text-sm group">
+                                            <div className="flex items-center gap-3">
+                                              <span className="flex items-center justify-center bg-secondary/50 text-secondary-foreground w-6 h-6 rounded-md font-medium text-xs">
+                                                {item.quantity}x
+                                              </span>
+                                              <div>
+                                                <p className="font-medium text-foreground group-hover:text-primary transition-colors">{item.productName}</p>
+                                                {item.gramageGrams && (
+                                                  <p className="text-xs text-muted-foreground">Gramaje: {item.gramageGrams}g</p>
+                                                )}
+                                              </div>
+                                            </div>
+                                            <span className="font-medium whitespace-nowrap text-foreground">
+                                              {formatARS(item.price * item.quantity)}
+                                            </span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+
+                                    <div className="pt-4 mt-auto border-t border-border/50 flex justify-between items-center">
+                                      <span className="font-semibold text-muted-foreground">Total del pedido</span>
+                                      <span className="text-lg font-bold text-primary">{formatARS(order.total)}</span>
+                                    </div>
+                                  </div>
+
+                                </div>
+                              </motion.div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
