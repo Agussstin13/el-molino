@@ -65,6 +65,7 @@ export interface Order {
   dni?: string;
   direccionEnvio?: string;
   estadoPago?: string;
+  shippingCost?: number;
   items?: OrderItem[];
 }
 

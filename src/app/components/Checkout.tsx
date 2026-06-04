@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { X, MapPin, ChevronRight, CheckCircle2 } from "lucide-react";
+import { X, MapPin, ChevronRight, CheckCircle2, Truck } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useAlert } from "../context/AlertContext";
-import { formatARS, getEffectivePrice } from "../../lib/price";
+import { formatARS, getEffectivePrice, getShippingCostByDistance } from "../../lib/price";
 const API_BASE = import.meta.env.VITE_API_BASE;
 
 interface FormData {
@@ -99,10 +99,11 @@ const InputField = ({
 );
 
 export function Checkout() {
-  const { isCheckoutOpen, items, closeCheckout, subtotal, shipping, total, clearCart } = useCart();
+  const { isCheckoutOpen, items, closeCheckout, subtotal, shipping, total, clearCart, shippingRates, freeShippingThreshold } = useCart();
   const { isClientAuthenticated, clientUser, updateClientProfile } = useAuth();
   const { showError, showSuccess } = useAlert();
   const [step, setStep] = useState<"datos" | "pago" | "confirmado">("datos");
+  const [confirmedTotal, setConfirmedTotal] = useState<number>(0);
   const [form, setForm] = useState<FormData>(() => {
     try {
       const stored = localStorage.getItem(FORM_STORAGE_KEY);
@@ -147,6 +148,19 @@ export function Checkout() {
   );
   const [shippingCost, setShippingCost] = useState<number | null>(null);
   const [calculatingShipping, setCalculatingShipping] = useState(false);
+  const [distanciaKm, setDistanciaKm] = useState<number | null>(null);
+
+  // Coordenadas del local (Bolívar 2342, Mar del Plata)
+  const STORE_LAT = -38.0040339;
+  const STORE_LNG = -57.5469972;
+
+  const calcularDistanciaKm = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLng = ((lng2 - lng1) * Math.PI) / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  };
 
   // Estados para autocompletado de dirección
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
@@ -177,9 +191,23 @@ export function Checkout() {
     }
   }, [form.calle, form.metodo_entrega, showSuggestions]);
 
-  const handleAddressSelect = (suggestion: AddressSuggestion) => {
+  const handleAddressSelect = (suggestion: AddressSuggestion & { lat?: string; lon?: string }) => {
     const fullAddress = suggestion.display_name;
-    
+
+    // Calcular distancia si la sugerencia trae coordenadas
+    if (suggestion.lat && suggestion.lon) {
+      const lat = parseFloat(suggestion.lat);
+      const lng = parseFloat(suggestion.lon);
+      const km = calcularDistanciaKm(STORE_LAT, STORE_LNG, lat, lng);
+      setDistanciaKm(km);
+      if (subtotal < freeShippingThreshold) {
+        const costo = getShippingCostByDistance(km, shippingRates);
+        setShippingCost(costo);
+      } else {
+        setShippingCost(0);
+      }
+    }
+
     setForm((f) => {
       const newForm = { ...f, calle: fullAddress };
       localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(newForm));
@@ -189,6 +217,22 @@ export function Checkout() {
     setAddressSuggestions([]);
     if (errors.calle) setErrors((err) => ({ ...err, calle: "" }));
   };
+
+  // Recalcular el envío si cambia el método de entrega
+  useEffect(() => {
+    if (form.metodo_entrega === "retiro") {
+      setShippingCost(0);
+      setDistanciaKm(null);
+    } else if (distanciaKm !== null) {
+      if (subtotal < freeShippingThreshold) {
+        setShippingCost(getShippingCostByDistance(distanciaKm, shippingRates));
+      } else {
+        setShippingCost(0);
+      }
+    } else {
+      setShippingCost(null);
+    }
+  }, [form.metodo_entrega, subtotal, shippingRates, freeShippingThreshold, distanciaKm]);
 
   if (!isCheckoutOpen) return null;
 
@@ -240,6 +284,7 @@ export function Checkout() {
       orderInformation: form.metodo_pago === "efectivo" && form.monto_efectivo
         ? `Paga con $${form.monto_efectivo}`
         : undefined,
+      shippingCost: form.metodo_entrega === "envio" ? (shippingCost ?? 0) : 0,
       items: items.map((i) => ({
         productId: parseInt(i.id, 10),
         quantity: i.quantity,
@@ -258,9 +303,15 @@ export function Checkout() {
         body: JSON.stringify(backendOrder),
       });
       if (res.ok) {
+        const data = await res.json().catch(() => null);
+        setConfirmedTotal(finalTotal);
         setStep("confirmado");
         clearCart();
         localStorage.removeItem(FORM_STORAGE_KEY);
+        
+        if (form.metodo_pago === "mercadopago" && data?.paymentUrl) {
+          window.location.href = data.paymentUrl;
+        }
       } else {
         const errData = await res.json().catch(() => null);
         const msg = errData?.title || errData?.detail || "Error al confirmar el pedido. Intente nuevamente.";
@@ -284,7 +335,11 @@ export function Checkout() {
     setShippingCost(null);
   };
 
-  const finalTotal = total + (shippingCost ?? 0);
+  // finalTotal usa el shippingCost calculado por distancia si existe, si no el del contexto
+  const finalTotal = subtotal === 0 ? 0
+    : form.metodo_entrega === "retiro" ? subtotal
+    : shippingCost !== null ? subtotal + shippingCost
+    : total;
 
   return (
     <>
@@ -315,19 +370,40 @@ export function Checkout() {
               {form.metodo_pago === "mercadopago"
                 ? "Te redirigiremos al link de pago de Mercado Pago para completar la transacción."
                 : form.metodo_pago === "transferencia"
-                ? "Recibirás los datos para realizar la transferencia bancaria por WhatsApp."
+                ? "Realizá la transferencia con los datos que se muestran a continuación y enviá el comprobante por WhatsApp."
                 : "Abonarás en efectivo al recibir o retirar tu pedido."}
             </p>
-            {form.metodo_pago === "efectivo" && (
+            {form.metodo_pago === "transferencia" && (
+              <div className="mt-2 w-full max-w-sm bg-secondary/40 border border-border rounded-xl p-4 text-left space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Datos para transferir</p>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Titular</span>
+                    <span className="font-medium">Mateo Agustin Lucero</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Banco</span>
+                    <span className="font-medium">Mercado Pago</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Alias</span>
+                    <span className="font-medium font-mono">elmolinomdp</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {(form.metodo_pago === "transferencia" || form.metodo_pago === "efectivo") && (
               <a
                 href={`https://wa.me/5492236927799?text=${encodeURIComponent(
-                  `¡Hola! Acabo de hacer un pedido con pago en efectivo. Mi nombre es ${form.nombre} ${form.apellido} y el total es de $${finalTotal}.`
+                  form.metodo_pago === "transferencia"
+                    ? `¡Hola! Acabo de hacer un pedido (#transferencia). Mi nombre es ${form.nombre} ${form.apellido} y el total es de $${confirmedTotal}. Adjunto el comprobante de transferencia.`
+                    : `¡Hola! Acabo de hacer un pedido con pago en efectivo. Mi nombre es ${form.nombre} ${form.apellido} y el total es de $${confirmedTotal}.`
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-2 bg-[#25D366] hover:bg-[#1ebd5a] text-white px-6 py-2.5 rounded-xl transition-colors font-medium flex items-center gap-2"
               >
-                Coordinar entrega por WhatsApp
+                {form.metodo_pago === "transferencia" ? "Enviar comprobante por WhatsApp" : "Coordinar entrega por WhatsApp"}
               </a>
             )}
             <button
@@ -522,27 +598,46 @@ export function Checkout() {
                     </label>
 
                     {/* Transferencia */}
-                    <label
-                      className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${form.metodo_pago === "transferencia" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
-                    >
-                      <input
-                        type="radio"
-                        name="pago"
-                        value="transferencia"
-                        checked={form.metodo_pago === "transferencia"}
-                        onChange={set("metodo_pago")}
-                        className="accent-primary"
-                      />
-                      <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm flex-shrink-0">
-                        <span className="text-2xl">🏦</span>
-                      </div>
-                      <div>
-                        <p className="font-medium">Transferencia Bancaria</p>
-                        <p className="text-sm text-muted-foreground">
-                          Pago directo — te enviamos los datos
-                        </p>
-                      </div>
-                    </label>
+                    <div className={`rounded-xl border-2 transition-colors ${form.metodo_pago === "transferencia" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}>
+                      <label className="flex items-center gap-4 p-4 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="pago"
+                          value="transferencia"
+                          checked={form.metodo_pago === "transferencia"}
+                          onChange={set("metodo_pago")}
+                          className="accent-primary"
+                        />
+                        <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm flex-shrink-0">
+                          <span className="text-2xl">🏦</span>
+                        </div>
+                        <div>
+                          <p className="font-medium">Transferencia Bancaria</p>
+                          <p className="text-sm text-muted-foreground">
+                            Mercado Pago — enviá el comprobante por WhatsApp
+                          </p>
+                        </div>
+                      </label>
+                      {form.metodo_pago === "transferencia" && (
+                        <div className="px-4 pb-4 pl-20">
+                          <div className="bg-white/50 p-3 rounded-lg border border-border/50 space-y-1.5">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Datos para transferir</p>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Titular</span>
+                              <span className="font-medium">Mateo Agustin Lucero</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Banco</span>
+                              <span className="font-medium">Mercado Pago</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Alias</span>
+                              <span className="font-medium font-mono tracking-wide">elmolinomdp</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     {/* Efectivo */}
                     <div className={`rounded-xl border-2 transition-colors ${form.metodo_pago === "efectivo" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}>
@@ -630,13 +725,23 @@ export function Checkout() {
                       <span>{formatARS(subtotal)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Envío</span>
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <Truck className="w-3 h-3" />
+                        Envío
+                        {distanciaKm !== null && form.metodo_entrega === "envio" && (
+                          <span className="text-xs opacity-60">({distanciaKm.toFixed(1)} km)</span>
+                        )}
+                      </span>
                       <span>
-                        {shippingCost !== null
+                        {form.metodo_entrega === "retiro"
+                          ? "Gratis (retiro)"
+                          : shippingCost === 0
+                          ? "¡Gratis!"
+                          : shippingCost !== null
                           ? formatARS(shippingCost)
-                          : shipping === 0
-                            ? "¡Gratis!"
-                            : "A calcular"}
+                          : subtotal >= freeShippingThreshold
+                          ? "¡Gratis!"
+                          : "Ingresá tu dirección"}
                       </span>
                     </div>
                     <div className="flex justify-between pt-2 border-t border-border font-semibold">

@@ -3,6 +3,29 @@ import type { Product, ProductGramage } from './types';
 export const FREE_SHIPPING_THRESHOLD = 5000;
 export const SHIPPING_COST = 500;
 
+export interface ShippingRate {
+  id: number;
+  desdeKm: number;
+  hastaKm: number;
+  precio: number;
+  activo: boolean;
+}
+
+/**
+ * Calcula el costo de envío según la distancia en km y los tramos configurados.
+ * Si la distancia no entra en ningún tramo activo, devuelve el precio del tramo más alto.
+ */
+export function getShippingCostByDistance(distanciaKm: number, tarifas: ShippingRate[]): number {
+  const activas = tarifas.filter((t) => t.activo).sort((a, b) => a.desdeKm - b.desdeKm);
+  if (activas.length === 0) return SHIPPING_COST;
+
+  const match = activas.find((t) => distanciaKm >= t.desdeKm && distanciaKm < t.hastaKm);
+  if (match) return match.precio;
+
+  // Si supera todos los tramos, usa el último
+  return activas[activas.length - 1].precio;
+}
+
 /**
  * Formatea un número como moneda argentina (ARS).
  * Ej: 4500 → "$4.500"

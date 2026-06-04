@@ -28,6 +28,8 @@ import {
   FileText,
   Phone,
   Hash,
+  Truck,
+  Save,
 } from "lucide-react";
 import { motion, Reorder } from "motion/react";
 import { useNavigate } from "react-router-dom";
@@ -51,7 +53,8 @@ type AdminView =
   | "orders"
   | "carousel"
   | "categories"
-  | "daily-offers";
+  | "daily-offers"
+  | "shipping";
 
 const EMPTY_CAROUSEL: Omit<CarouselImage, "id"> = {
   imagenNombre: "",
@@ -159,6 +162,21 @@ export function AdminPanel() {
   const [offersFilter, setOffersFilter] = useState<"all" | "active" | "inactive">("all");
   const [isSavingOffers, setIsSavingOffers] = useState(false);
 
+  // Shipping state
+  interface ShippingRateAdmin {
+    id: number;
+    desdeKm: number;
+    hastaKm: number;
+    precio: number;
+    activo: boolean;
+  }
+  const [shippingRates, setShippingRates] = useState<ShippingRateAdmin[]>([]);
+  const [umbralEnvioGratis, setUmbralEnvioGratis] = useState<string>("5000");
+  const [showShippingForm, setShowShippingForm] = useState(false);
+  const [editingShippingId, setEditingShippingId] = useState<number | null>(null);
+  const [shippingForm, setShippingForm] = useState({ desdeKm: "", hastaKm: "", precio: "", activo: true });
+  const [isSavingShipping, setIsSavingShipping] = useState(false);
+
   const { lastProductsUpdate, lastCategoriesUpdate } = useSignalR();
 
   useEffect(() => {
@@ -172,6 +190,9 @@ export function AdminPanel() {
         };
       });
       setOffersDraft(initialDraft);
+    }
+    if (currentView === "shipping") {
+      fetchShippingRates();
     }
   }, [currentView, products]);
 
@@ -384,6 +405,98 @@ export function AdminPanel() {
     }
   };
 
+  // ── Shipping handlers ──────────────────────────────────────────────────────
+  const fetchShippingRates = async () => {
+    try {
+      const [ratesRes, configRes] = await Promise.all([
+        fetch(`${API_BASE}/api/shipping`, { headers: getAuthHeaders(null) }),
+        fetch(`${API_BASE}/api/shipping/config`, { headers: getAuthHeaders(null) }),
+      ]);
+      if (ratesRes.ok) setShippingRates(await ratesRes.json());
+      if (configRes.ok) {
+        const cfg = await configRes.json();
+        setUmbralEnvioGratis(String(cfg.umbralEnvioGratis ?? 5000));
+      }
+    } catch (e) {
+      console.error("Error fetching shipping config:", e);
+    }
+  };
+
+  const handleSaveShippingRate = async () => {
+    const desde = parseFloat(shippingForm.desdeKm);
+    const hasta = parseFloat(shippingForm.hastaKm);
+    const precio = parseFloat(shippingForm.precio.replace(/\./g, "").replace(",", "."));
+
+    if (isNaN(desde) || isNaN(hasta) || isNaN(precio)) {
+      showError("Datos incompletos", "Completá todos los campos del tramo.");
+      return;
+    }
+    if (hasta <= desde) {
+      showError("Rango inválido", "El km máximo debe ser mayor al km mínimo.");
+      return;
+    }
+
+    setIsSavingShipping(true);
+    try {
+      const payload = { id: editingShippingId ?? 0, desdeKm: desde, hastaKm: hasta, precio, activo: shippingForm.activo };
+      const url = editingShippingId ? `${API_BASE}/api/shipping/${editingShippingId}` : `${API_BASE}/api/shipping`;
+      const method = editingShippingId ? "PUT" : "POST";
+      const res = await fetch(url, { method, headers: getAuthHeaders(), body: JSON.stringify(payload) });
+      if (res.ok) {
+        showSuccess("¡Listo!", editingShippingId ? "Tramo actualizado." : "Tramo creado.");
+        setShowShippingForm(false);
+        setEditingShippingId(null);
+        setShippingForm({ desdeKm: "", hastaKm: "", precio: "", activo: true });
+        fetchShippingRates();
+      } else {
+        const errorData = await res.json().catch(() => null);
+        showError("Error", errorData?.title || "No se pudo guardar el tramo.");
+      }
+    } catch {
+      showError("Error de red", "No se pudo conectar con el servidor.");
+    } finally {
+      setIsSavingShipping(false);
+    }
+  };
+
+  const handleDeleteShippingRate = async (id: number) => {
+    showConfirm("¿Eliminar tramo?", "Esta acción no se puede deshacer.", async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/shipping/${id}`, { method: "DELETE", headers: getAuthHeaders(null) });
+        if (res.ok) {
+          showSuccess("¡Listo!", "Tramo eliminado.");
+          fetchShippingRates();
+        } else {
+          showError("Error", "No se pudo eliminar el tramo.");
+        }
+      } catch {
+        showError("Error de red", "No se pudo conectar con el servidor.");
+      }
+    });
+  };
+
+  const handleSaveUmbral = async () => {
+    const val = parseFloat(umbralEnvioGratis.replace(/\./g, "").replace(",", "."));
+    if (isNaN(val) || val < 0) {
+      showError("Valor inválido", "Ingresá un monto válido.");
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/shipping/config/umbral`, {
+        method: "PUT",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(val),
+      });
+      if (res.ok) {
+        showSuccess("¡Listo!", "Umbral de envío gratis actualizado.");
+      } else {
+        showError("Error", "No se pudo guardar el umbral.");
+      }
+    } catch {
+      showError("Error de red", "No se pudo conectar con el servidor.");
+    }
+  };
+
   const handleSessionExpired = () => {
     logout();
     showError(
@@ -556,6 +669,7 @@ export function AdminPanel() {
             dni: o.buyerDocument,
             direccionEnvio: o.shippingAddress,
             estadoPago: o.paymentStatus,
+            shippingCost: o.shippingCost,
             items: o.items,
             fechaCreacion: o.createdAt || o.fechaCreacion,
           }));
@@ -1473,6 +1587,7 @@ export function AdminPanel() {
     { id: "orders" as AdminView, icon: ShoppingBag, label: "Pedidos" },
     { id: "carousel" as AdminView, icon: ImageIcon, label: "Carousel" },
     { id: "categories" as AdminView, icon: Layers, label: "Categorías" },
+    { id: "shipping" as AdminView, icon: Truck, label: "Envíos" },
   ];
 
   const filteredOffersProducts = products.filter(p => {
@@ -2763,9 +2878,21 @@ export function AdminPanel() {
                                       </ul>
                                     </div>
 
-                                    <div className="pt-4 mt-auto border-t border-border/50 flex justify-between items-center">
-                                      <span className="font-semibold text-muted-foreground">Total del pedido</span>
-                                      <span className="text-lg font-bold text-primary">{formatARS(order.total)}</span>
+                                    <div className="pt-4 mt-auto border-t border-border/50">
+                                      <div className="flex justify-between items-center mb-2">
+                                        <span className="text-sm text-muted-foreground">Subtotal productos</span>
+                                        <span className="text-sm font-medium text-foreground">{formatARS(order.total - (order.shippingCost || 0))}</span>
+                                      </div>
+                                      <div className="flex justify-between items-center mb-3 pb-3 border-b border-border/30">
+                                        <span className="text-sm text-muted-foreground">Envío</span>
+                                        <span className="text-sm font-medium text-foreground">
+                                          {order.shippingCost ? formatARS(order.shippingCost) : "Gratis / No aplica"}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between items-center">
+                                        <span className="font-semibold text-muted-foreground">Total del pedido</span>
+                                        <span className="text-lg font-bold text-primary">{formatARS(order.total)}</span>
+                                      </div>
                                     </div>
                                   </div>
 
@@ -3339,6 +3466,200 @@ export function AdminPanel() {
                   ))
                 )}
               </Reorder.Group>
+            </div>
+          )}
+
+          {/* ENVÍOS */}
+          {currentView === "shipping" && (
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h1 style={{ fontFamily: "Georgia, serif" }}>Tarifas de Envío</h1>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Configurá los costos de envío por tramo de distancia desde el local.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setEditingShippingId(null);
+                    setShippingForm({ desdeKm: "", hastaKm: "", precio: "", activo: true });
+                    setShowShippingForm(true);
+                  }}
+                  className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg transition-colors shadow-sm text-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  Nuevo tramo
+                </button>
+              </div>
+
+              {/* Umbral envío gratis */}
+              <div className="bg-card border border-border rounded-xl p-5 mb-6">
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-primary" />
+                  Envío gratis a partir de...
+                </h3>
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-1 max-w-xs">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">$</span>
+                    <input
+                      type="text"
+                      value={umbralEnvioGratis}
+                      onChange={e => setUmbralEnvioGratis(e.target.value)}
+                      placeholder="5000"
+                      className="w-full pl-7 pr-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                    />
+                  </div>
+                  <button
+                    onClick={handleSaveUmbral}
+                    className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-sm transition-colors"
+                  >
+                    <Save className="w-4 h-4" />
+                    Guardar
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Los pedidos que superen este monto no pagarán envío (actualmente: ${umbralEnvioGratis}).
+                </p>
+              </div>
+
+              {/* Formulario inline */}
+              {showShippingForm && (
+                <div className="bg-card border-2 border-primary/30 rounded-xl p-5 mb-6 shadow-sm">
+                  <h3 className="text-base mb-4" style={{ fontFamily: "Georgia, serif" }}>
+                    {editingShippingId ? "Editar tramo" : "Nuevo tramo"}
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium mb-1.5">Desde (km)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={shippingForm.desdeKm}
+                        onChange={e => setShippingForm(f => ({ ...f, desdeKm: e.target.value }))}
+                        placeholder="0"
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1.5">Hasta (km)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={shippingForm.hastaKm}
+                        onChange={e => setShippingForm(f => ({ ...f, hastaKm: e.target.value }))}
+                        placeholder="5"
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1.5">Precio ($)</label>
+                      <input
+                        type="text"
+                        value={shippingForm.precio}
+                        onChange={e => setShippingForm(f => ({ ...f, precio: e.target.value }))}
+                        placeholder="500"
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20"
+                      />
+                    </div>
+                    <div className="flex flex-col justify-end">
+                      <label className="flex items-center gap-2 cursor-pointer text-sm pb-2">
+                        <input
+                          type="checkbox"
+                          checked={shippingForm.activo}
+                          onChange={e => setShippingForm(f => ({ ...f, activo: e.target.checked }))}
+                          className="accent-primary"
+                        />
+                        Activo
+                      </label>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 mt-4">
+                    <button
+                      onClick={handleSaveShippingRate}
+                      disabled={isSavingShipping}
+                      className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
+                    >
+                      <Save className="w-4 h-4" />
+                      {isSavingShipping ? "Guardando..." : "Guardar tramo"}
+                    </button>
+                    <button
+                      onClick={() => { setShowShippingForm(false); setEditingShippingId(null); }}
+                      className="px-4 py-2 rounded-lg text-sm border border-border hover:bg-secondary transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Tabla de tramos */}
+              {shippingRates.length === 0 ? (
+                <div className="text-center py-16 text-muted-foreground">
+                  <Truck className="w-12 h-12 mx-auto opacity-20 mb-3" />
+                  <p>No hay tramos de envío configurados.</p>
+                  <p className="text-sm mt-1">Creá el primero con el botón "Nuevo tramo".</p>
+                </div>
+              ) : (
+                <div className="bg-card border border-border rounded-xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-secondary/40 border-b border-border">
+                      <tr>
+                        <th className="text-left px-5 py-3 font-medium text-muted-foreground">Desde</th>
+                        <th className="text-left px-5 py-3 font-medium text-muted-foreground">Hasta</th>
+                        <th className="text-left px-5 py-3 font-medium text-muted-foreground">Precio</th>
+                        <th className="text-left px-5 py-3 font-medium text-muted-foreground">Estado</th>
+                        <th className="px-5 py-3"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {shippingRates
+                        .slice()
+                        .sort((a, b) => a.desdeKm - b.desdeKm)
+                        .map((rate) => (
+                          <tr key={rate.id} className="hover:bg-secondary/20 transition-colors">
+                            <td className="px-5 py-3">{rate.desdeKm} km</td>
+                            <td className="px-5 py-3">{rate.hastaKm} km</td>
+                            <td className="px-5 py-3 font-semibold text-primary">{formatARS(rate.precio)}</td>
+                            <td className="px-5 py-3">
+                              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${rate.activo ? "bg-chart-2/20 text-chart-2" : "bg-secondary text-muted-foreground"}`}>
+                                {rate.activo ? "Activo" : "Inactivo"}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => {
+                                    setEditingShippingId(rate.id);
+                                    setShippingForm({
+                                      desdeKm: String(rate.desdeKm),
+                                      hastaKm: String(rate.hastaKm),
+                                      precio: String(rate.precio),
+                                      activo: rate.activo,
+                                    });
+                                    setShowShippingForm(true);
+                                  }}
+                                  className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                                  title="Editar"
+                                >
+                                  <Edit className="w-4 h-4 text-muted-foreground" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteShippingRate(rate.id)}
+                                  className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors"
+                                  title="Eliminar"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </div>
