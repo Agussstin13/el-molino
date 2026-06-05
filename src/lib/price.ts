@@ -1,4 +1,4 @@
-import type { Product, ProductGramage } from './types';
+import type { Product, ProductGramage, CartItem } from './types';
 
 export const FREE_SHIPPING_THRESHOLD = 5000;
 export const SHIPPING_COST = 500;
@@ -46,7 +46,11 @@ export function formatARS(amount: number): string {
  * - Si tiene discount (legacy) → precio con descuento
  * - Si no → precio normal
  */
-export function getEffectivePrice(product: Product, quantity: number): number {
+export function getEffectivePrice(product: Product | CartItem, quantity: number): number {
+  if ('selectedGramage' in product && product.selectedGramage) {
+    return getEffectiveGramagePrice(product.selectedGramage);
+  }
+
   if (product.wholesalePrice && quantity >= product.wholesalePrice.quantity) {
     return product.wholesalePrice.price;
   }

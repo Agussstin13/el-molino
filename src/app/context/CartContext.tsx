@@ -71,6 +71,101 @@ export function CartProvider({ children }: { children: ReactNode }) {
     loadShippingConfig();
   }, []);
 
+  // Sincronizar carrito con el backend al iniciar para actualizar precios y stock
+  useEffect(() => {
+    const syncCart = async () => {
+      try {
+        const stored = localStorage.getItem(CART_STORAGE_KEY);
+        if (!stored) return;
+        const parsedItems = JSON.parse(stored) as CartItem[];
+        if (parsedItems.length === 0) return;
+
+        const res = await fetch(`${API_BASE}/api/products`);
+        if (!res.ok) return;
+        const allData = await res.json();
+
+        const activeDbProducts = new Map<string, any>(allData.map((r: any) => [
+          r.id.toString(),
+          {
+            stock: r.stock,
+            price: r.price ?? r.precio,
+            offerPrice: r.offerPrice ?? null,
+            discount: r.offerPrice != null && (r.price ?? r.precio)
+              ? Math.round((((r.price ?? r.precio) - r.offerPrice) / (r.price ?? r.precio)) * 100)
+              : (r.discount ?? r.descuento ?? 0),
+            wholesalePrice: r.wholesalePrice
+              ? { quantity: r.minimumWholesaleAmount ?? 10, price: r.wholesalePrice }
+              : undefined,
+            active: r.active ?? true,
+            gramages: Array.isArray(r.gramages) ? r.gramages : [],
+          }
+        ]));
+
+        setItems(prevItems => {
+          let hasChanges = false;
+          const usedStockMap = new Map<string, number>();
+
+          const newItems = prevItems.map(item => {
+            const dbData = activeDbProducts.get(item.id);
+            if (!dbData || !dbData.active) {
+              hasChanges = true;
+              return null; // Producto ya no existe o está inactivo
+            }
+
+            let updatedItem = {
+              ...item,
+              stock: dbData.stock,
+              price: dbData.price,
+              offerPrice: dbData.offerPrice,
+              discount: dbData.discount,
+              wholesalePrice: dbData.wholesalePrice,
+              gramages: dbData.gramages,
+            };
+
+            if (updatedItem.selectedGramage) {
+              const updatedGramage = dbData.gramages.find((g: any) => g.id === updatedItem.selectedGramage?.id);
+              if (updatedGramage) {
+                updatedItem.selectedGramage = updatedGramage;
+              }
+            }
+
+            const requiredGrams = updatedItem.measurementUnit === 'gramo' && updatedItem.selectedGramage 
+              ? updatedItem.selectedGramage.grams 
+              : 1;
+
+            const alreadyUsed = usedStockMap.get(updatedItem.id) || 0;
+            const remainingStock = updatedItem.stock - alreadyUsed;
+            
+            const maxAllowedForThisItem = Math.floor(remainingStock / requiredGrams);
+
+            if (updatedItem.quantity > maxAllowedForThisItem) {
+              updatedItem.quantity = Math.max(0, maxAllowedForThisItem);
+              hasChanges = true;
+            }
+            
+            if (item.stock !== updatedItem.stock || item.price !== updatedItem.price) {
+               hasChanges = true;
+            }
+
+            if (updatedItem.quantity > 0) {
+              usedStockMap.set(updatedItem.id, alreadyUsed + (updatedItem.quantity * requiredGrams));
+              return updatedItem;
+            }
+            
+            hasChanges = true;
+            return null;
+          }).filter(Boolean) as CartItem[];
+
+          return hasChanges ? newItems : prevItems;
+        });
+      } catch (err) {
+        console.error("Error al sincronizar el carrito:", err);
+      }
+    };
+    
+    syncCart();
+  }, []);
+
   useEffect(() => {
     localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
   }, [items]);

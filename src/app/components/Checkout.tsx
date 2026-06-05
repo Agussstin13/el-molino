@@ -102,7 +102,7 @@ export function Checkout() {
   const { isCheckoutOpen, items, closeCheckout, subtotal, shipping, total, clearCart, shippingRates, freeShippingThreshold } = useCart();
   const { isClientAuthenticated, clientUser, updateClientProfile } = useAuth();
   const { showError, showSuccess } = useAlert();
-  const [step, setStep] = useState<"datos" | "pago" | "confirmado">("datos");
+  const [step, setStep] = useState<"datos" | "pago" | "revisar" | "confirmado">("datos");
   const [confirmedTotal, setConfirmedTotal] = useState<number>(0);
   const [form, setForm] = useState<FormData>(() => {
     try {
@@ -119,19 +119,19 @@ export function Checkout() {
       setForm((f) => {
         const newForm = { ...f };
         let changed = false;
-        if (clientUser.nombre && newForm.nombre !== clientUser.nombre) {
+        if (clientUser.nombre && !newForm.nombre) {
           newForm.nombre = clientUser.nombre;
           changed = true;
         }
-        if (clientUser.apellido && newForm.apellido !== clientUser.apellido) {
+        if (clientUser.apellido && !newForm.apellido) {
           newForm.apellido = clientUser.apellido;
           changed = true;
         }
-        if (clientUser.dni && newForm.dni !== clientUser.dni) {
+        if (clientUser.dni && !newForm.dni) {
           newForm.dni = clientUser.dni;
           changed = true;
         }
-        if (clientUser.telefono && newForm.telefono !== clientUser.telefono) {
+        if (clientUser.telefono && !newForm.telefono) {
           newForm.telefono = clientUser.telefono;
           changed = true;
         }
@@ -256,7 +256,11 @@ export function Checkout() {
     if (!form.nombre.trim()) newErrors.nombre = "Requerido";
     if (!form.apellido.trim()) newErrors.apellido = "Requerido";
     if (!form.dni.trim()) newErrors.dni = "Requerido";
-    if (!form.telefono.trim()) newErrors.telefono = "Requerido";
+    if (!form.telefono.trim()) {
+      newErrors.telefono = "Requerido";
+    } else if (form.telefono.replace(/\D/g, "").length < 10) {
+      newErrors.telefono = "Debe tener al menos 10 números";
+    }
     if (form.metodo_entrega === "envio") {
       if (!form.calle.trim()) newErrors.calle = "Requerido";
     }
@@ -288,6 +292,7 @@ export function Checkout() {
       items: items.map((i) => ({
         productId: parseInt(i.id, 10),
         quantity: i.quantity,
+        productGramageId: i.selectedGramage?.id,
       })),
     };
 
@@ -307,7 +312,6 @@ export function Checkout() {
         setConfirmedTotal(finalTotal);
         setStep("confirmado");
         clearCart();
-        localStorage.removeItem(FORM_STORAGE_KEY);
         
         if (form.metodo_pago === "mercadopago" && data?.paymentUrl) {
           window.location.href = data.paymentUrl;
@@ -325,12 +329,7 @@ export function Checkout() {
 
   const handleClose = () => {
     closeCheckout();
-    if (step === "confirmado") {
-      setStep("datos");
-      setForm(EMPTY_FORM);
-    } else {
-      setStep("datos");
-    }
+    setStep("datos");
     setErrors({});
     setShippingCost(null);
   };
@@ -416,7 +415,7 @@ export function Checkout() {
         ) : (
           <div className="flex-1 overflow-y-auto p-5">
             {/* Steps */}
-            <div className="flex items-center gap-2 mb-6">
+            <div className="flex flex-wrap items-center gap-2 mb-6">
               <button
                 onClick={() => setStep("datos")}
                 className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full transition-colors ${step === "datos" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
@@ -429,6 +428,13 @@ export function Checkout() {
                 className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full transition-colors ${step === "pago" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
                 2. Pago
+              </button>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              <button
+                onClick={() => validateDatos() && setStep("revisar")}
+                className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full transition-colors ${step === "revisar" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                3. Revisar
               </button>
             </div>
 
@@ -682,11 +688,45 @@ export function Checkout() {
                     </div>
 
                     <button
-                      id="confirm-order-btn"
-                      onClick={handleConfirm}
+                      onClick={() => setStep("revisar")}
                       className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 rounded-xl transition-colors font-medium mt-2"
                     >
-                      Confirmar pedido
+                      Revisar pedido
+                    </button>
+                  </div>
+                )}
+
+                {step === "revisar" && (
+                  <div className="space-y-4">
+                    <p className="text-sm font-medium">Revisá los datos de tu compra</p>
+                    <div className="bg-secondary/20 p-4 rounded-xl border border-border space-y-3 text-sm">
+                      <div>
+                        <span className="text-muted-foreground block text-xs">Datos Personales</span>
+                        <span className="font-medium">{form.nombre} {form.apellido} - DNI: {form.dni}</span>
+                        <span className="block text-muted-foreground">{form.telefono}</span>
+                      </div>
+                      <div className="pt-2 border-t border-border/50">
+                        <span className="text-muted-foreground block text-xs">Método de Entrega</span>
+                        <span className="font-medium">{form.metodo_entrega === "envio" ? "Envío a Domicilio" : "Retiro por Sucursal"}</span>
+                        {form.metodo_entrega === "envio" && <span className="block text-muted-foreground">{form.calle} {form.info_adicional && `- ${form.info_adicional}`}</span>}
+                      </div>
+                      <div className="pt-2 border-t border-border/50">
+                        <span className="text-muted-foreground block text-xs">Método de Pago</span>
+                        <span className="font-medium">
+                          {form.metodo_pago === "mercadopago" ? "Mercado Pago" : 
+                           form.metodo_pago === "transferencia" ? "Transferencia Bancaria" : "Efectivo"}
+                        </span>
+                        {form.metodo_pago === "efectivo" && form.monto_efectivo && (
+                          <span className="block text-muted-foreground">Paga con: ${form.monto_efectivo}</span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      id="confirm-order-btn"
+                      onClick={handleConfirm}
+                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 rounded-xl transition-colors font-medium mt-4 shadow-lg shadow-primary/20"
+                    >
+                      Confirmar Compra
                     </button>
                   </div>
                 )}

@@ -22,6 +22,8 @@ import {
   Calendar,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   User,
   MapPin,
   CreditCard,
@@ -98,6 +100,7 @@ export function AdminPanel() {
   const { logout, adminToken } = useAuth();
   const navigate = useNavigate();
   const [currentView, setCurrentView] = useState<AdminView>("products");
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [showCouponForm, setShowCouponForm] = useState(false);
@@ -1607,58 +1610,70 @@ export function AdminPanel() {
   return (
     <div className="h-screen bg-background flex overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-60 bg-sidebar border-r border-sidebar-border p-4 flex flex-col flex-shrink-0">
-        <div className="flex items-center gap-3 mb-8">
+      <aside className={`${isSidebarExpanded ? "w-60" : "w-20"} transition-all duration-300 bg-sidebar border-r border-sidebar-border p-4 flex flex-col flex-shrink-0 relative`}>
+        <button
+          onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
+          className="absolute -right-3 top-6 bg-sidebar border border-border rounded-full p-1 text-sidebar-foreground hover:bg-sidebar-accent z-10 hidden md:block shadow-sm"
+        >
+          {isSidebarExpanded ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        </button>
+
+        <div className={`flex items-center ${isSidebarExpanded ? "gap-3" : "justify-center"} mb-8 h-12`}>
           <img
             src="/logo.svg"
             alt="El Molino"
-            className="h-12 w-12 object-contain"
+            className="h-10 w-10 object-contain flex-shrink-0"
           />
-          <div>
-            <p
-              className="text-sidebar-foreground font-bold italic tracking-wide text-2xl"
-              style={{ fontFamily: "'Playfair Display', serif" }}
-            >
-              El Molino
-            </p>
-            <p className="text-xs text-muted-foreground">Panel Admin</p>
-          </div>
+          {isSidebarExpanded && (
+            <div className="whitespace-nowrap overflow-hidden">
+              <p
+                className="text-sidebar-foreground font-bold italic tracking-wide text-2xl leading-none"
+                style={{ fontFamily: "'Playfair Display', serif" }}
+              >
+                El Molino
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">Panel Admin</p>
+            </div>
+          )}
         </div>
 
-        <nav className="space-y-1 flex-1">
+        <nav className="space-y-1 flex-1 overflow-x-hidden">
           {navItems.map((item) => (
             <button
               key={item.id}
               id={`admin-nav-${item.id}`}
               onClick={() => setCurrentView(item.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm ${
+              className={`w-full flex items-center ${isSidebarExpanded ? "gap-3 px-3" : "justify-center px-0"} py-2.5 rounded-lg transition-colors text-sm ${
                 currentView === item.id
                   ? "bg-sidebar-primary text-sidebar-primary-foreground"
                   : "text-sidebar-foreground hover:bg-sidebar-accent"
               }`}
+              title={!isSidebarExpanded ? item.label : undefined}
             >
-              <item.icon className="w-4 h-4" />
-              {item.label}
+              <item.icon className="w-5 h-5 flex-shrink-0" />
+              {isSidebarExpanded && <span className="whitespace-nowrap">{item.label}</span>}
             </button>
           ))}
         </nav>
 
-        <div className="border-t border-sidebar-border pt-4 space-y-2">
+        <div className="border-t border-sidebar-border pt-4 space-y-2 overflow-x-hidden">
           <a
             href="/"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition-colors text-sm"
+            className={`w-full flex items-center ${isSidebarExpanded ? "gap-3 px-3" : "justify-center px-0"} py-2.5 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition-colors text-sm`}
+            title={!isSidebarExpanded ? "Ver tienda" : undefined}
           >
-            <Package className="w-4 h-4" />
-            Ver tienda
+            <Package className="w-5 h-5 flex-shrink-0" />
+            {isSidebarExpanded && <span className="whitespace-nowrap">Ver tienda</span>}
           </a>
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors text-sm"
+            className={`w-full flex items-center ${isSidebarExpanded ? "gap-3 px-3" : "justify-center px-0"} py-2.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors text-sm`}
+            title={!isSidebarExpanded ? "Cerrar sesión" : undefined}
           >
-            <LogOut className="w-4 h-4" />
-            Cerrar sesión
+            <LogOut className="w-5 h-5 flex-shrink-0" />
+            {isSidebarExpanded && <span className="whitespace-nowrap">Cerrar sesión</span>}
           </button>
         </div>
       </aside>
