@@ -26,7 +26,7 @@ export function Cart() {
         <div className="flex items-center justify-between p-4 border-b-2 border-border bg-secondary/30">
           <div className="flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-primary" />
-            <h2 style={{ fontFamily: 'Georgia, serif' }}>
+            <h2>
               Carrito ({items.length} {items.length === 1 ? 'producto' : 'productos'})
             </h2>
           </div>

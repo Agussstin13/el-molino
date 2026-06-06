@@ -46,7 +46,7 @@ export function AdminLoginPage() {
             alt="El Molino"
             className="h-20 w-20 object-contain mx-auto mb-4"
           />
-          <h1 className="text-2xl text-primary" style={{ fontFamily: 'Georgia, serif' }}>
+          <h1 className="text-2xl text-primary">
             El Molino
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">Panel de Administración</p>
@@ -54,7 +54,7 @@ export function AdminLoginPage() {
 
         {/* Card */}
         <div className="bg-card rounded-xl border-2 border-border shadow-lg p-8">
-          <h2 className="text-lg mb-6 text-center" style={{ fontFamily: 'Georgia, serif' }}>
+          <h2 className="text-lg mb-6 text-center">
             Iniciar sesión
           </h2>
 

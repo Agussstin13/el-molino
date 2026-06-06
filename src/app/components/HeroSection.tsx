@@ -127,7 +127,7 @@ export function HeroSection() {
           </p>
           <h1
             className="text-4xl md:text-5xl lg:text-6xl mb-5 text-primary leading-tight"
-            style={{ fontFamily: "Georgia, serif" }}
+           
           >
             {slide.titulo}
           </h1>

@@ -74,7 +74,7 @@ export function CustomAlert({
                 </motion.div>
               </div>
               
-              <h3 className="text-xl font-medium text-foreground mb-2" style={{ fontFamily: 'Georgia, serif' }}>
+              <h3 className="text-xl font-medium text-foreground mb-2">
                 {title}
               </h3>
               

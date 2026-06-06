@@ -166,6 +166,7 @@ export function Checkout() {
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isAddressVerified, setIsAddressVerified] = useState(false);
 
   useEffect(() => {
     if (form.metodo_entrega === "envio" && form.calle.trim().length > 3 && showSuggestions) {
@@ -191,8 +192,33 @@ export function Checkout() {
     }
   }, [form.calle, form.metodo_entrega, showSuggestions]);
 
+  const formatArgentinianAddress = (suggestion: AddressSuggestion) => {
+    if (!suggestion.address?.road) {
+      return { 
+        main: suggestion.display_name.split(',')[0], 
+        secondary: suggestion.display_name, 
+        full: suggestion.display_name 
+      };
+    }
+    
+    const road = suggestion.address.road;
+    const house = suggestion.address.house_number || "";
+    const main = `${road} ${house}`.trim();
+    
+    const parts = suggestion.display_name.split(',').map(p => p.trim());
+    const secondaryParts = parts.filter(p => p !== road && p !== house);
+    const secondary = secondaryParts.join(', ');
+    
+    return {
+      main,
+      secondary,
+      full: secondary ? `${main}, ${secondary}` : main
+    };
+  };
+
   const handleAddressSelect = (suggestion: AddressSuggestion & { lat?: string; lon?: string }) => {
-    const fullAddress = suggestion.display_name;
+    const formatted = formatArgentinianAddress(suggestion);
+    const fullAddress = formatted.full;
 
     // Calcular distancia si la sugerencia trae coordenadas
     if (suggestion.lat && suggestion.lon) {
@@ -214,6 +240,7 @@ export function Checkout() {
       return newForm;
     });
     setShowSuggestions(false);
+    setIsAddressVerified(true);
     setAddressSuggestions([]);
     if (errors.calle) setErrors((err) => ({ ...err, calle: "" }));
   };
@@ -262,7 +289,11 @@ export function Checkout() {
       newErrors.telefono = "Debe tener al menos 10 números";
     }
     if (form.metodo_entrega === "envio") {
-      if (!form.calle.trim()) newErrors.calle = "Requerido";
+      if (!form.calle.trim()) {
+        newErrors.calle = "Requerido";
+      } else if (!isAddressVerified) {
+        newErrors.calle = "Debe seleccionar una dirección de las opciones sugeridas";
+      }
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -346,7 +377,7 @@ export function Checkout() {
       <div className="fixed inset-4 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-4xl md:max-h-[92vh] bg-card rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden border-2 border-border">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b-2 border-border bg-secondary/30 flex-shrink-0">
-          <h2 style={{ fontFamily: "Georgia, serif" }}>Finalizar Compra</h2>
+          <h2>Finalizar Compra</h2>
           <button
             onClick={handleClose}
             className="p-2 hover:bg-secondary rounded-lg transition-colors"
@@ -361,7 +392,7 @@ export function Checkout() {
             <CheckCircle2 className="w-20 h-20 text-accent" />
             <h3
               className="text-2xl text-primary"
-              style={{ fontFamily: "Georgia, serif" }}
+             
             >
               ¡Pedido confirmado!
             </h3>
@@ -514,6 +545,7 @@ export function Checkout() {
                                 onChange={(e) => {
                                   set("calle")(e);
                                   setShowSuggestions(true);
+                                  setIsAddressVerified(false);
                                 }}
                                 placeholder="Ej: Av. Independencia"
                                 className={`w-full px-3 py-2.5 bg-input-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-sm transition-colors ${
@@ -536,17 +568,20 @@ export function Checkout() {
                                 {isSearchingAddress && addressSuggestions.length === 0 ? (
                                   <div className="p-3 text-sm text-muted-foreground text-center">Buscando direcciones...</div>
                                 ) : (
-                                  addressSuggestions.map((suggestion, idx) => (
-                                    <button
-                                      key={idx}
-                                      type="button"
-                                      onClick={() => handleAddressSelect(suggestion)}
-                                      className="w-full text-left px-3 py-2 text-sm hover:bg-secondary/50 border-b border-border/50 last:border-0 transition-colors"
-                                    >
-                                      <p className="font-medium truncate">{suggestion.address?.road || suggestion.display_name.split(',')[0]}</p>
-                                      <p className="text-xs text-muted-foreground truncate">{suggestion.display_name}</p>
-                                    </button>
-                                  ))
+                                  addressSuggestions.map((suggestion, idx) => {
+                                    const formatted = formatArgentinianAddress(suggestion);
+                                    return (
+                                      <button
+                                        key={idx}
+                                        type="button"
+                                        onClick={() => handleAddressSelect(suggestion)}
+                                        className="w-full text-left px-3 py-2 text-sm hover:bg-secondary/50 border-b border-border/50 last:border-0 transition-colors"
+                                      >
+                                        <p className="font-medium truncate">{formatted.main}</p>
+                                        <p className="text-xs text-muted-foreground truncate">{formatted.secondary}</p>
+                                      </button>
+                                    );
+                                  })
                                 )}
                               </div>
                             )}
@@ -737,7 +772,7 @@ export function Checkout() {
                 <div className="bg-secondary/30 p-4 rounded-xl border border-border sticky top-0">
                   <h3
                     className="mb-4 text-base"
-                    style={{ fontFamily: "Georgia, serif" }}
+                   
                   >
                     Resumen del pedido
                   </h3>

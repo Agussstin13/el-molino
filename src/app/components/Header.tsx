@@ -137,7 +137,7 @@ export function Header() {
           />
           <div className="relative w-full max-w-xs bg-background h-full shadow-2xl flex flex-col animate-in slide-in-from-left">
             <div className="flex items-center justify-between p-4 border-b border-border bg-secondary/30">
-              <span className="text-xl font-bold text-primary" style={{ fontFamily: "Georgia, serif" }}>Menú</span>
+              <span className="text-xl font-bold text-primary">Menú</span>
               <button 
                 onClick={() => setIsMenuOpen(false)}
                 className="p-2 rounded-lg hover:bg-secondary transition-colors"

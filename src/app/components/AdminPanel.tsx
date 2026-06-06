@@ -48,7 +48,6 @@ import type {
 } from "../../lib/types";
 const API_BASE = import.meta.env.VITE_API_BASE;
 
-
 type AdminView =
   | "products"
   | "promotions"
@@ -125,7 +124,7 @@ export function AdminPanel() {
     offerPrice: 0 as string | number,
     measurementUnit: "unidad" as "unidad" | "gramo",
     gramages: [] as number[], // lista de gramos: [250, 500, 1000]
-    newGramageInput: "",       // input temporal para agregar un gramaje
+    newGramageInput: "", // input temporal para agregar un gramaje
     active: true,
   });
 
@@ -145,6 +144,9 @@ export function AdminPanel() {
   const [editingCarouselId, setEditingCarouselId] = useState<number | null>(
     null,
   );
+  const [ordersFilter, setOrdersFilter] = useState<
+    "todos" | "pendientes" | "enviados"
+  >("pendientes");
 
   // Category state
   const [categories, setCategories] = useState<Category[]>([]);
@@ -160,9 +162,13 @@ export function AdminPanel() {
   );
 
   // Daily offers state
-  const [offersDraft, setOffersDraft] = useState<Record<string, { active: boolean; offerPrice: string | number }>>({});
+  const [offersDraft, setOffersDraft] = useState<
+    Record<string, { active: boolean; offerPrice: string | number }>
+  >({});
   const [offersSearchQuery, setOffersSearchQuery] = useState("");
-  const [offersFilter, setOffersFilter] = useState<"all" | "active" | "inactive">("all");
+  const [offersFilter, setOffersFilter] = useState<
+    "all" | "active" | "inactive"
+  >("all");
   const [isSavingOffers, setIsSavingOffers] = useState(false);
 
   // Shipping state
@@ -176,17 +182,27 @@ export function AdminPanel() {
   const [shippingRates, setShippingRates] = useState<ShippingRateAdmin[]>([]);
   const [umbralEnvioGratis, setUmbralEnvioGratis] = useState<string>("5000");
   const [showShippingForm, setShowShippingForm] = useState(false);
-  const [editingShippingId, setEditingShippingId] = useState<number | null>(null);
-  const [shippingForm, setShippingForm] = useState({ desdeKm: "", hastaKm: "", precio: "", activo: true });
+  const [editingShippingId, setEditingShippingId] = useState<number | null>(
+    null,
+  );
+  const [shippingForm, setShippingForm] = useState({
+    desdeKm: "",
+    hastaKm: "",
+    precio: "",
+    activo: true,
+  });
   const [isSavingShipping, setIsSavingShipping] = useState(false);
 
   const { lastProductsUpdate, lastCategoriesUpdate } = useSignalR();
 
   useEffect(() => {
-    document.title = 'El Molino - Admin';
+    document.title = "El Molino - Admin";
     if (currentView === "daily-offers") {
-      const initialDraft: Record<string, { active: boolean; offerPrice: string | number }> = {};
-      products.forEach(p => {
+      const initialDraft: Record<
+        string,
+        { active: boolean; offerPrice: string | number }
+      > = {};
+      products.forEach((p) => {
         initialDraft[p.id] = {
           active: p.offerPrice != null,
           offerPrice: p.offerPrice ? formatInputPrice(p.offerPrice) : "",
@@ -200,13 +216,13 @@ export function AdminPanel() {
   }, [currentView, products]);
 
   const handleToggleOfferDraft = (productId: string) => {
-    setOffersDraft(prev => {
+    setOffersDraft((prev) => {
       const current = prev[productId] || { active: false, offerPrice: "" };
       const nextActive = !current.active;
-      
+
       let nextOfferPrice = current.offerPrice;
       if (nextActive && !nextOfferPrice) {
-        const prod = products.find(p => p.id === productId);
+        const prod = products.find((p) => p.id === productId);
         if (prod) {
           const suggested = Math.round(prod.price * 0.9);
           nextOfferPrice = formatInputPrice(suggested);
@@ -214,7 +230,7 @@ export function AdminPanel() {
       } else if (!nextActive) {
         nextOfferPrice = "";
       }
-      
+
       return {
         ...prev,
         [productId]: {
@@ -226,7 +242,7 @@ export function AdminPanel() {
   };
 
   const handleOfferPriceDraftChange = (productId: string, value: string) => {
-    setOffersDraft(prev => {
+    setOffersDraft((prev) => {
       const current = prev[productId] || { active: false, offerPrice: "" };
       return {
         ...prev,
@@ -239,15 +255,15 @@ export function AdminPanel() {
   };
 
   const getDiscountPercentage = (productId: string): number | null => {
-    const prod = products.find(p => p.id === productId);
+    const prod = products.find((p) => p.id === productId);
     if (!prod) return null;
-    
+
     const draft = offersDraft[productId];
     if (!draft || !draft.active) return null;
-    
+
     const offerVal = parseInputPrice(draft.offerPrice);
     if (offerVal <= 0 || offerVal >= prod.price) return null;
-    
+
     const discount = ((prod.price - offerVal) / prod.price) * 100;
     return Math.round(discount);
   };
@@ -255,7 +271,7 @@ export function AdminPanel() {
   const getAverageDiscount = (): number => {
     let sum = 0;
     let count = 0;
-    products.forEach(p => {
+    products.forEach((p) => {
       const draft = offersDraft[p.id];
       if (draft && draft.active) {
         const offerVal = parseInputPrice(draft.offerPrice);
@@ -269,7 +285,7 @@ export function AdminPanel() {
   };
 
   const handleSaveDailyOffers = async () => {
-    const dirtyProducts = products.filter(p => {
+    const dirtyProducts = products.filter((p) => {
       const draft = offersDraft[p.id];
       if (!draft) return false;
       const parsedDraftPrice = parseInputPrice(draft.offerPrice);
@@ -281,7 +297,10 @@ export function AdminPanel() {
     });
 
     if (dirtyProducts.length === 0) {
-      showError("Sin cambios", "No se detectaron modificaciones en las ofertas.");
+      showError(
+        "Sin cambios",
+        "No se detectaron modificaciones en las ofertas.",
+      );
       return;
     }
 
@@ -292,14 +311,14 @@ export function AdminPanel() {
         if (parsedDraftPrice >= p.price) {
           showError(
             "Error de precio",
-            `El producto "${p.name}" tiene un precio de oferta (${formatARS(parsedDraftPrice)}) mayor o igual a su precio normal (${formatARS(p.price)}).`
+            `El producto "${p.name}" tiene un precio de oferta (${formatARS(parsedDraftPrice)}) mayor o igual a su precio normal (${formatARS(p.price)}).`,
           );
           return;
         }
         if (p.wholesalePrice && parsedDraftPrice <= p.wholesalePrice.price) {
           showError(
             "Error en promoción",
-            `El producto "${p.name}" tiene un precio de oferta (${formatARS(parsedDraftPrice)}) menor o igual a su precio mayorista (${formatARS(p.wholesalePrice.price)}).`
+            `El producto "${p.name}" tiene un precio de oferta (${formatARS(parsedDraftPrice)}) menor o igual a su precio mayorista (${formatARS(p.wholesalePrice.price)}).`,
           );
           return;
         }
@@ -313,7 +332,7 @@ export function AdminPanel() {
     for (const p of dirtyProducts) {
       const draft = offersDraft[p.id];
       const parsedDraftPrice = parseInputPrice(draft.offerPrice);
-      
+
       const formData = new FormData();
       formData.append("Id", p.id);
       formData.append("Name", p.name);
@@ -326,7 +345,7 @@ export function AdminPanel() {
 
       if (p.measurementUnit === "gramo" && Array.isArray(p.gramages)) {
         p.gramages.forEach((g: any) => {
-          const gramsVal = typeof g === 'number' ? g : g.grams;
+          const gramsVal = typeof g === "number" ? g : g.grams;
           if (gramsVal) {
             formData.append("Gramages", String(gramsVal));
           }
@@ -337,12 +356,15 @@ export function AdminPanel() {
       if (draft.active && parsedDraftPrice > 0) {
         formData.append("OfferPrice", String(parsedDraftPrice));
       }
-      
+
       if (p.wholesalePrice) {
         formData.append("WholesalePrice", String(p.wholesalePrice.price));
-        formData.append("MinimumWholesaleAmount", String(p.wholesalePrice.quantity));
+        formData.append(
+          "MinimumWholesaleAmount",
+          String(p.wholesalePrice.quantity),
+        );
       }
-      
+
       if (p.imagePath) {
         formData.append("ExistingImagePath", p.imagePath);
       }
@@ -400,11 +422,20 @@ export function AdminPanel() {
 
     setIsSavingOffers(false);
     if (failCount === 0) {
-      showSuccess("¡Ofertas guardadas!", `Se actualizaron con éxito las ofertas de ${successCount} producto(s).`);
+      showSuccess(
+        "¡Ofertas guardadas!",
+        `Se actualizaron con éxito las ofertas de ${successCount} producto(s).`,
+      );
     } else if (successCount > 0) {
-      showSuccess("Guardado parcial", `Se actualizaron ${successCount} ofertas, pero fallaron ${failCount}.`);
+      showSuccess(
+        "Guardado parcial",
+        `Se actualizaron ${successCount} ofertas, pero fallaron ${failCount}.`,
+      );
     } else {
-      showError("Error", "No se pudo actualizar ninguna de las ofertas modificadas.");
+      showError(
+        "Error",
+        "No se pudo actualizar ninguna de las ofertas modificadas.",
+      );
     }
   };
 
@@ -413,7 +444,9 @@ export function AdminPanel() {
     try {
       const [ratesRes, configRes] = await Promise.all([
         fetch(`${API_BASE}/api/shipping`, { headers: getAuthHeaders(null) }),
-        fetch(`${API_BASE}/api/shipping/config`, { headers: getAuthHeaders(null) }),
+        fetch(`${API_BASE}/api/shipping/config`, {
+          headers: getAuthHeaders(null),
+        }),
       ]);
       if (ratesRes.ok) setShippingRates(await ratesRes.json());
       if (configRes.ok) {
@@ -428,7 +461,9 @@ export function AdminPanel() {
   const handleSaveShippingRate = async () => {
     const desde = parseFloat(shippingForm.desdeKm);
     const hasta = parseFloat(shippingForm.hastaKm);
-    const precio = parseFloat(shippingForm.precio.replace(/\./g, "").replace(",", "."));
+    const precio = parseFloat(
+      shippingForm.precio.replace(/\./g, "").replace(",", "."),
+    );
 
     if (isNaN(desde) || isNaN(hasta) || isNaN(precio)) {
       showError("Datos incompletos", "Completá todos los campos del tramo.");
@@ -441,12 +476,27 @@ export function AdminPanel() {
 
     setIsSavingShipping(true);
     try {
-      const payload = { id: editingShippingId ?? 0, desdeKm: desde, hastaKm: hasta, precio, activo: shippingForm.activo };
-      const url = editingShippingId ? `${API_BASE}/api/shipping/${editingShippingId}` : `${API_BASE}/api/shipping`;
+      const payload = {
+        id: editingShippingId ?? 0,
+        desdeKm: desde,
+        hastaKm: hasta,
+        precio,
+        activo: shippingForm.activo,
+      };
+      const url = editingShippingId
+        ? `${API_BASE}/api/shipping/${editingShippingId}`
+        : `${API_BASE}/api/shipping`;
       const method = editingShippingId ? "PUT" : "POST";
-      const res = await fetch(url, { method, headers: getAuthHeaders(), body: JSON.stringify(payload) });
+      const res = await fetch(url, {
+        method,
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
       if (res.ok) {
-        showSuccess("¡Listo!", editingShippingId ? "Tramo actualizado." : "Tramo creado.");
+        showSuccess(
+          "¡Listo!",
+          editingShippingId ? "Tramo actualizado." : "Tramo creado.",
+        );
         setShowShippingForm(false);
         setEditingShippingId(null);
         setShippingForm({ desdeKm: "", hastaKm: "", precio: "", activo: true });
@@ -463,23 +513,32 @@ export function AdminPanel() {
   };
 
   const handleDeleteShippingRate = async (id: number) => {
-    showConfirm("¿Eliminar tramo?", "Esta acción no se puede deshacer.", async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/shipping/${id}`, { method: "DELETE", headers: getAuthHeaders(null) });
-        if (res.ok) {
-          showSuccess("¡Listo!", "Tramo eliminado.");
-          fetchShippingRates();
-        } else {
-          showError("Error", "No se pudo eliminar el tramo.");
+    showConfirm(
+      "¿Eliminar tramo?",
+      "Esta acción no se puede deshacer.",
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/api/shipping/${id}`, {
+            method: "DELETE",
+            headers: getAuthHeaders(null),
+          });
+          if (res.ok) {
+            showSuccess("¡Listo!", "Tramo eliminado.");
+            fetchShippingRates();
+          } else {
+            showError("Error", "No se pudo eliminar el tramo.");
+          }
+        } catch {
+          showError("Error de red", "No se pudo conectar con el servidor.");
         }
-      } catch {
-        showError("Error de red", "No se pudo conectar con el servidor.");
-      }
-    });
+      },
+    );
   };
 
   const handleSaveUmbral = async () => {
-    const val = parseFloat(umbralEnvioGratis.replace(/\./g, "").replace(",", "."));
+    const val = parseFloat(
+      umbralEnvioGratis.replace(/\./g, "").replace(",", "."),
+    );
     if (isNaN(val) || val < 0) {
       showError("Valor inválido", "Ingresá un monto válido.");
       return;
@@ -638,7 +697,6 @@ export function AdminPanel() {
           }));
           setCoupons(mappedCoupons);
         }
-
       } catch (err) {
         console.error("Critical error fetching admin data:", err);
       }
@@ -655,7 +713,7 @@ export function AdminPanel() {
         const ordersRes = await fetch(`${API_BASE}/api/orders`, {
           headers: { Authorization: `Bearer ${adminToken}` },
         });
-        
+
         if (ordersRes.status === 401) return handleSessionExpired();
 
         if (ordersRes.ok) {
@@ -666,7 +724,10 @@ export function AdminPanel() {
             total: o.total,
             status: o.orderStatus || o.estadoPedido, // Fallback por las dudas
             date: new Date(o.createdAt || o.fechaCreacion).toLocaleDateString(),
-            metodo_pago: o.paymentMethod === "mercado_pago" ? "mercadopago" : o.paymentMethod || o.metodoPago,
+            metodo_pago:
+              o.paymentMethod === "mercado_pago"
+                ? "mercadopago"
+                : o.paymentMethod || o.metodoPago,
             informacion: o.orderInformation,
             telefono: o.buyerPhone,
             dni: o.buyerDocument,
@@ -676,12 +737,14 @@ export function AdminPanel() {
             items: o.items,
             fechaCreacion: o.createdAt || o.fechaCreacion,
           }));
-          
+
           // Ordenar de más reciente a más antiguo
-          mappedOrders.sort((a: any, b: any) => 
-            new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime()
+          mappedOrders.sort(
+            (a: any, b: any) =>
+              new Date(b.fechaCreacion).getTime() -
+              new Date(a.fechaCreacion).getTime(),
           );
-          
+
           setOrders(mappedOrders);
         }
       } catch (err) {
@@ -711,7 +774,10 @@ export function AdminPanel() {
     navigate("/admin/login");
   };
 
-  const handleUpdateOrderStatus = async (orderId: string, currentStatus: Order["status"]) => {
+  const handleUpdateOrderStatus = async (
+    orderId: string,
+    currentStatus: Order["status"],
+  ) => {
     const newStatus = currentStatus === "pendiente" ? "enviado" : "pendiente";
     try {
       const res = await fetch(`${API_BASE}/api/orders/${orderId}/status`, {
@@ -721,11 +787,21 @@ export function AdminPanel() {
       });
 
       if (res.ok) {
-        setOrders(orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
-        showSuccess("Éxito", `El pedido ahora está ${newStatus === "enviado" ? "Enviado" : "Pendiente"}`);
+        setOrders(
+          orders.map((o) =>
+            o.id === orderId ? { ...o, status: newStatus } : o,
+          ),
+        );
+        showSuccess(
+          "Éxito",
+          `El pedido ahora está ${newStatus === "enviado" ? "Enviado" : "Pendiente"}`,
+        );
       } else {
         const errorData = await res.json().catch(() => null);
-        showError("Error", errorData?.detail || "No se pudo actualizar el estado.");
+        showError(
+          "Error",
+          errorData?.detail || "No se pudo actualizar el estado.",
+        );
       }
     } catch (e) {
       showError("Error", "Error de conexión al actualizar estado.");
@@ -768,7 +844,10 @@ export function AdminPanel() {
       name: product.name || "",
       description: product.description || "",
       price: product.price || 0,
-      stock: product.measurementUnit === "gramo" ? (product.stock / 1000) : (product.stock || 0),
+      stock:
+        product.measurementUnit === "gramo"
+          ? product.stock / 1000
+          : product.stock || 0,
       category: product.category || "",
       enableWholesale: !!product.wholesalePrice,
       wholesalePrice: product.wholesalePrice?.price || 0,
@@ -789,7 +868,10 @@ export function AdminPanel() {
 
   const handleSaveProduct = async () => {
     if (!productImageFile && !productImagePreview) {
-      showError("Imagen requerida", "El producto debe tener una imagen para poder guardarse.");
+      showError(
+        "Imagen requerida",
+        "El producto debe tener una imagen para poder guardarse.",
+      );
       return;
     }
 
@@ -798,12 +880,21 @@ export function AdminPanel() {
     );
 
     if (!selectedCategory) {
-      showError("Categoría requerida", "Por favor selecciona una categoría válida para el producto.");
+      showError(
+        "Categoría requerida",
+        "Por favor selecciona una categoría válida para el producto.",
+      );
       return;
     }
 
-    if (productForm.measurementUnit === "gramo" && productForm.gramages.length === 0) {
-      showError("Faltan presentaciones", "Los productos por peso deben incluir al menos un gramaje.");
+    if (
+      productForm.measurementUnit === "gramo" &&
+      productForm.gramages.length === 0
+    ) {
+      showError(
+        "Faltan presentaciones",
+        "Los productos por peso deben incluir al menos un gramaje.",
+      );
       return;
     }
 
@@ -812,17 +903,35 @@ export function AdminPanel() {
     const parsedOffer = parseInputPrice(productForm.offerPrice);
 
     if (productForm.enableWholesale && parsedWholesale >= parsedPrice) {
-      showError("Error en precio", "El precio mayorista debe ser menor al precio normal.");
+      showError(
+        "Error en precio",
+        "El precio mayorista debe ser menor al precio normal.",
+      );
       return;
     }
 
-    if (productForm.enableOffer && parsedOffer > 0 && parsedOffer >= parsedPrice) {
-      showError("Error en precio", "El precio de oferta debe ser menor al precio normal.");
+    if (
+      productForm.enableOffer &&
+      parsedOffer > 0 &&
+      parsedOffer >= parsedPrice
+    ) {
+      showError(
+        "Error en precio",
+        "El precio de oferta debe ser menor al precio normal.",
+      );
       return;
     }
 
-    if (productForm.enableWholesale && productForm.enableOffer && parsedOffer > 0 && parsedWholesale >= parsedOffer) {
-      showError("Error en precio", "El precio mayorista debe ser menor al precio de oferta.");
+    if (
+      productForm.enableWholesale &&
+      productForm.enableOffer &&
+      parsedOffer > 0 &&
+      parsedWholesale >= parsedOffer
+    ) {
+      showError(
+        "Error en precio",
+        "El precio mayorista debe ser menor al precio de oferta.",
+      );
       return;
     }
 
@@ -831,27 +940,44 @@ export function AdminPanel() {
     formData.append("Name", productForm.name ?? "");
     formData.append("Description", productForm.description ?? "");
     formData.append("Price", String(parseInputPrice(productForm.price)));
-    
-    const finalStock = productForm.measurementUnit === "gramo" ? ((productForm.stock ?? 0) * 1000) : (productForm.stock ?? 0);
+
+    const finalStock =
+      productForm.measurementUnit === "gramo"
+        ? (productForm.stock ?? 0) * 1000
+        : (productForm.stock ?? 0);
     formData.append("Stock", String(finalStock));
-    
+
     formData.append("CategoryId", String(selectedCategory.id));
     formData.append("Active", String(productForm.active));
     formData.append("MeasurementUnit", productForm.measurementUnit);
 
     // Gramajes: solo si es producto por gramo
     if (productForm.measurementUnit === "gramo") {
-      productForm.gramages.forEach(g => formData.append("Gramages", String(g)));
+      productForm.gramages.forEach((g) =>
+        formData.append("Gramages", String(g)),
+      );
     }
 
     if (productForm.enableWholesale) {
-      formData.append("WholesalePrice", String(parseInputPrice(productForm.wholesalePrice)));
-      formData.append("MinimumWholesaleAmount", String(productForm.minimumWholesaleAmount));
+      formData.append(
+        "WholesalePrice",
+        String(parseInputPrice(productForm.wholesalePrice)),
+      );
+      formData.append(
+        "MinimumWholesaleAmount",
+        String(productForm.minimumWholesaleAmount),
+      );
     }
 
     // La oferta se activa/desactiva enviando o no offerPrice
-    if (productForm.enableOffer && parseInputPrice(productForm.offerPrice) > 0) {
-      formData.append("OfferPrice", String(parseInputPrice(productForm.offerPrice)));
+    if (
+      productForm.enableOffer &&
+      parseInputPrice(productForm.offerPrice) > 0
+    ) {
+      formData.append(
+        "OfferPrice",
+        String(parseInputPrice(productForm.offerPrice)),
+      );
     }
     // Si no hay oferta, no enviamos OfferPrice (el backend lo pondrá en null)
 
@@ -860,15 +986,15 @@ export function AdminPanel() {
     }
 
     try {
-      const url = editingProductId 
+      const url = editingProductId
         ? `${API_BASE}/api/products/${editingProductId}`
         : `${API_BASE}/api/products`;
-      
+
       const method = editingProductId ? "PUT" : "POST";
 
       if (editingProductId) {
         formData.append("Id", editingProductId);
-        const currentProd = products.find(p => p.id === editingProductId);
+        const currentProd = products.find((p) => p.id === editingProductId);
         if (currentProd?.imagePath) {
           formData.append("ExistingImagePath", currentProd.imagePath);
         }
@@ -931,20 +1057,24 @@ export function AdminPanel() {
         });
         setProductImageFile(null);
         setProductImagePreview("");
-        showSuccess("¡Listo!", `El producto se ${editingProductId ? "actualizó" : "creó"} correctamente.`);
+        showSuccess(
+          "¡Listo!",
+          `El producto se ${editingProductId ? "actualizó" : "creó"} correctamente.`,
+        );
       } else {
         const err = await res.json().catch(() => ({}));
         showError(
           `No se pudo ${editingProductId ? "actualizar" : "guardar"}`,
-          err.detail || err.title ||
-            `Hubo un problema al intentar ${editingProductId ? "actualizar" : "guardar"} el producto.`
+          err.detail ||
+            err.title ||
+            `Hubo un problema al intentar ${editingProductId ? "actualizar" : "guardar"} el producto.`,
         );
       }
     } catch (e) {
       console.error(e);
       showError(
         "Problema de red",
-        "No pudimos conectar con el servidor. Revisá tu conexión."
+        "No pudimos conectar con el servidor. Revisá tu conexión.",
       );
     } finally {
       setIsSaving(false);
@@ -966,17 +1096,27 @@ export function AdminPanel() {
             showSuccess("¡Borrado!", "El producto ya no está en la lista.");
           } else {
             const text = await res.text().catch(() => "");
-            const isForeignKey = text.includes("23503") || text.toLowerCase().includes("fk_") || text.toLowerCase().includes("foreign key");
+            const isForeignKey =
+              text.includes("23503") ||
+              text.toLowerCase().includes("fk_") ||
+              text.toLowerCase().includes("foreign key");
             if (isForeignKey) {
               showError(
                 "No se puede eliminar este producto",
-                "Este producto forma parte de uno o más pedidos existentes. Para proteger el historial de ventas no es posible eliminarlo. Podés desactivarlo desde la columna de estado para ocultarlo de la tienda."
+                "Este producto forma parte de uno o más pedidos existentes. Para proteger el historial de ventas no es posible eliminarlo. Podés desactivarlo desde la columna de estado para ocultarlo de la tienda.",
               );
             } else {
-              const errorData = (() => { try { return JSON.parse(text); } catch { return {}; } })();
+              const errorData = (() => {
+                try {
+                  return JSON.parse(text);
+                } catch {
+                  return {};
+                }
+              })();
               showError(
                 "No se pudo borrar",
-                errorData.title || "Hubo un problema al intentar eliminar el producto."
+                errorData.title ||
+                  "Hubo un problema al intentar eliminar el producto.",
               );
             }
           }
@@ -1585,7 +1725,11 @@ export function AdminPanel() {
 
   const navItems = [
     { id: "products" as AdminView, icon: Package, label: "Productos" },
-    { id: "daily-offers" as AdminView, icon: Percent, label: "Ofertas del día" },
+    {
+      id: "daily-offers" as AdminView,
+      icon: Percent,
+      label: "Ofertas del día",
+    },
     { id: "promotions" as AdminView, icon: Tag, label: "Cupones" },
     { id: "orders" as AdminView, icon: ShoppingBag, label: "Pedidos" },
     { id: "carousel" as AdminView, icon: ImageIcon, label: "Carousel" },
@@ -1593,7 +1737,7 @@ export function AdminPanel() {
     { id: "shipping" as AdminView, icon: Truck, label: "Envíos" },
   ];
 
-  const filteredOffersProducts = products.filter(p => {
+  const filteredOffersProducts = products.filter((p) => {
     if (offersSearchQuery) {
       const q = offersSearchQuery.toLowerCase();
       const matchesName = p.name.toLowerCase().includes(q);
@@ -1601,7 +1745,7 @@ export function AdminPanel() {
       if (!matchesName && !matchesCat) return false;
     }
     const draft = offersDraft[p.id];
-    const isOnOffer = draft ? draft.active : (p.offerPrice != null);
+    const isOnOffer = draft ? draft.active : p.offerPrice != null;
     if (offersFilter === "active") return isOnOffer;
     if (offersFilter === "inactive") return !isOnOffer;
     return true;
@@ -1610,15 +1754,23 @@ export function AdminPanel() {
   return (
     <div className="h-screen bg-background flex overflow-hidden">
       {/* Sidebar */}
-      <aside className={`${isSidebarExpanded ? "w-60" : "w-20"} transition-all duration-300 bg-sidebar border-r border-sidebar-border p-4 flex flex-col flex-shrink-0 relative`}>
+      <aside
+        className={`${isSidebarExpanded ? "w-60" : "w-20"} transition-all duration-300 bg-sidebar border-r border-sidebar-border p-4 flex flex-col flex-shrink-0 relative`}
+      >
         <button
           onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
           className="absolute -right-3 top-6 bg-sidebar border border-border rounded-full p-1 text-sidebar-foreground hover:bg-sidebar-accent z-10 hidden md:block shadow-sm"
         >
-          {isSidebarExpanded ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          {isSidebarExpanded ? (
+            <ChevronLeft className="w-4 h-4" />
+          ) : (
+            <ChevronRight className="w-4 h-4" />
+          )}
         </button>
 
-        <div className={`flex items-center ${isSidebarExpanded ? "gap-3" : "justify-center"} mb-8 h-12`}>
+        <div
+          className={`flex items-center ${isSidebarExpanded ? "gap-3" : "justify-center"} mb-8 h-12`}
+        >
           <img
             src="/logo.svg"
             alt="El Molino"
@@ -1651,7 +1803,9 @@ export function AdminPanel() {
               title={!isSidebarExpanded ? item.label : undefined}
             >
               <item.icon className="w-5 h-5 flex-shrink-0" />
-              {isSidebarExpanded && <span className="whitespace-nowrap">{item.label}</span>}
+              {isSidebarExpanded && (
+                <span className="whitespace-nowrap">{item.label}</span>
+              )}
             </button>
           ))}
         </nav>
@@ -1665,7 +1819,9 @@ export function AdminPanel() {
             title={!isSidebarExpanded ? "Ver tienda" : undefined}
           >
             <Package className="w-5 h-5 flex-shrink-0" />
-            {isSidebarExpanded && <span className="whitespace-nowrap">Ver tienda</span>}
+            {isSidebarExpanded && (
+              <span className="whitespace-nowrap">Ver tienda</span>
+            )}
           </a>
           <button
             onClick={handleLogout}
@@ -1673,7 +1829,9 @@ export function AdminPanel() {
             title={!isSidebarExpanded ? "Cerrar sesión" : undefined}
           >
             <LogOut className="w-5 h-5 flex-shrink-0" />
-            {isSidebarExpanded && <span className="whitespace-nowrap">Cerrar sesión</span>}
+            {isSidebarExpanded && (
+              <span className="whitespace-nowrap">Cerrar sesión</span>
+            )}
           </button>
         </div>
       </aside>
@@ -1685,9 +1843,7 @@ export function AdminPanel() {
           {currentView === "products" && (
             <div>
               <div className="flex items-center justify-between mb-6">
-                <h1 style={{ fontFamily: "Georgia, serif" }}>
-                  Gestión de Productos
-                </h1>
+                <h1>Gestión de Productos</h1>
                 <button
                   id="new-product-btn"
                   onClick={() => {
@@ -1711,52 +1867,83 @@ export function AdminPanel() {
 
               {showProductForm && (
                 <div className="bg-card border-2 border-primary/30 rounded-xl p-6 mb-6 shadow-sm">
-                  <h3
-                    className="mb-5 text-base"
-                    style={{ fontFamily: "Georgia, serif" }}
-                  >
+                  <h3 className="mb-5 text-base">
                     {editingProductId ? "Editar producto" : "Crear producto"}
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2 sm:col-span-1">
-                      <label className="block text-sm mb-1.5 font-medium">Nombre *</label>
+                      <label className="block text-sm mb-1.5 font-medium">
+                        Nombre *
+                      </label>
                       <input
                         type="text"
                         value={productForm.name || ""}
-                        onChange={(e) => setProductForm(p => ({ ...p, name: e.target.value }))}
+                        onChange={(e) =>
+                          setProductForm((p) => ({
+                            ...p,
+                            name: e.target.value,
+                          }))
+                        }
                         placeholder="Ej: Avena arrollada"
                         className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
                       />
                     </div>
                     <div className="col-span-2 sm:col-span-1">
-                      <label className="block text-sm mb-1.5 font-medium">Categoría *</label>
+                      <label className="block text-sm mb-1.5 font-medium">
+                        Categoría *
+                      </label>
                       <select
                         value={productForm.category || ""}
-                        onChange={(e) => setProductForm(p => ({ ...p, category: e.target.value }))}
+                        onChange={(e) =>
+                          setProductForm((p) => ({
+                            ...p,
+                            category: e.target.value,
+                          }))
+                        }
                         className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer text-foreground"
                       >
-                        <option value="" disabled>Seleccionar...</option>
+                        <option value="" disabled>
+                          Seleccionar...
+                        </option>
                         {categories.map((cat) => (
-                          <option key={cat.id} value={cat.nombre}>{cat.nombre}</option>
+                          <option key={cat.id} value={cat.nombre}>
+                            {cat.nombre}
+                          </option>
                         ))}
                       </select>
                     </div>
                     <div className="col-span-2">
-                      <label className="block text-sm mb-1.5 font-medium">Descripción</label>
+                      <label className="block text-sm mb-1.5 font-medium">
+                        Descripción
+                      </label>
                       <textarea
                         value={productForm.description || ""}
-                        onChange={(e) => setProductForm(p => ({ ...p, description: e.target.value }))}
+                        onChange={(e) =>
+                          setProductForm((p) => ({
+                            ...p,
+                            description: e.target.value,
+                          }))
+                        }
                         placeholder="Descripción opcional del producto..."
                         rows={3}
                         className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all resize-none"
                       />
                     </div>
                     <div className="col-span-2">
-                      <label className="block text-sm mb-1.5 font-medium">Tipo de venta *</label>
+                      <label className="block text-sm mb-1.5 font-medium">
+                        Tipo de venta *
+                      </label>
                       <div className="flex gap-3">
                         <button
                           type="button"
-                          onClick={() => setProductForm(p => ({ ...p, measurementUnit: "unidad", gramages: [], newGramageInput: "" }))}
+                          onClick={() =>
+                            setProductForm((p) => ({
+                              ...p,
+                              measurementUnit: "unidad",
+                              gramages: [],
+                              newGramageInput: "",
+                            }))
+                          }
                           className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${
                             productForm.measurementUnit === "unidad"
                               ? "bg-foreground text-background border-foreground"
@@ -1767,7 +1954,13 @@ export function AdminPanel() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setProductForm(p => ({ ...p, measurementUnit: "gramo", enableWholesale: false }))}
+                          onClick={() =>
+                            setProductForm((p) => ({
+                              ...p,
+                              measurementUnit: "gramo",
+                              enableWholesale: false,
+                            }))
+                          }
                           className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${
                             productForm.measurementUnit === "gramo"
                               ? "bg-foreground text-background border-foreground"
@@ -1780,46 +1973,73 @@ export function AdminPanel() {
                     </div>
                     <div className="col-span-2 sm:col-span-1">
                       <label className="block text-sm mb-1.5 font-medium">
-                        {productForm.measurementUnit === "gramo" ? "Stock inicial (kilos) *" : "Stock inicial (unidades) *"}
+                        {productForm.measurementUnit === "gramo"
+                          ? "Stock inicial (kilos) *"
+                          : "Stock inicial (unidades) *"}
                       </label>
                       <input
                         type="number"
                         value={productForm.stock || ""}
-                        onChange={(e) => setProductForm(p => ({ ...p, stock: Number(e.target.value) }))}
+                        onChange={(e) =>
+                          setProductForm((p) => ({
+                            ...p,
+                            stock: Number(e.target.value),
+                          }))
+                        }
                         placeholder="0"
                         className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
                       />
                     </div>
                     <div className="col-span-2 sm:col-span-1">
                       <label className="block text-sm mb-1.5 font-medium">
-                        {productForm.measurementUnit === "gramo" ? "Precio por kg *" : "Precio minorista *"}
+                        {productForm.measurementUnit === "gramo"
+                          ? "Precio por kg *"
+                          : "Precio minorista *"}
                       </label>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">$</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">
+                          $
+                        </span>
                         <input
                           type="text"
                           value={formatInputPrice(productForm.price)}
-                          onChange={(e) => setProductForm(p => ({ ...p, price: formatInputPrice(e.target.value) }))}
+                          onChange={(e) =>
+                            setProductForm((p) => ({
+                              ...p,
+                              price: formatInputPrice(e.target.value),
+                            }))
+                          }
                           placeholder="0,00"
                           className="w-full pl-7 pr-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
                         />
                       </div>
                       {productForm.measurementUnit === "gramo" && (
-                        <p className="text-[11px] text-muted-foreground mt-1">El precio de cada gramaje se calcula automáticamente a partir del precio por kg.</p>
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          El precio de cada gramaje se calcula automáticamente a
+                          partir del precio por kg.
+                        </p>
                       )}
                     </div>
                     <div className="col-span-2 sm:col-span-1 flex items-center justify-between p-3 bg-secondary/20 border border-border/50 rounded-lg">
-                      <span className="text-sm font-medium text-foreground">Producto activo</span>
+                      <span className="text-sm font-medium text-foreground">
+                        Producto activo
+                      </span>
                       <button
                         type="button"
-                        onClick={() => setProductForm(p => ({ ...p, active: !p.active }))}
+                        onClick={() =>
+                          setProductForm((p) => ({ ...p, active: !p.active }))
+                        }
                         className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          productForm.active ? "bg-accent" : "bg-switch-background"
+                          productForm.active
+                            ? "bg-accent"
+                            : "bg-switch-background"
                         }`}
                       >
                         <span
                           className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                            productForm.active ? "translate-x-5" : "translate-x-0"
+                            productForm.active
+                              ? "translate-x-5"
+                              : "translate-x-0"
                           }`}
                         />
                       </button>
@@ -1832,7 +2052,12 @@ export function AdminPanel() {
                             <input
                               type="checkbox"
                               checked={productForm.enableWholesale}
-                              onChange={(e) => setProductForm(p => ({ ...p, enableWholesale: e.target.checked }))}
+                              onChange={(e) =>
+                                setProductForm((p) => ({
+                                  ...p,
+                                  enableWholesale: e.target.checked,
+                                }))
+                              }
                               className="accent-primary rounded border-border"
                             />
                             Habilitar precio mayorista
@@ -1842,24 +2067,46 @@ export function AdminPanel() {
                         {productForm.enableWholesale && (
                           <>
                             <div className="col-span-2 sm:col-span-1">
-                              <label className="block text-sm mb-1.5 font-medium">Precio mayorista *</label>
+                              <label className="block text-sm mb-1.5 font-medium">
+                                Precio mayorista *
+                              </label>
                               <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">$</span>
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">
+                                  $
+                                </span>
                                 <input
                                   type="text"
-                                  value={formatInputPrice(productForm.wholesalePrice)}
-                                  onChange={(e) => setProductForm(p => ({ ...p, wholesalePrice: formatInputPrice(e.target.value) }))}
+                                  value={formatInputPrice(
+                                    productForm.wholesalePrice,
+                                  )}
+                                  onChange={(e) =>
+                                    setProductForm((p) => ({
+                                      ...p,
+                                      wholesalePrice: formatInputPrice(
+                                        e.target.value,
+                                      ),
+                                    }))
+                                  }
                                   placeholder="0,00"
                                   className="w-full pl-7 pr-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
                                 />
                               </div>
                             </div>
                             <div className="col-span-2 sm:col-span-1">
-                              <label className="block text-sm mb-1.5 font-medium">Cantidad mínima mayorista *</label>
+                              <label className="block text-sm mb-1.5 font-medium">
+                                Cantidad mínima mayorista *
+                              </label>
                               <input
                                 type="number"
                                 value={productForm.minimumWholesaleAmount || ""}
-                                onChange={(e) => setProductForm(p => ({ ...p, minimumWholesaleAmount: Number(e.target.value) }))}
+                                onChange={(e) =>
+                                  setProductForm((p) => ({
+                                    ...p,
+                                    minimumWholesaleAmount: Number(
+                                      e.target.value,
+                                    ),
+                                  }))
+                                }
                                 placeholder="10"
                                 className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
                               />
@@ -1872,17 +2119,31 @@ export function AdminPanel() {
                     {/* Gramajes — solo si producto por gramo */}
                     {productForm.measurementUnit === "gramo" && (
                       <div className="col-span-2 p-4 bg-secondary/20 border border-border/50 rounded-xl">
-                        <label className="block text-sm font-medium mb-3">Presentaciones (gramajes) *</label>
+                        <label className="block text-sm font-medium mb-3">
+                          Presentaciones (gramajes) *
+                        </label>
                         <div className="flex flex-wrap gap-2 mb-3">
                           {productForm.gramages.length === 0 && (
-                            <p className="text-xs text-muted-foreground italic">No hay gramajes cargados todavía.</p>
+                            <p className="text-xs text-muted-foreground italic">
+                              No hay gramajes cargados todavía.
+                            </p>
                           )}
                           {productForm.gramages.map((g, i) => (
-                            <div key={i} className="flex items-center gap-1.5 bg-background border border-border rounded-lg px-2.5 py-1.5 text-sm font-medium">
+                            <div
+                              key={i}
+                              className="flex items-center gap-1.5 bg-background border border-border rounded-lg px-2.5 py-1.5 text-sm font-medium"
+                            >
                               {g >= 1000 ? `${g / 1000} kg` : `${g} g`}
                               <button
                                 type="button"
-                                onClick={() => setProductForm(p => ({ ...p, gramages: p.gramages.filter((_, idx) => idx !== i) }))}
+                                onClick={() =>
+                                  setProductForm((p) => ({
+                                    ...p,
+                                    gramages: p.gramages.filter(
+                                      (_, idx) => idx !== i,
+                                    ),
+                                  }))
+                                }
                                 className="text-muted-foreground hover:text-destructive transition-colors"
                               >
                                 <X className="w-3.5 h-3.5" />
@@ -1894,13 +2155,29 @@ export function AdminPanel() {
                           <input
                             type="number"
                             value={productForm.newGramageInput}
-                            onChange={(e) => setProductForm(p => ({ ...p, newGramageInput: e.target.value }))}
+                            onChange={(e) =>
+                              setProductForm((p) => ({
+                                ...p,
+                                newGramageInput: e.target.value,
+                              }))
+                            }
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 e.preventDefault();
-                                const val = parseInt(productForm.newGramageInput);
-                                if (val > 0 && !productForm.gramages.includes(val)) {
-                                  setProductForm(p => ({ ...p, gramages: [...p.gramages, val].sort((a, b) => a - b), newGramageInput: "" }));
+                                const val = parseInt(
+                                  productForm.newGramageInput,
+                                );
+                                if (
+                                  val > 0 &&
+                                  !productForm.gramages.includes(val)
+                                ) {
+                                  setProductForm((p) => ({
+                                    ...p,
+                                    gramages: [...p.gramages, val].sort(
+                                      (a, b) => a - b,
+                                    ),
+                                    newGramageInput: "",
+                                  }));
                                 }
                               }
                             }}
@@ -1911,8 +2188,17 @@ export function AdminPanel() {
                             type="button"
                             onClick={() => {
                               const val = parseInt(productForm.newGramageInput);
-                              if (val > 0 && !productForm.gramages.includes(val)) {
-                                setProductForm(p => ({ ...p, gramages: [...p.gramages, val].sort((a, b) => a - b), newGramageInput: "" }));
+                              if (
+                                val > 0 &&
+                                !productForm.gramages.includes(val)
+                              ) {
+                                setProductForm((p) => ({
+                                  ...p,
+                                  gramages: [...p.gramages, val].sort(
+                                    (a, b) => a - b,
+                                  ),
+                                  newGramageInput: "",
+                                }));
                               }
                             }}
                             className="px-4 py-2 bg-foreground text-background rounded-lg text-sm font-medium hover:opacity-80 transition-opacity flex items-center gap-1.5"
@@ -1920,7 +2206,9 @@ export function AdminPanel() {
                             <Plus className="w-3.5 h-3.5" /> Agregar
                           </button>
                         </div>
-                        <p className="text-[11px] text-muted-foreground mt-2">Ingresá el peso en gramos. Ej: 250, 500, 1000</p>
+                        <p className="text-[11px] text-muted-foreground mt-2">
+                          Ingresá el peso en gramos. Ej: 250, 500, 1000
+                        </p>
                       </div>
                     )}
 
@@ -1929,7 +2217,12 @@ export function AdminPanel() {
                         <input
                           type="checkbox"
                           checked={productForm.enableOffer}
-                          onChange={(e) => setProductForm(p => ({ ...p, enableOffer: e.target.checked }))}
+                          onChange={(e) =>
+                            setProductForm((p) => ({
+                              ...p,
+                              enableOffer: e.target.checked,
+                            }))
+                          }
                           className="accent-primary rounded border-border"
                         />
                         Habilitar precio de oferta (Promoción)
@@ -1938,13 +2231,22 @@ export function AdminPanel() {
 
                     {productForm.enableOffer && (
                       <div className="col-span-2 sm:col-span-1">
-                        <label className="block text-sm mb-1.5 font-medium">Precio de oferta *</label>
+                        <label className="block text-sm mb-1.5 font-medium">
+                          Precio de oferta *
+                        </label>
                         <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">$</span>
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">
+                            $
+                          </span>
                           <input
                             type="text"
                             value={formatInputPrice(productForm.offerPrice)}
-                            onChange={(e) => setProductForm(p => ({ ...p, offerPrice: formatInputPrice(e.target.value) }))}
+                            onChange={(e) =>
+                              setProductForm((p) => ({
+                                ...p,
+                                offerPrice: formatInputPrice(e.target.value),
+                              }))
+                            }
                             placeholder="0,00"
                             className="w-full pl-7 pr-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
                           />
@@ -1953,7 +2255,9 @@ export function AdminPanel() {
                     )}
 
                     <div className="col-span-2">
-                      <label className="block text-sm mb-2 font-medium">Imagen del producto *</label>
+                      <label className="block text-sm mb-2 font-medium">
+                        Imagen del producto *
+                      </label>
                       <div className="flex items-start gap-6 p-4 bg-secondary/20 rounded-xl border border-border/50">
                         {productImagePreview ? (
                           <div className="relative group">
@@ -1976,7 +2280,9 @@ export function AdminPanel() {
                         ) : (
                           <label className="flex flex-col items-center justify-center w-32 h-32 border-2 border-dashed border-border hover:border-primary/50 rounded-lg cursor-pointer transition-colors bg-secondary/5">
                             <Upload className="w-6 h-6 text-muted-foreground mb-1" />
-                            <span className="text-[10px] text-muted-foreground font-semibold">Subir imagen</span>
+                            <span className="text-[10px] text-muted-foreground font-semibold">
+                              Subir imagen
+                            </span>
                             <input
                               type="file"
                               accept="image/*"
@@ -1986,9 +2292,13 @@ export function AdminPanel() {
                           </label>
                         )}
                         <div className="flex-1 text-xs text-muted-foreground flex flex-col justify-center gap-1">
-                          <p className="font-semibold text-foreground">Detalles de carga:</p>
+                          <p className="font-semibold text-foreground">
+                            Detalles de carga:
+                          </p>
                           <p>• Formatos soportados: JPG, PNG, WEBP</p>
-                          <p>• Relación de aspecto recomendada: 1:1 (Cuadrada)</p>
+                          <p>
+                            • Relación de aspecto recomendada: 1:1 (Cuadrada)
+                          </p>
                           <p>• Tamaño máximo de archivo: 2 MB</p>
                         </div>
                       </div>
@@ -2059,125 +2369,155 @@ export function AdminPanel() {
                     </tr>
                   </thead>
                   <tbody>
-                    {products.filter(p => 
-                      p.name.toLowerCase().includes(productSearchTerm.toLowerCase()) || 
-                      (p.category && p.category.toLowerCase().includes(productSearchTerm.toLowerCase()))
-                    ).map((product) => (
-                      <tr
-                        key={product.id}
-                        className="border-t border-border hover:bg-secondary/20 transition-colors"
-                      >
-                        <td className="p-4">
-                          <div className="flex items-center gap-3">
-                            <img
-                              src={product.image}
-                              alt={product.name}
-                              className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
-                            />
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="text-sm font-medium">
-                                  {product.name}
+                    {products
+                      .filter(
+                        (p) =>
+                          p.name
+                            .toLowerCase()
+                            .includes(productSearchTerm.toLowerCase()) ||
+                          (p.category &&
+                            p.category
+                              .toLowerCase()
+                              .includes(productSearchTerm.toLowerCase())),
+                      )
+                      .map((product) => (
+                        <tr
+                          key={product.id}
+                          className="border-t border-border hover:bg-secondary/20 transition-colors"
+                        >
+                          <td className="p-4">
+                            <div className="flex items-center gap-3">
+                              <img
+                                src={product.image}
+                                alt={product.name}
+                                className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                              />
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-medium">
+                                    {product.name}
+                                  </p>
+                                  {product.offerPrice != null && (
+                                    <span className="px-1.5 py-0.5 bg-accent/20 text-accent text-[9px] font-extrabold rounded tracking-wider">
+                                      PROMO
+                                    </span>
+                                  )}
+                                  {product.measurementUnit === "gramo" && (
+                                    <span className="px-1.5 py-0.5 bg-secondary text-muted-foreground text-[9px] font-semibold rounded tracking-wider">
+                                      GRAMOS
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {product.category}
                                 </p>
-                                {product.offerPrice != null && (
-                                  <span className="px-1.5 py-0.5 bg-accent/20 text-accent text-[9px] font-extrabold rounded tracking-wider">
-                                    PROMO
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4 text-sm">
+                            {product.offerPrice != null ? (
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="line-through text-muted-foreground text-xs">
+                                    {formatARS(product.price)}
                                   </span>
-                                )}
-                                {product.measurementUnit === "gramo" && (
-                                  <span className="px-1.5 py-0.5 bg-secondary text-muted-foreground text-[9px] font-semibold rounded tracking-wider">
-                                    GRAMOS
+                                  <span className="font-bold text-accent">
+                                    {formatARS(product.offerPrice)}
                                   </span>
+                                </div>
+                                {product.wholesalePrice && (
+                                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                                    May:{" "}
+                                    <span className="font-medium text-foreground">
+                                      {formatARS(product.wholesalePrice.price)}
+                                    </span>{" "}
+                                    (min. {product.wholesalePrice.quantity} u.)
+                                  </p>
                                 )}
                               </div>
-                              <p className="text-xs text-muted-foreground">
-                                {product.category}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-4 text-sm">
-                          {product.offerPrice != null ? (
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="line-through text-muted-foreground text-xs">
+                            ) : (
+                              <div>
+                                <span className="font-medium">
                                   {formatARS(product.price)}
+                                  {product.measurementUnit === "gramo" && (
+                                    <span className="text-muted-foreground text-xs ml-1">
+                                      /kg
+                                    </span>
+                                  )}
                                 </span>
-                                <span className="font-bold text-accent">
-                                  {formatARS(product.offerPrice)}
-                                </span>
+                                {product.wholesalePrice && (
+                                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                                    May:{" "}
+                                    <span className="font-medium text-foreground">
+                                      {formatARS(product.wholesalePrice.price)}
+                                    </span>{" "}
+                                    (min. {product.wholesalePrice.quantity} u.)
+                                  </p>
+                                )}
+                                {product.measurementUnit === "gramo" &&
+                                  Array.isArray(product.gramages) &&
+                                  product.gramages.length > 0 && (
+                                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                                      {(product.gramages as any[])
+                                        .map((g: any) =>
+                                          g.grams >= 1000
+                                            ? `${g.grams / 1000}kg`
+                                            : `${g.grams}g`,
+                                        )
+                                        .join(" · ")}
+                                    </p>
+                                  )}
                               </div>
-                              {product.wholesalePrice && (
-                                <p className="text-[10px] text-muted-foreground mt-0.5">
-                                  May: <span className="font-medium text-foreground">{formatARS(product.wholesalePrice.price)}</span> (min. {product.wholesalePrice.quantity} u.)
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <div>
-                              <span className="font-medium">
-                                {formatARS(product.price)}
-                                {product.measurementUnit === "gramo" && <span className="text-muted-foreground text-xs ml-1">/kg</span>}
-                              </span>
-                              {product.wholesalePrice && (
-                                <p className="text-[10px] text-muted-foreground mt-0.5">
-                                  May: <span className="font-medium text-foreground">{formatARS(product.wholesalePrice.price)}</span> (min. {product.wholesalePrice.quantity} u.)
-                                </p>
-                              )}
-                              {product.measurementUnit === "gramo" && Array.isArray(product.gramages) && product.gramages.length > 0 && (
-                                <p className="text-[10px] text-muted-foreground mt-0.5">
-                                  {(product.gramages as any[]).map((g: any) => g.grams >= 1000 ? `${g.grams / 1000}kg` : `${g.grams}g`).join(" · ")}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                        <td className="p-4">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                              product.stock > 50
-                                ? "bg-accent/20 text-accent"
-                                : product.stock > 20
-                                  ? "bg-chart-4/20 text-chart-4"
-                                  : "bg-destructive/20 text-destructive"
-                            }`}
-                          >
-                            {product.measurementUnit === "gramo" 
-                              ? (product.stock >= 1000 ? `${product.stock / 1000} kg` : `${product.stock} g`)
-                              : `${product.stock} uds.`}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <span
-                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
-                              product.active
-                                ? "bg-accent/10 text-accent border-accent/20"
-                                : "bg-secondary/60 text-muted-foreground border-border"
-                            }`}
-                          >
-                            {product.active ? "Activo" : "Inactivo"}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <div className="flex gap-1 justify-end">
-                            <button
-                              onClick={() => handleEditProductClick(product)}
-                              className="p-2 hover:bg-secondary rounded-lg transition-colors"
-                              title="Editar"
+                            )}
+                          </td>
+                          <td className="p-4">
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                                product.stock > 50
+                                  ? "bg-accent/20 text-accent"
+                                  : product.stock > 20
+                                    ? "bg-chart-4/20 text-chart-4"
+                                    : "bg-destructive/20 text-destructive"
+                              }`}
                             >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteProduct(product.id)}
-                              className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors"
-                              title="Eliminar"
+                              {product.measurementUnit === "gramo"
+                                ? product.stock >= 1000
+                                  ? `${product.stock / 1000} kg`
+                                  : `${product.stock} g`
+                                : `${product.stock} uds.`}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+                                product.active
+                                  ? "bg-accent/10 text-accent border-accent/20"
+                                  : "bg-secondary/60 text-muted-foreground border-border"
+                              }`}
                             >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              {product.active ? "Activo" : "Inactivo"}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex gap-1 justify-end">
+                              <button
+                                onClick={() => handleEditProductClick(product)}
+                                className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                                title="Editar"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteProduct(product.id)}
+                                className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors"
+                                title="Eliminar"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
@@ -2189,11 +2529,10 @@ export function AdminPanel() {
             <div>
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
-                  <h1 style={{ fontFamily: "Georgia, serif" }} className="text-2xl font-bold">
-                    Ofertas del día
-                  </h1>
+                  <h1 className="text-2xl font-bold">Ofertas del día</h1>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Activá el descuento por producto y definí el precio de oferta
+                    Activá el descuento por producto y definí el precio de
+                    oferta
                   </p>
                 </div>
                 <div className="bg-accent/10 text-accent border border-accent/20 px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 shadow-sm self-start md:self-auto">
@@ -2201,9 +2540,13 @@ export function AdminPanel() {
                   <span>
                     {(() => {
                       const d = new Date();
-                      const dayName = d.toLocaleDateString("es-AR", { weekday: "long" });
+                      const dayName = d.toLocaleDateString("es-AR", {
+                        weekday: "long",
+                      });
                       const dayNum = d.getDate();
-                      const monthName = d.toLocaleDateString("es-AR", { month: "long" });
+                      const monthName = d.toLocaleDateString("es-AR", {
+                        month: "long",
+                      });
                       return `${dayName.charAt(0).toUpperCase() + dayName.slice(1)} ${dayNum} de ${monthName}`;
                     })()}
                   </span>
@@ -2213,17 +2556,25 @@ export function AdminPanel() {
               {/* KPIs Rows */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div className="bg-card border border-border rounded-xl p-5 shadow-sm flex flex-col justify-between h-28 hover:shadow-md transition-all duration-300">
-                  <span className="text-sm font-medium text-muted-foreground">Total productos</span>
-                  <span className="text-3xl font-extrabold tracking-tight mt-1">{products.length}</span>
-                </div>
-                <div className="bg-card border border-border rounded-xl p-5 shadow-sm flex flex-col justify-between h-28 hover:shadow-md transition-all duration-300">
-                  <span className="text-sm font-medium text-muted-foreground">En oferta hoy</span>
-                  <span className="text-3xl font-extrabold tracking-tight mt-1 text-accent">
-                    {Object.values(offersDraft).filter(d => d.active).length}
+                  <span className="text-sm font-medium text-muted-foreground">
+                    Total productos
+                  </span>
+                  <span className="text-3xl font-extrabold tracking-tight mt-1">
+                    {products.length}
                   </span>
                 </div>
                 <div className="bg-card border border-border rounded-xl p-5 shadow-sm flex flex-col justify-between h-28 hover:shadow-md transition-all duration-300">
-                  <span className="text-sm font-medium text-muted-foreground">Descuento promedio</span>
+                  <span className="text-sm font-medium text-muted-foreground">
+                    En oferta hoy
+                  </span>
+                  <span className="text-3xl font-extrabold tracking-tight mt-1 text-accent">
+                    {Object.values(offersDraft).filter((d) => d.active).length}
+                  </span>
+                </div>
+                <div className="bg-card border border-border rounded-xl p-5 shadow-sm flex flex-col justify-between h-28 hover:shadow-md transition-all duration-300">
+                  <span className="text-sm font-medium text-muted-foreground">
+                    Descuento promedio
+                  </span>
                   <span className="text-3xl font-extrabold tracking-tight mt-1 text-chart-4">
                     {getAverageDiscount()}%
                   </span>
@@ -2281,23 +2632,46 @@ export function AdminPanel() {
                 <table className="w-full">
                   <thead className="bg-secondary/50">
                     <tr>
-                      <th className="text-left p-4 text-sm font-medium">Producto</th>
-                      <th className="text-left p-4 text-sm font-medium">Precio Normal</th>
-                      <th className="text-left p-4 text-sm font-medium" style={{ width: "200px" }}>Precio Oferta</th>
-                      <th className="text-left p-4 text-sm font-medium">Descuento</th>
-                      <th className="text-right p-4 text-sm font-medium" style={{ width: "100px" }}>Activo</th>
+                      <th className="text-left p-4 text-sm font-medium">
+                        Producto
+                      </th>
+                      <th className="text-left p-4 text-sm font-medium">
+                        Precio Normal
+                      </th>
+                      <th
+                        className="text-left p-4 text-sm font-medium"
+                        style={{ width: "200px" }}
+                      >
+                        Precio Oferta
+                      </th>
+                      <th className="text-left p-4 text-sm font-medium">
+                        Descuento
+                      </th>
+                      <th
+                        className="text-right p-4 text-sm font-medium"
+                        style={{ width: "100px" }}
+                      >
+                        Activo
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredOffersProducts.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="p-8 text-center text-muted-foreground text-sm">
-                          No se encontraron productos para los criterios seleccionados.
+                        <td
+                          colSpan={5}
+                          className="p-8 text-center text-muted-foreground text-sm"
+                        >
+                          No se encontraron productos para los criterios
+                          seleccionados.
                         </td>
                       </tr>
                     ) : (
                       filteredOffersProducts.map((product) => {
-                        const draft = offersDraft[product.id] || { active: false, offerPrice: "" };
+                        const draft = offersDraft[product.id] || {
+                          active: false,
+                          offerPrice: "",
+                        };
                         const pct = getDiscountPercentage(product.id);
                         return (
                           <tr
@@ -2312,8 +2686,12 @@ export function AdminPanel() {
                                   className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
                                 />
                                 <div>
-                                  <p className="text-sm font-medium">{product.name}</p>
-                                  <p className="text-xs text-muted-foreground">{product.category}</p>
+                                  <p className="text-sm font-medium">
+                                    {product.name}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {product.category}
+                                  </p>
                                 </div>
                               </div>
                             </td>
@@ -2322,22 +2700,35 @@ export function AdminPanel() {
                             </td>
                             <td className="p-4">
                               <div className="relative">
-                                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium select-none ${
-                                    draft.active ? "text-muted-foreground" : "text-muted-foreground/30"
-                                  }`}>$</span>
-                                  <input
-                                    type="text"
-                                    disabled={!draft.active}
-                                    value={draft.offerPrice}
-                                    onChange={(e) => handleOfferPriceDraftChange(product.id, e.target.value)}
-                                    placeholder={draft.active ? "0,00" : "Desactivado"}
-                                    className={`w-full pl-7 pr-3 py-1.5 border rounded-lg text-sm transition-all focus:ring-2 focus:ring-primary/20 ${
-                                      draft.active
-                                        ? "bg-input-background border-border text-foreground font-medium"
-                                        : "bg-secondary/30 border-border/40 text-muted-foreground/40 cursor-not-allowed"
-                                    }`}
-                                  />
-                                </div>
+                                <span
+                                  className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium select-none ${
+                                    draft.active
+                                      ? "text-muted-foreground"
+                                      : "text-muted-foreground/30"
+                                  }`}
+                                >
+                                  $
+                                </span>
+                                <input
+                                  type="text"
+                                  disabled={!draft.active}
+                                  value={draft.offerPrice}
+                                  onChange={(e) =>
+                                    handleOfferPriceDraftChange(
+                                      product.id,
+                                      e.target.value,
+                                    )
+                                  }
+                                  placeholder={
+                                    draft.active ? "0,00" : "Desactivado"
+                                  }
+                                  className={`w-full pl-7 pr-3 py-1.5 border rounded-lg text-sm transition-all focus:ring-2 focus:ring-primary/20 ${
+                                    draft.active
+                                      ? "bg-input-background border-border text-foreground font-medium"
+                                      : "bg-secondary/30 border-border/40 text-muted-foreground/40 cursor-not-allowed"
+                                  }`}
+                                />
+                              </div>
                             </td>
                             <td className="p-4">
                               {pct !== null ? (
@@ -2345,21 +2736,29 @@ export function AdminPanel() {
                                   -{pct}%
                                 </span>
                               ) : (
-                                <span className="text-muted-foreground/50 text-sm">—</span>
+                                <span className="text-muted-foreground/50 text-sm">
+                                  —
+                                </span>
                               )}
                             </td>
                             <td className="p-4">
                               <div className="flex justify-end">
                                 <button
                                   type="button"
-                                  onClick={() => handleToggleOfferDraft(product.id)}
+                                  onClick={() =>
+                                    handleToggleOfferDraft(product.id)
+                                  }
                                   className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                    draft.active ? "bg-accent" : "bg-switch-background"
+                                    draft.active
+                                      ? "bg-accent"
+                                      : "bg-switch-background"
                                   }`}
                                 >
                                   <span
                                     className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                      draft.active ? "translate-x-5" : "translate-x-0"
+                                      draft.active
+                                        ? "translate-x-5"
+                                        : "translate-x-0"
                                     }`}
                                   />
                                 </button>
@@ -2378,15 +2777,23 @@ export function AdminPanel() {
                 <button
                   type="button"
                   onClick={() => {
-                    const initialDraft: Record<string, { active: boolean; offerPrice: string | number }> = {};
-                    products.forEach(p => {
+                    const initialDraft: Record<
+                      string,
+                      { active: boolean; offerPrice: string | number }
+                    > = {};
+                    products.forEach((p) => {
                       initialDraft[p.id] = {
                         active: p.offerPrice != null,
-                        offerPrice: p.offerPrice ? formatInputPrice(p.offerPrice) : "",
+                        offerPrice: p.offerPrice
+                          ? formatInputPrice(p.offerPrice)
+                          : "",
                       };
                     });
                     setOffersDraft(initialDraft);
-                    showSuccess("Descartado", "Se descartaron los cambios no guardados.");
+                    showSuccess(
+                      "Descartado",
+                      "Se descartaron los cambios no guardados.",
+                    );
                   }}
                   className="px-4 py-2 border border-border rounded-lg hover:bg-secondary/40 transition-colors text-sm text-foreground"
                 >
@@ -2408,9 +2815,7 @@ export function AdminPanel() {
           {currentView === "promotions" && (
             <div>
               <div className="flex items-center justify-between mb-6">
-                <h1 style={{ fontFamily: "Georgia, serif" }}>
-                  Cupones de Descuento
-                </h1>
+                <h1>Cupones de Descuento</h1>
                 <button
                   id="new-coupon-btn"
                   onClick={() => setShowCouponForm((v) => !v)}
@@ -2428,12 +2833,7 @@ export function AdminPanel() {
               {/* Formulario nuevo cupón */}
               {showCouponForm && (
                 <div className="bg-card border-2 border-primary/30 rounded-xl p-6 mb-6 shadow-sm">
-                  <h3
-                    className="mb-5 text-base"
-                    style={{ fontFamily: "Georgia, serif" }}
-                  >
-                    Crear cupón
-                  </h3>
+                  <h3 className="mb-5 text-base">Crear cupón</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm mb-1.5">Nombre *</label>
@@ -2695,9 +3095,41 @@ export function AdminPanel() {
           {/* PEDIDOS */}
           {currentView === "orders" && (
             <div>
-              <h1 className="mb-6" style={{ fontFamily: "Georgia, serif" }}>
-                Historial de Pedidos
-              </h1>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-6">
+                <h1 className="text-2xl font-bold">Historial de Pedidos</h1>
+                <div className="flex bg-secondary/40 p-1 border border-border rounded-lg self-start sm:self-auto">
+                  <button
+                    onClick={() => setOrdersFilter("pendientes")}
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                      ordersFilter === "pendientes"
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Pendientes
+                  </button>
+                  <button
+                    onClick={() => setOrdersFilter("enviados")}
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                      ordersFilter === "enviados"
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Enviados
+                  </button>
+                  <button
+                    onClick={() => setOrdersFilter("todos")}
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                      ordersFilter === "todos"
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Todos
+                  </button>
+                </div>
+              </div>
               <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
                 <table className="w-full">
                   <thead className="bg-secondary/50">
@@ -2724,200 +3156,306 @@ export function AdminPanel() {
                     </tr>
                   </thead>
                   <tbody>
-                    {orders.map((order) => (
-                      <React.Fragment key={order.id}>
-                        <tr
-                          className="border-t border-border hover:bg-secondary/20 transition-colors cursor-pointer"
-                          onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
-                        >
-                          <td className="p-4 text-sm font-mono">{order.id}</td>
-                          <td className="p-4 text-sm">{order.customer}</td>
-                          <td className="p-4 text-sm font-medium">
-                            {formatARS(order.total)}
-                          </td>
-                          <td className="p-4 text-sm text-muted-foreground capitalize">
-                            {order.metodo_pago}
-                            {order.informacion && (
-                              <div className="text-xs text-primary font-medium mt-1 normal-case">
-                                {order.informacion}
-                              </div>
-                            )}
-                          </td>
-                          <td className="p-4">
-                            <span
-                              className={`px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[order.status]}`}
-                            >
-                              {STATUS_LABELS[order.status]}
-                            </span>
-                          </td>
-                          <td className="p-4 text-sm text-muted-foreground">
-                            {order.date}
-                          </td>
-                          <td className="p-4 text-muted-foreground">
-                            {expandedOrderId === order.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                          </td>
-                        </tr>
-                        {expandedOrderId === order.id && (
-                          <tr className="bg-secondary/10">
-                            <td colSpan={7} className="p-0 border-b border-border">
-                              <motion.div 
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                exit={{ opacity: 0, height: 0 }}
-                                className="p-6"
+                    {orders
+                      .filter(
+                        (o) =>
+                          ordersFilter === "todos" ||
+                          (ordersFilter === "pendientes" &&
+                            o.status === "pendiente") ||
+                          (ordersFilter === "enviados" &&
+                            o.status === "enviado"),
+                      )
+                      .map((order) => (
+                        <React.Fragment key={order.id}>
+                          <tr
+                            className="border-t border-border hover:bg-secondary/20 transition-colors cursor-pointer"
+                            onClick={() =>
+                              setExpandedOrderId(
+                                expandedOrderId === order.id ? null : order.id,
+                              )
+                            }
+                          >
+                            <td className="p-4 text-sm font-mono">
+                              {order.id}
+                            </td>
+                            <td className="p-4 text-sm">{order.customer}</td>
+                            <td className="p-4 text-sm font-medium">
+                              {formatARS(order.total)}
+                            </td>
+                            <td className="p-4 text-sm text-muted-foreground capitalize">
+                              {order.metodo_pago}
+                              {order.informacion && (
+                                <div className="text-xs text-primary font-medium mt-1 normal-case">
+                                  {order.informacion}
+                                </div>
+                              )}
+                            </td>
+                            <td className="p-4">
+                              <span
+                                className={`px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[order.status]}`}
                               >
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                  
-                                  {/* Columna Cliente y Envío */}
-                                  <div className="bg-card p-5 rounded-xl border border-border/50 shadow-sm space-y-4">
-                                    <div className="flex items-center gap-2 pb-3 border-b border-border/50">
-                                      <div className="p-2 bg-primary/10 text-primary rounded-lg">
-                                        <User size={18} />
+                                {STATUS_LABELS[order.status]}
+                              </span>
+                            </td>
+                            <td className="p-4 text-sm text-muted-foreground">
+                              {order.date}
+                            </td>
+                            <td className="p-4 text-muted-foreground">
+                              {expandedOrderId === order.id ? (
+                                <ChevronUp size={18} />
+                              ) : (
+                                <ChevronDown size={18} />
+                              )}
+                            </td>
+                          </tr>
+                          {expandedOrderId === order.id && (
+                            <tr className="bg-secondary/10">
+                              <td
+                                colSpan={7}
+                                className="p-0 border-b border-border"
+                              >
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: "auto" }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  className="p-6"
+                                >
+                                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                    {/* Columna Cliente y Envío */}
+                                    <div className="bg-card p-5 rounded-xl border border-border/50 shadow-sm space-y-4">
+                                      <div className="flex items-center gap-2 pb-3 border-b border-border/50">
+                                        <div className="p-2 bg-primary/10 text-primary rounded-lg">
+                                          <User size={18} />
+                                        </div>
+                                        <h4 className="font-semibold text-foreground">
+                                          Datos del Cliente
+                                        </h4>
                                       </div>
-                                      <h4 className="font-semibold text-foreground">Datos del Cliente</h4>
+                                      <div className="space-y-3 text-sm">
+                                        <div className="flex items-start gap-3">
+                                          <User
+                                            size={16}
+                                            className="text-muted-foreground mt-0.5 shrink-0"
+                                          />
+                                          <div>
+                                            <p className="text-muted-foreground text-xs">
+                                              Nombre completo
+                                            </p>
+                                            <p className="font-medium text-foreground">
+                                              {order.customer}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-start gap-3">
+                                          <Hash
+                                            size={16}
+                                            className="text-muted-foreground mt-0.5 shrink-0"
+                                          />
+                                          <div>
+                                            <p className="text-muted-foreground text-xs">
+                                              Documento (DNI)
+                                            </p>
+                                            <p className="font-medium text-foreground">
+                                              {order.dni || "No especificado"}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-start gap-3">
+                                          <Phone
+                                            size={16}
+                                            className="text-muted-foreground mt-0.5 shrink-0"
+                                          />
+                                          <div>
+                                            <p className="text-muted-foreground text-xs">
+                                              Teléfono de contacto
+                                            </p>
+                                            <p className="font-medium text-foreground">
+                                              {order.telefono ||
+                                                "No especificado"}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-start gap-3">
+                                          <MapPin
+                                            size={16}
+                                            className="text-muted-foreground mt-0.5 shrink-0"
+                                          />
+                                          <div>
+                                            <p className="text-muted-foreground text-xs">
+                                              Dirección de entrega
+                                            </p>
+                                            <p className="font-medium text-foreground">
+                                              {order.direccionEnvio ||
+                                                "Retiro por sucursal"}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </div>
                                     </div>
-                                    <div className="space-y-3 text-sm">
-                                      <div className="flex items-start gap-3">
-                                        <User size={16} className="text-muted-foreground mt-0.5 shrink-0" />
-                                        <div>
-                                          <p className="text-muted-foreground text-xs">Nombre completo</p>
-                                          <p className="font-medium text-foreground">{order.customer}</p>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-start gap-3">
-                                        <Hash size={16} className="text-muted-foreground mt-0.5 shrink-0" />
-                                        <div>
-                                          <p className="text-muted-foreground text-xs">Documento (DNI)</p>
-                                          <p className="font-medium text-foreground">{order.dni || "No especificado"}</p>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-start gap-3">
-                                        <Phone size={16} className="text-muted-foreground mt-0.5 shrink-0" />
-                                        <div>
-                                          <p className="text-muted-foreground text-xs">Teléfono de contacto</p>
-                                          <p className="font-medium text-foreground">{order.telefono || "No especificado"}</p>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-start gap-3">
-                                        <MapPin size={16} className="text-muted-foreground mt-0.5 shrink-0" />
-                                        <div>
-                                          <p className="text-muted-foreground text-xs">Dirección de entrega</p>
-                                          <p className="font-medium text-foreground">{order.direccionEnvio || "Retiro por sucursal"}</p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
 
-                                  {/* Columna Pago y Detalles */}
-                                  <div className="bg-card p-5 rounded-xl border border-border/50 shadow-sm space-y-4">
-                                    <div className="flex items-center gap-2 pb-3 border-b border-border/50">
-                                      <div className="p-2 bg-primary/10 text-primary rounded-lg">
-                                        <CreditCard size={18} />
+                                    {/* Columna Pago y Detalles */}
+                                    <div className="bg-card p-5 rounded-xl border border-border/50 shadow-sm space-y-4">
+                                      <div className="flex items-center gap-2 pb-3 border-b border-border/50">
+                                        <div className="p-2 bg-primary/10 text-primary rounded-lg">
+                                          <CreditCard size={18} />
+                                        </div>
+                                        <h4 className="font-semibold text-foreground">
+                                          Información de Pago
+                                        </h4>
                                       </div>
-                                      <h4 className="font-semibold text-foreground">Información de Pago</h4>
-                                    </div>
-                                    <div className="space-y-3 text-sm">
-                                      <div className="flex items-start gap-3">
-                                        <CreditCard size={16} className="text-muted-foreground mt-0.5 shrink-0" />
-                                        <div>
-                                          <p className="text-muted-foreground text-xs">Método seleccionado</p>
-                                          <p className="font-medium text-foreground capitalize">{order.metodo_pago}</p>
+                                      <div className="space-y-3 text-sm">
+                                        <div className="flex items-start gap-3">
+                                          <CreditCard
+                                            size={16}
+                                            className="text-muted-foreground mt-0.5 shrink-0"
+                                          />
+                                          <div>
+                                            <p className="text-muted-foreground text-xs">
+                                              Método seleccionado
+                                            </p>
+                                            <p className="font-medium text-foreground capitalize">
+                                              {order.metodo_pago}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-start gap-3">
+                                          <Tag
+                                            size={16}
+                                            className="text-muted-foreground mt-0.5 shrink-0"
+                                          />
+                                          <div>
+                                            <p className="text-muted-foreground text-xs">
+                                              Estado del cobro
+                                            </p>
+                                            <span className="inline-block mt-0.5 px-2 py-0.5 bg-secondary text-secondary-foreground text-xs font-medium rounded-full capitalize">
+                                              {order.estadoPago || "Pendiente"}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-start gap-3">
+                                          <FileText
+                                            size={16}
+                                            className="text-muted-foreground mt-0.5 shrink-0"
+                                          />
+                                          <div>
+                                            <p className="text-muted-foreground text-xs">
+                                              Aclaraciones adicionales
+                                            </p>
+                                            <p className="font-medium text-foreground mt-0.5 bg-primary/5 px-2 py-1.5 rounded text-primary">
+                                              {order.informacion ||
+                                                "Sin aclaraciones adicionales"}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <div className="pt-3 mt-1 border-t border-border/50">
+                                          <p className="text-muted-foreground text-xs mb-2">
+                                            Acción rápida
+                                          </p>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleUpdateOrderStatus(
+                                                order.id,
+                                                order.status,
+                                              );
+                                            }}
+                                            className={`w-full py-2 px-3 rounded-md text-sm font-medium shadow-sm transition-all hover:opacity-90 active:scale-[0.98] flex items-center justify-center gap-2 ${
+                                              order.status === "pendiente"
+                                                ? "bg-chart-2 text-white"
+                                                : "bg-chart-4 text-white"
+                                            }`}
+                                          >
+                                            {order.status === "pendiente"
+                                              ? "Marcar como Enviado"
+                                              : "Devolver a Pendiente"}
+                                          </button>
                                         </div>
                                       </div>
-                                      <div className="flex items-start gap-3">
-                                        <Tag size={16} className="text-muted-foreground mt-0.5 shrink-0" />
-                                        <div>
-                                          <p className="text-muted-foreground text-xs">Estado del cobro</p>
-                                          <span className="inline-block mt-0.5 px-2 py-0.5 bg-secondary text-secondary-foreground text-xs font-medium rounded-full capitalize">
-                                            {order.estadoPago || "Pendiente"}
+                                    </div>
+
+                                    {/* Columna Resumen del Pedido */}
+                                    <div className="bg-card p-5 rounded-xl border border-border/50 shadow-sm flex flex-col h-full">
+                                      <div className="flex items-center gap-2 pb-3 border-b border-border/50 mb-4">
+                                        <div className="p-2 bg-primary/10 text-primary rounded-lg">
+                                          <ShoppingBag size={18} />
+                                        </div>
+                                        <h4 className="font-semibold text-foreground">
+                                          Resumen de Productos
+                                        </h4>
+                                      </div>
+
+                                      <div className="flex-1 overflow-y-auto max-h-[220px] pr-2 custom-scrollbar">
+                                        <ul className="space-y-3">
+                                          {order.items?.map((item, idx) => (
+                                            <li
+                                              key={idx}
+                                              className="flex justify-between items-center text-sm group"
+                                            >
+                                              <div className="flex items-center gap-3">
+                                                <span className="flex items-center justify-center bg-secondary/50 text-secondary-foreground w-6 h-6 rounded-md font-medium text-xs">
+                                                  {item.quantity}x
+                                                </span>
+                                                <div>
+                                                  <p className="font-medium text-foreground group-hover:text-primary transition-colors">
+                                                    {item.productName}
+                                                  </p>
+                                                  {item.gramageGrams && (
+                                                    <p className="text-xs text-muted-foreground">
+                                                      Gramaje:{" "}
+                                                      {item.gramageGrams}g
+                                                    </p>
+                                                  )}
+                                                </div>
+                                              </div>
+                                              <span className="font-medium whitespace-nowrap text-foreground">
+                                                {formatARS(
+                                                  item.price * item.quantity,
+                                                )}
+                                              </span>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </div>
+
+                                      <div className="pt-4 mt-auto border-t border-border/50">
+                                        <div className="flex justify-between items-center mb-2">
+                                          <span className="text-sm text-muted-foreground">
+                                            Subtotal productos
+                                          </span>
+                                          <span className="text-sm font-medium text-foreground">
+                                            {formatARS(
+                                              order.total -
+                                                (order.shippingCost || 0),
+                                            )}
+                                          </span>
+                                        </div>
+                                        <div className="flex justify-between items-center mb-3 pb-3 border-b border-border/30">
+                                          <span className="text-sm text-muted-foreground">
+                                            Envío
+                                          </span>
+                                          <span className="text-sm font-medium text-foreground">
+                                            {order.shippingCost
+                                              ? formatARS(order.shippingCost)
+                                              : "Gratis / No aplica"}
+                                          </span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                          <span className="font-semibold text-muted-foreground">
+                                            Total del pedido
+                                          </span>
+                                          <span className="text-lg font-bold text-primary">
+                                            {formatARS(order.total)}
                                           </span>
                                         </div>
                                       </div>
-                                      <div className="flex items-start gap-3">
-                                        <FileText size={16} className="text-muted-foreground mt-0.5 shrink-0" />
-                                        <div>
-                                          <p className="text-muted-foreground text-xs">Aclaraciones adicionales</p>
-                                          <p className="font-medium text-foreground mt-0.5 bg-primary/5 px-2 py-1.5 rounded text-primary">
-                                            {order.informacion || "Sin aclaraciones adicionales"}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      <div className="pt-3 mt-1 border-t border-border/50">
-                                        <p className="text-muted-foreground text-xs mb-2">Acción rápida</p>
-                                        <button 
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleUpdateOrderStatus(order.id, order.status);
-                                          }}
-                                          className={`w-full py-2 px-3 rounded-md text-sm font-medium shadow-sm transition-all hover:opacity-90 active:scale-[0.98] flex items-center justify-center gap-2 ${
-                                            order.status === "pendiente" 
-                                              ? "bg-chart-2 text-white" 
-                                              : "bg-chart-4 text-white"
-                                          }`}
-                                        >
-                                          {order.status === "pendiente" ? "Marcar como Enviado" : "Devolver a Pendiente"}
-                                        </button>
-                                      </div>
                                     </div>
                                   </div>
-
-                                  {/* Columna Resumen del Pedido */}
-                                  <div className="bg-card p-5 rounded-xl border border-border/50 shadow-sm flex flex-col h-full">
-                                    <div className="flex items-center gap-2 pb-3 border-b border-border/50 mb-4">
-                                      <div className="p-2 bg-primary/10 text-primary rounded-lg">
-                                        <ShoppingBag size={18} />
-                                      </div>
-                                      <h4 className="font-semibold text-foreground">Resumen de Productos</h4>
-                                    </div>
-                                    
-                                    <div className="flex-1 overflow-y-auto max-h-[220px] pr-2 custom-scrollbar">
-                                      <ul className="space-y-3">
-                                        {order.items?.map((item, idx) => (
-                                          <li key={idx} className="flex justify-between items-center text-sm group">
-                                            <div className="flex items-center gap-3">
-                                              <span className="flex items-center justify-center bg-secondary/50 text-secondary-foreground w-6 h-6 rounded-md font-medium text-xs">
-                                                {item.quantity}x
-                                              </span>
-                                              <div>
-                                                <p className="font-medium text-foreground group-hover:text-primary transition-colors">{item.productName}</p>
-                                                {item.gramageGrams && (
-                                                  <p className="text-xs text-muted-foreground">Gramaje: {item.gramageGrams}g</p>
-                                                )}
-                                              </div>
-                                            </div>
-                                            <span className="font-medium whitespace-nowrap text-foreground">
-                                              {formatARS(item.price * item.quantity)}
-                                            </span>
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </div>
-
-                                    <div className="pt-4 mt-auto border-t border-border/50">
-                                      <div className="flex justify-between items-center mb-2">
-                                        <span className="text-sm text-muted-foreground">Subtotal productos</span>
-                                        <span className="text-sm font-medium text-foreground">{formatARS(order.total - (order.shippingCost || 0))}</span>
-                                      </div>
-                                      <div className="flex justify-between items-center mb-3 pb-3 border-b border-border/30">
-                                        <span className="text-sm text-muted-foreground">Envío</span>
-                                        <span className="text-sm font-medium text-foreground">
-                                          {order.shippingCost ? formatARS(order.shippingCost) : "Gratis / No aplica"}
-                                        </span>
-                                      </div>
-                                      <div className="flex justify-between items-center">
-                                        <span className="font-semibold text-muted-foreground">Total del pedido</span>
-                                        <span className="text-lg font-bold text-primary">{formatARS(order.total)}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                </div>
-                              </motion.div>
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    ))}
+                                </motion.div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      ))}
                   </tbody>
                 </table>
               </div>
@@ -2927,9 +3465,7 @@ export function AdminPanel() {
           {currentView === "carousel" && (
             <div>
               <div className="flex items-center justify-between mb-6">
-                <h1 style={{ fontFamily: "Georgia, serif" }}>
-                  Imágenes del Carousel
-                </h1>
+                <h1>Imágenes del Carousel</h1>
                 <button
                   id="new-carousel-btn"
                   onClick={() => {
@@ -2987,10 +3523,7 @@ export function AdminPanel() {
 
               {showCarouselForm && (
                 <div className="bg-card border-2 border-primary/30 rounded-xl p-6 mb-6 shadow-sm">
-                  <h3
-                    className="mb-5 text-base"
-                    style={{ fontFamily: "Georgia, serif" }}
-                  >
+                  <h3 className="mb-5 text-base">
                     {editingCarouselId
                       ? "Editar imagen del carousel"
                       : "Agregar imagen al carousel"}
@@ -3047,7 +3580,9 @@ export function AdminPanel() {
                       />
                     </div>
                     <div className="col-span-2">
-                      <label className="block text-sm mb-1.5">URL de Redirección (Opcional)</label>
+                      <label className="block text-sm mb-1.5">
+                        URL de Redirección (Opcional)
+                      </label>
                       <input
                         value={carouselForm.redirectUrl ?? ""}
                         onChange={(e) =>
@@ -3169,10 +3704,7 @@ export function AdminPanel() {
                         <div className="flex-1 p-5 flex flex-col justify-between">
                           <div className="flex items-start justify-between">
                             <div>
-                              <h3
-                                className="text-lg font-medium"
-                                style={{ fontFamily: "Georgia, serif" }}
-                              >
+                              <h3 className="text-lg font-medium">
                                 {img.titulo || "Sin título"}
                               </h3>
                               {img.subtitulo && (
@@ -3233,9 +3765,7 @@ export function AdminPanel() {
           {currentView === "categories" && (
             <div>
               <div className="flex items-center justify-between mb-6">
-                <h1 style={{ fontFamily: "Georgia, serif" }}>
-                  Gestión de Categorías
-                </h1>
+                <h1 className="text-2xl font-bold">Gestión de categorías</h1>
                 <button
                   id="new-category-btn"
                   onClick={() => {
@@ -3258,10 +3788,7 @@ export function AdminPanel() {
 
               {showCategoryForm && (
                 <div className="bg-card border-2 border-primary/30 rounded-xl p-6 mb-6 shadow-sm">
-                  <h3
-                    className="mb-5 text-base"
-                    style={{ fontFamily: "Georgia, serif" }}
-                  >
+                  <h3 className="mb-5 text-base">
                     {editingCategoryId ? "Editar categoría" : "Crear categoría"}
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
@@ -3433,10 +3960,7 @@ export function AdminPanel() {
                         </div>
                         <div className="flex-1 p-5 flex flex-col justify-between">
                           <div className="flex items-start justify-between">
-                            <h3
-                              className="text-lg font-medium"
-                              style={{ fontFamily: "Georgia, serif" }}
-                            >
+                            <h3 className="text-lg font-medium">
                               {cat.nombre}
                             </h3>
                             <div className="flex gap-2">
@@ -3489,15 +4013,21 @@ export function AdminPanel() {
             <div>
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h1 style={{ fontFamily: "Georgia, serif" }}>Tarifas de Envío</h1>
+                  <h1>Tarifas de Envío</h1>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Configurá los costos de envío por tramo de distancia desde el local.
+                    Configurá los costos de envío por tramo de distancia desde
+                    el local.
                   </p>
                 </div>
                 <button
                   onClick={() => {
                     setEditingShippingId(null);
-                    setShippingForm({ desdeKm: "", hastaKm: "", precio: "", activo: true });
+                    setShippingForm({
+                      desdeKm: "",
+                      hastaKm: "",
+                      precio: "",
+                      activo: true,
+                    });
                     setShowShippingForm(true);
                   }}
                   className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg transition-colors shadow-sm text-sm"
@@ -3515,11 +4045,13 @@ export function AdminPanel() {
                 </h3>
                 <div className="flex items-center gap-3">
                   <div className="relative flex-1 max-w-xs">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">$</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">
+                      $
+                    </span>
                     <input
                       type="text"
                       value={umbralEnvioGratis}
-                      onChange={e => setUmbralEnvioGratis(e.target.value)}
+                      onChange={(e) => setUmbralEnvioGratis(e.target.value)}
                       placeholder="5000"
                       className="w-full pl-7 pr-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
                     />
@@ -3533,47 +4065,69 @@ export function AdminPanel() {
                   </button>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Los pedidos que superen este monto no pagarán envío (actualmente: ${umbralEnvioGratis}).
+                  Los pedidos que superen este monto no pagarán envío
+                  (actualmente: ${umbralEnvioGratis}).
                 </p>
               </div>
 
               {/* Formulario inline */}
               {showShippingForm && (
                 <div className="bg-card border-2 border-primary/30 rounded-xl p-5 mb-6 shadow-sm">
-                  <h3 className="text-base mb-4" style={{ fontFamily: "Georgia, serif" }}>
+                  <h3 className="text-base mb-4">
                     {editingShippingId ? "Editar tramo" : "Nuevo tramo"}
                   </h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
-                      <label className="block text-xs font-medium mb-1.5">Desde (km)</label>
+                      <label className="block text-xs font-medium mb-1.5">
+                        Desde (km)
+                      </label>
                       <input
                         type="number"
                         min="0"
                         step="0.1"
                         value={shippingForm.desdeKm}
-                        onChange={e => setShippingForm(f => ({ ...f, desdeKm: e.target.value }))}
+                        onChange={(e) =>
+                          setShippingForm((f) => ({
+                            ...f,
+                            desdeKm: e.target.value,
+                          }))
+                        }
                         placeholder="0"
                         className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium mb-1.5">Hasta (km)</label>
+                      <label className="block text-xs font-medium mb-1.5">
+                        Hasta (km)
+                      </label>
                       <input
                         type="number"
                         min="0"
                         step="0.1"
                         value={shippingForm.hastaKm}
-                        onChange={e => setShippingForm(f => ({ ...f, hastaKm: e.target.value }))}
+                        onChange={(e) =>
+                          setShippingForm((f) => ({
+                            ...f,
+                            hastaKm: e.target.value,
+                          }))
+                        }
                         placeholder="5"
                         className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium mb-1.5">Precio ($)</label>
+                      <label className="block text-xs font-medium mb-1.5">
+                        Precio ($)
+                      </label>
                       <input
                         type="text"
                         value={shippingForm.precio}
-                        onChange={e => setShippingForm(f => ({ ...f, precio: e.target.value }))}
+                        onChange={(e) =>
+                          setShippingForm((f) => ({
+                            ...f,
+                            precio: e.target.value,
+                          }))
+                        }
                         placeholder="500"
                         className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20"
                       />
@@ -3583,7 +4137,12 @@ export function AdminPanel() {
                         <input
                           type="checkbox"
                           checked={shippingForm.activo}
-                          onChange={e => setShippingForm(f => ({ ...f, activo: e.target.checked }))}
+                          onChange={(e) =>
+                            setShippingForm((f) => ({
+                              ...f,
+                              activo: e.target.checked,
+                            }))
+                          }
                           className="accent-primary"
                         />
                         Activo
@@ -3600,7 +4159,10 @@ export function AdminPanel() {
                       {isSavingShipping ? "Guardando..." : "Guardar tramo"}
                     </button>
                     <button
-                      onClick={() => { setShowShippingForm(false); setEditingShippingId(null); }}
+                      onClick={() => {
+                        setShowShippingForm(false);
+                        setEditingShippingId(null);
+                      }}
                       className="px-4 py-2 rounded-lg text-sm border border-border hover:bg-secondary transition-colors"
                     >
                       Cancelar
@@ -3614,17 +4176,27 @@ export function AdminPanel() {
                 <div className="text-center py-16 text-muted-foreground">
                   <Truck className="w-12 h-12 mx-auto opacity-20 mb-3" />
                   <p>No hay tramos de envío configurados.</p>
-                  <p className="text-sm mt-1">Creá el primero con el botón "Nuevo tramo".</p>
+                  <p className="text-sm mt-1">
+                    Creá el primero con el botón "Nuevo tramo".
+                  </p>
                 </div>
               ) : (
                 <div className="bg-card border border-border rounded-xl overflow-hidden">
                   <table className="w-full text-sm">
                     <thead className="bg-secondary/40 border-b border-border">
                       <tr>
-                        <th className="text-left px-5 py-3 font-medium text-muted-foreground">Desde</th>
-                        <th className="text-left px-5 py-3 font-medium text-muted-foreground">Hasta</th>
-                        <th className="text-left px-5 py-3 font-medium text-muted-foreground">Precio</th>
-                        <th className="text-left px-5 py-3 font-medium text-muted-foreground">Estado</th>
+                        <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                          Desde
+                        </th>
+                        <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                          Hasta
+                        </th>
+                        <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                          Precio
+                        </th>
+                        <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                          Estado
+                        </th>
                         <th className="px-5 py-3"></th>
                       </tr>
                     </thead>
@@ -3633,12 +4205,19 @@ export function AdminPanel() {
                         .slice()
                         .sort((a, b) => a.desdeKm - b.desdeKm)
                         .map((rate) => (
-                          <tr key={rate.id} className="hover:bg-secondary/20 transition-colors">
+                          <tr
+                            key={rate.id}
+                            className="hover:bg-secondary/20 transition-colors"
+                          >
                             <td className="px-5 py-3">{rate.desdeKm} km</td>
                             <td className="px-5 py-3">{rate.hastaKm} km</td>
-                            <td className="px-5 py-3 font-semibold text-primary">{formatARS(rate.precio)}</td>
+                            <td className="px-5 py-3 font-semibold text-primary">
+                              {formatARS(rate.precio)}
+                            </td>
                             <td className="px-5 py-3">
-                              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${rate.activo ? "bg-chart-2/20 text-chart-2" : "bg-secondary text-muted-foreground"}`}>
+                              <span
+                                className={`text-xs font-semibold px-2.5 py-1 rounded-full ${rate.activo ? "bg-chart-2/20 text-chart-2" : "bg-secondary text-muted-foreground"}`}
+                              >
                                 {rate.activo ? "Activo" : "Inactivo"}
                               </span>
                             </td>
@@ -3661,7 +4240,9 @@ export function AdminPanel() {
                                   <Edit className="w-4 h-4 text-muted-foreground" />
                                 </button>
                                 <button
-                                  onClick={() => handleDeleteShippingRate(rate.id)}
+                                  onClick={() =>
+                                    handleDeleteShippingRate(rate.id)
+                                  }
                                   className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors"
                                   title="Eliminar"
                                 >

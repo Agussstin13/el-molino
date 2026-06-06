@@ -37,7 +37,7 @@ export function Footer() {
               />
               <span
                 className="text-xl font-bold text-foreground"
-                style={{ fontFamily: "Georgia, serif" }}
+               
               >
                 El Molino
               </span>
@@ -53,7 +53,7 @@ export function Footer() {
           <div>
             <h3
               className="text-lg font-semibold mb-6 text-foreground"
-              style={{ fontFamily: "Georgia, serif" }}
+             
             >
               Contacto
             </h3>
@@ -81,7 +81,7 @@ export function Footer() {
           <div>
             <h3
               className="text-lg font-semibold mb-6 text-foreground"
-              style={{ fontFamily: "Georgia, serif" }}
+             
             >
               Escribinos
             </h3>

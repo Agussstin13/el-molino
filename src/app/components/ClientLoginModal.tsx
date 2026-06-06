@@ -79,7 +79,7 @@ export function ClientLoginModal({ isOpen, onClose }: ClientLoginModalProps) {
       <div className="relative w-full max-w-md bg-card rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-border transition-all duration-200 transform scale-100">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-border bg-secondary/10 flex-shrink-0">
-          <h2 className="text-xl font-medium text-primary" style={{ fontFamily: 'Georgia, serif' }}>
+          <h2 className="text-xl font-medium text-primary">
             {isClientAuthenticated ? 'Mi Perfil' : isRegistering ? 'Crear Cuenta' : 'Ingresar'}
           </h2>
           <button 
