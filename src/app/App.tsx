@@ -27,6 +27,8 @@ export default function App() {
             <CartProvider>
               <Routes>
                 <Route path="/" element={<ShopPage />} />
+                <Route path="/products/top-selling" element={<ShopPage />} />
+                <Route path="/productos" element={<ShopPage />} />
                 <Route path="/producto/:id" element={<ProductDetailPage />} />
                 <Route path="/admin/login" element={<AdminLoginPage />} />
                 <Route

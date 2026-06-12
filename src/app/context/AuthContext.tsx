@@ -7,8 +7,8 @@ interface AuthContextType {
   adminToken: string | null;
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
-  loginClient: (email: string, password: string) => Promise<boolean>;
-  registerClient: (userData: any) => Promise<boolean>;
+  loginClient: (email: string, password: string) => Promise<{success: boolean; error?: string}>;
+  registerClient: (userData: any) => Promise<{success: boolean; error?: string}>;
   logoutClient: () => void;
   updateClientProfile: (updates: any) => void;
 }
@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAdminToken(null);
   };
 
-  const loginClient = async (email: string, password: string): Promise<boolean> => {
+  const loginClient = async (email: string, password: string): Promise<{success: boolean; error?: string}> => {
     try {
       const res = await fetch(`${API_BASE}/api/Auth/login/user`, {
         method: 'POST',
@@ -112,16 +112,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch {
           setClientUser({ email, token });
         }
-        return true;
+        return { success: true };
       }
-      return false;
+      
+      const errData = await res.json().catch(() => null);
+      const errorMsg = errData?.detail || errData?.title || 'Credenciales incorrectas';
+      return { success: false, error: errorMsg };
     } catch (error) {
       console.error('Client login error:', error);
-      return false;
+      return { success: false, error: 'Error al conectar con el servidor' };
     }
   };
 
-  const registerClient = async (userData: any): Promise<boolean> => {
+  const registerClient = async (userData: any): Promise<{success: boolean; error?: string}> => {
     try {
       const res = await fetch(`${API_BASE}/api/clients/register`, {
         method: 'POST',
@@ -131,13 +134,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (res.ok) {
         // Registration succeeded — auto-login to get a JWT token
-        const loginSuccess = await loginClient(userData.email, userData.password);
-        return loginSuccess;
+        return await loginClient(userData.email, userData.password);
       }
-      return false;
+      
+      const errData = await res.json().catch(() => null);
+      const errorMsg = errData?.detail || errData?.title || 'Error al registrarse. El email o DNI ya podrían estar en uso.';
+      return { success: false, error: errorMsg };
     } catch (error) {
       console.error('Client register error:', error);
-      return false;
+      return { success: false, error: 'Error al conectar con el servidor' };
     }
   };
 

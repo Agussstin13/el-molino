@@ -39,13 +39,13 @@ export function ClientLoginModal({ isOpen, onClose }: ClientLoginModalProps) {
           setLoading(false);
           return;
         }
-        const success = await registerClient({
+        const result = await registerClient({
           email, password, nombre, apellido, dni, fechaNacimiento: new Date(fechaNacimiento).toISOString(), telefono
         });
-        if (success) {
+        if (result.success) {
           onClose();
         } else {
-          setError('Error al registrarse. El email o DNI ya podrían estar en uso.');
+          setError(result.error || 'Error al registrarse. El email o DNI ya podrían estar en uso.');
         }
       } else {
         if (!email || !password) {
@@ -53,11 +53,11 @@ export function ClientLoginModal({ isOpen, onClose }: ClientLoginModalProps) {
           setLoading(false);
           return;
         }
-        const success = await loginClient(email, password);
-        if (success) {
+        const result = await loginClient(email, password);
+        if (result.success) {
           onClose();
         } else {
-          setError('Credenciales incorrectas');
+          setError(result.error || 'Credenciales incorrectas');
         }
       }
     } catch (err) {

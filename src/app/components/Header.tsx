@@ -1,4 +1,4 @@
-import { Search, ShoppingCart, User, Menu, X, Home, Instagram, Phone, ChevronRight, List, ChevronDown } from "lucide-react";
+import { Search, ShoppingCart, User, Menu, X, Home, Instagram, Phone, ChevronRight, List, ChevronDown, Package } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
@@ -155,6 +155,15 @@ export function Header() {
                 >
                   <Home className="w-5 h-5 text-primary" />
                   Inicio
+                </Link>
+                
+                <Link 
+                  to="/productos" 
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-secondary transition-colors text-foreground font-medium"
+                >
+                  <Package className="w-5 h-5 text-primary" />
+                  Todos los Productos
                 </Link>
                 
                 <div className="pt-2 pb-2">

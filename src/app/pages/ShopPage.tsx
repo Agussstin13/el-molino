@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { HeroSection } from '../components/HeroSection';
 import { ProductSection } from '../components/ProductSection';
@@ -16,10 +16,14 @@ const imgUrl = (path: string) =>
 
 export function ShopPage() {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const categoryId = searchParams.get('categoria');
   const searchQuery = searchParams.get('q');
-  const seccion = searchParams.get('seccion');
+  const seccion = location.pathname === '/products/top-selling' ? 'destacados' 
+                : location.pathname === '/productos' ? 'todos'
+                : searchParams.get('seccion');
   const [products, setProducts] = useState<Product[]>([]);
+  const [topSellingProducts, setTopSellingProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<{id: number, name: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'grid-sm' | 'grid-lg'>('grid-sm');
@@ -39,53 +43,54 @@ export function ShopPage() {
   useEffect(() => {
     setLoading(true);
 
-    fetch(`${API_BASE}/api/products`)
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then(data => {
-        if (!Array.isArray(data)) {
-          console.error("Respuesta inesperada:", data);
-          setProducts([]);
-          return;
-        }
+    const fetchProducts = fetch(`${API_BASE}/api/products`).then(res => res.ok ? res.json() : []);
+    const fetchTopSelling = fetch(`${API_BASE}/api/Products/top-selling`).then(res => res.ok ? res.json() : []).catch(() => []);
 
-        const mapped = data.map((p: any) => ({
-          id: p.id.toString(),
-          name: p.name ?? p.nombre,
-          price: p.price ?? p.precio,
-          stock: p.stock,
-          category: p.categoryName ?? p.description ?? "",
-          image: imgUrl(p.imagePath ?? p.imageUrl ?? ''),
-          categoryId: p.categoryId ?? p.categoriaId,
-          onOffer: p.offerPrice != null,
-          offerPrice: p.offerPrice ?? null,
-          discount: p.offerPrice != null && p.price
-            ? Math.round(((p.price - p.offerPrice) / p.price) * 100)
-            : (p.discount ?? p.descuento ?? 0),
-          wholesalePrice: p.wholesalePrice
-            ? { quantity: p.minimumWholesaleAmount ?? 10, price: p.wholesalePrice }
-            : undefined,
-          measurementUnit: p.measurementUnit ?? "unidad",
-          gramages: Array.isArray(p.gramages) ? p.gramages : [],
-          imagePath: p.imagePath ?? "",
-          description: p.description ?? "",
-          active: p.active ?? true,
-        }));
+    Promise.all([fetchProducts, fetchTopSelling])
+      .then(([productsData, topSellingData]) => {
+        const mapProducts = (data: any[]) => {
+          if (!Array.isArray(data)) return [];
+          return data.map((p: any) => ({
+            id: p.id.toString(),
+            name: p.name ?? p.nombre,
+            price: p.price ?? p.precio,
+            stock: p.stock,
+            category: p.categoryName ?? p.description ?? "",
+            image: imgUrl(p.imagePath ?? p.imageUrl ?? ''),
+            categoryId: p.categoryId ?? p.categoriaId,
+            onOffer: p.offerPrice != null,
+            offerPrice: p.offerPrice ?? null,
+            discount: p.offerPrice != null && p.price
+              ? Math.round(((p.price - p.offerPrice) / p.price) * 100)
+              : (p.discount ?? p.descuento ?? 0),
+            wholesalePrice: p.wholesalePrice
+              ? { quantity: p.minimumWholesaleAmount ?? 10, price: p.wholesalePrice }
+              : undefined,
+            measurementUnit: p.measurementUnit ?? "unidad",
+            gramages: Array.isArray(p.gramages) ? p.gramages : [],
+            imagePath: p.imagePath ?? "",
+            description: p.description ?? "",
+            active: p.active ?? true,
+          }));
+        };
+
+        const mappedProducts = mapProducts(productsData);
+        const mappedTopSelling = mapProducts(topSellingData);
+        
+        setTopSellingProducts(mappedTopSelling);
 
         if (categoryId) {
-          setProducts(mapped.filter((p: any) => p.categoryId?.toString() === categoryId));
+          setProducts(mappedProducts.filter((p: any) => p.categoryId?.toString() === categoryId));
         } else if (searchQuery) {
           const normalize = (t: string) => t ? t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : "";
           const queryWords = normalize(searchQuery).split(/\s+/).map(w => w.endsWith('s') && w.length > 3 ? w.slice(0, -1) : w);
           
-          setProducts(mapped.filter((p: any) => {
+          setProducts(mappedProducts.filter((p: any) => {
             const searchableText = normalize(`${p.name} ${p.description || ""} ${p.category || ""}`);
             return queryWords.every(qw => searchableText.includes(qw));
           }));
         } else {
-          setProducts(mapped);
+          setProducts(mappedProducts);
         }
       })
       .catch(err => console.error("Error fetching products:", err))
@@ -133,8 +138,24 @@ export function ShopPage() {
     }
   }, [products, sortBy]);
 
+  const sortedTopSelling = useMemo(() => {
+    const list = [...topSellingProducts];
+    switch (sortBy) {
+      case 'price-asc':
+        return list.sort((a, b) => a.price - b.price);
+      case 'price-desc':
+        return list.sort((a, b) => b.price - a.price);
+      case 'name-asc':
+        return list.sort((a, b) => a.name.localeCompare(b.name));
+      default:
+        return list;
+    }
+  }, [topSellingProducts, sortBy]);
+
   const offers = sortedProducts.filter(p => p.discount && p.discount > 0);
-  const others = sortedProducts.filter(p => !p.discount || p.discount <= 0);
+  const others = sortedTopSelling.length > 0 
+    ? sortedTopSelling 
+    : sortedProducts.filter(p => !p.discount || p.discount <= 0);
 
   const categoryName = useMemo(() => {
     if (!categoryId || categories.length === 0) return undefined;
@@ -186,7 +207,7 @@ export function ShopPage() {
               products={others} 
               id="productos-lista"
               viewMode={viewMode}
-              viewAllLink="/?seccion=destacados"
+              viewAllLink="/products/top-selling"
             />
           </div>
         )}
