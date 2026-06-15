@@ -6,10 +6,8 @@ import { useAlert } from "../context/AlertContext";
 import {
   formatARS,
   getEffectivePrice,
-  getShippingCostByDistance,
 } from "../../lib/price";
 const API_BASE = import.meta.env.VITE_API_BASE;
-const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 interface FormData {
   nombre: string;
@@ -26,13 +24,21 @@ interface FormData {
 }
 
 interface AddressSuggestion {
-  display_name: string;
-  lat?: string;
-  lon?: string;
-  address: {
-    road?: string;
-    house_number?: string;
-  };
+  placeId: string;
+  text: string;
+}
+
+interface ShippingQuoteResponse {
+  destinationPlaceId: string;
+  shippingAddress: string;
+  shippingLatitude: number;
+  shippingLongitude: number;
+  shippingDistanceMeters: number;
+  distanceKm: number;
+  baseShippingCost: number;
+  shippingCost: number;
+  freeShippingApplied: boolean;
+  freeShippingThreshold: number;
 }
 
 const EMPTY_FORM: FormData = {
@@ -111,7 +117,6 @@ export function Checkout() {
     shipping,
     total,
     clearCart,
-    shippingRates,
     freeShippingThreshold,
   } = useCart();
   const { isClientAuthenticated, clientUser, updateClientProfile } = useAuth();
@@ -165,27 +170,12 @@ export function Checkout() {
   const [shippingCost, setShippingCost] = useState<number | null>(null);
   const [calculatingShipping, setCalculatingShipping] = useState(false);
   const [distanciaKm, setDistanciaKm] = useState<number | null>(null);
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const [shippingQuoteError, setShippingQuoteError] = useState<string | null>(null);
 
   // Coordenadas del local (Bolívar 2342, Mar del Plata)
   const STORE_LAT = -38.0040339;
   const STORE_LNG = -57.5469972;
-
-  const calcularDistanciaKm = (
-    lat1: number,
-    lng1: number,
-    lat2: number,
-    lng2: number,
-  ): number => {
-    const R = 6371;
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLng = ((lng2 - lng1) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLng / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  };
 
   // Estados para autocompletado de dirección
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
@@ -194,9 +184,8 @@ export function Checkout() {
   const [isAddressVerified, setIsAddressVerified] = useState(false);
   const [selectedCoords, setSelectedCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [showAddressConfirm, setShowAddressConfirm] = useState(false);
-  const [manualAddress, setManualAddress] = useState(false);
 
-  // Autocompletado con Nominatim (OpenStreetMap) — gratuito, sin billing
+  // Autocompletado de direcciones resuelto desde el backend
   useEffect(() => {
     if (
       form.metodo_entrega !== "envio" ||
@@ -211,40 +200,28 @@ export function Checkout() {
     const timer = setTimeout(async () => {
       setIsSearchingAddress(true);
       try {
-        const query = encodeURIComponent(
-          `${form.calle.trim()}, Mar del Plata, Argentina`,
-        );
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${query}&format=json&addressdetails=1&limit=5&email=app@elmolino.com`,
+          `${API_BASE}/api/shipping/autocomplete?input=${encodeURIComponent(form.calle.trim())}`,
         );
-        if (res.ok && !cancelled) {
-          let data = await res.json();
-          
-          // Fallback: si no hay resultados y la búsqueda tiene números (Ej: España 123)
-          // Buscamos solo la calle y le permitimos elegirla (luego le agregamos el número)
-          if (data.length === 0 && /\d/.test(form.calle)) {
-            const calleSinNumero = form.calle.replace(/\d+/g, '').trim();
-            if (calleSinNumero.length > 2) {
-              const fallbackQuery = encodeURIComponent(`${calleSinNumero}, Mar del Plata, Argentina`);
-              const fallbackRes = await fetch(
-                `https://nominatim.openstreetmap.org/search?q=${fallbackQuery}&format=json&addressdetails=1&limit=5&email=app@elmolino.com`,
-              );
-              if (fallbackRes.ok && !cancelled) {
-                data = await fallbackRes.json();
-              }
-            }
-          }
-          
-          if (!cancelled) {
-            setAddressSuggestions(data);
-          }
+
+        if (!res.ok) {
+          throw new Error("No se pudieron buscar direcciones.");
+        }
+
+        const data = (await res.json()) as AddressSuggestion[];
+
+        if (!cancelled) {
+          setAddressSuggestions(Array.isArray(data) ? data : []);
         }
       } catch (e) {
-        console.error("Error fetching address:", e);
+        console.error("Error fetching address suggestions:", e);
+        if (!cancelled) {
+          setAddressSuggestions([]);
+        }
       } finally {
         if (!cancelled) setIsSearchingAddress(false);
       }
-    }, 600);
+    }, 400);
 
     return () => {
       cancelled = true;
@@ -252,88 +229,132 @@ export function Checkout() {
     };
   }, [form.calle, form.metodo_entrega, showSuggestions]);
 
-  const formatArgentinianAddress = (suggestion: AddressSuggestion) => {
-    if (!suggestion.address?.road) {
-      return {
-        main: suggestion.display_name.split(",")[0],
-        secondary: suggestion.display_name,
-        full: suggestion.display_name,
-      };
-    }
-    const road = suggestion.address.road;
-    const house = suggestion.address.house_number || "";
-    const main = `${road} ${house}`.trim();
-    const parts = suggestion.display_name.split(",").map((p) => p.trim());
-    const secondaryParts = parts.filter((p) => p !== road && p !== house);
-    const secondary = secondaryParts.join(", ");
+  const formatAddressSuggestion = (suggestion: AddressSuggestion) => {
+    const parts = suggestion.text.split(",").map((part) => part.trim()).filter(Boolean);
     return {
-      main,
-      secondary,
-      full: secondary ? `${main}, ${secondary}` : main,
+      main: parts[0] ?? suggestion.text,
+      secondary: parts.slice(1).join(", "),
+      full: suggestion.text,
     };
   };
 
   const handleAddressSelect = (suggestion: AddressSuggestion) => {
-    const formatted = formatArgentinianAddress(suggestion);
-    let fullAddress = formatted.full;
-
-    // Si el usuario escribió un número de calle (Ej: "123") pero Nominatim devolvió solo la calle
-    const userTypedNumberMatch = form.calle.match(/\d+/);
-    if (userTypedNumberMatch && !suggestion.address?.house_number) {
-      const num = userTypedNumberMatch[0];
-      if (formatted.main === formatted.full) {
-        fullAddress = `${formatted.main} ${num}`;
-      } else {
-        fullAddress = `${formatted.main} ${num}, ${formatted.secondary}`;
-      }
-    }
-
-    if (suggestion.lat && suggestion.lon) {
-      const lat = parseFloat(suggestion.lat);
-      const lng = parseFloat(suggestion.lon);
-      const km = calcularDistanciaKm(STORE_LAT, STORE_LNG, lat, lng);
-      setDistanciaKm(km);
-      setSelectedCoords({ lat, lng });
-      if (subtotal < freeShippingThreshold) {
-        setShippingCost(getShippingCostByDistance(km, shippingRates));
-      } else {
-        setShippingCost(0);
-      }
-    }
-
     setForm((f) => {
-      const newForm = { ...f, calle: fullAddress };
+      const newForm = { ...f, calle: suggestion.text };
       localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(newForm));
       return newForm;
     });
+    setSelectedPlaceId(suggestion.placeId);
     setShowSuggestions(false);
-    setIsAddressVerified(true);
     setAddressSuggestions([]);
+    setShippingQuoteError(null);
+    setIsAddressVerified(false);
     if (errors.calle) setErrors((err) => ({ ...err, calle: "" }));
   };
 
-  // Recalcular el envío si cambia el método de entrega
   useEffect(() => {
     if (form.metodo_entrega === "retiro") {
       setShippingCost(0);
       setDistanciaKm(null);
       setSelectedCoords(null);
-    } else if (distanciaKm !== null) {
-      if (subtotal < freeShippingThreshold) {
-        setShippingCost(getShippingCostByDistance(distanciaKm, shippingRates));
-      } else {
-        setShippingCost(0);
-      }
-    } else {
-      setShippingCost(null);
+      setSelectedPlaceId(null);
+      setShippingQuoteError(null);
+      setIsAddressVerified(false);
+      return;
     }
-  }, [
-    form.metodo_entrega,
-    subtotal,
-    shippingRates,
-    freeShippingThreshold,
-    distanciaKm,
-  ]);
+
+    if (!selectedPlaceId) {
+      setShippingCost(null);
+      setDistanciaKm(null);
+      setSelectedCoords(null);
+      setShippingQuoteError(null);
+      setIsAddressVerified(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const quoteShipping = async () => {
+      setCalculatingShipping(true);
+      setShippingQuoteError(null);
+
+      try {
+        const res = await fetch(`${API_BASE}/api/shipping/quote`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            destinationPlaceId: selectedPlaceId,
+            orderSubtotal: subtotal,
+          }),
+        });
+
+        const data = await res.json().catch(() => null);
+
+        if (!res.ok) {
+          const errorPayload = data as {
+            title?: string;
+            detail?: string;
+          } | null;
+          const msg =
+            errorPayload?.title ||
+            errorPayload?.detail ||
+            "No se pudo validar la dirección de entrega.";
+          throw new Error(msg);
+        }
+
+        if (!data || !("destinationPlaceId" in data)) {
+          throw new Error("No se pudo validar la dirección de entrega.");
+        }
+
+        if (cancelled) return;
+
+        const quote = data as ShippingQuoteResponse;
+
+        setSelectedPlaceId(quote.destinationPlaceId);
+        setShippingCost(quote.shippingCost);
+        setDistanciaKm(quote.distanceKm);
+        setSelectedCoords({
+          lat: quote.shippingLatitude,
+          lng: quote.shippingLongitude,
+        });
+        setIsAddressVerified(true);
+        setForm((f) => {
+          if (f.calle === quote.shippingAddress) {
+            return f;
+          }
+
+          const newForm = { ...f, calle: quote.shippingAddress };
+          localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(newForm));
+          return newForm;
+        });
+      } catch (e) {
+        if (cancelled) return;
+
+        const message =
+          e instanceof Error
+            ? e.message
+            : "No se pudo validar la dirección de entrega.";
+
+        setShippingCost(null);
+        setDistanciaKm(null);
+        setSelectedCoords(null);
+        setIsAddressVerified(false);
+        setShippingQuoteError(message);
+      } finally {
+        if (!cancelled) {
+          setCalculatingShipping(false);
+        }
+      }
+    };
+
+    quoteShipping();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPlaceId, subtotal, form.metodo_entrega]);
 
   if (!isCheckoutOpen) return null;
 
@@ -365,38 +386,36 @@ export function Checkout() {
     if (form.metodo_entrega === "envio") {
       if (!form.calle.trim()) {
         newErrors.calle = "Requerido";
-      } else if (!isAddressVerified && !manualAddress) {
+      } else if (!selectedPlaceId) {
         newErrors.calle =
-          "Debe seleccionar una dirección de las opciones sugeridas o ingresarla a mano";
+          "Debe seleccionar una dirección de las opciones sugeridas.";
+      } else if (shippingQuoteError) {
+        newErrors.calle = shippingQuoteError;
+      } else if (calculatingShipping || !isAddressVerified || shippingCost === null) {
+        newErrors.calle = "Estamos validando la dirección y calculando el envío.";
       }
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const calcularEnvio = async () => {
-    // Envío deshabilitado - Solo Mar del Plata
-  };
-
   const handleConfirm = async () => {
     const userToken = localStorage.getItem("userToken");
+    const orderInformation = form.info_adicional.trim() || undefined;
 
     const backendOrder = {
       buyerFirstName: form.nombre,
       buyerLastName: form.apellido,
       buyerPhone: form.telefono,
       buyerDocument: form.dni,
-      shippingAddress:
-        form.metodo_entrega === "retiro"
-          ? "Retiro por sucursal"
-          : `${form.calle}${form.info_adicional ? " - " + form.info_adicional : ""}`.trim(),
+      destinationPlaceId: form.metodo_entrega === "envio" ? (selectedPlaceId ?? "") : "",
       paymentMethod:
         form.metodo_pago === "mercadopago"
           ? 0
           : form.metodo_pago === "efectivo"
             ? 1
             : 2,
-      shippingCost: form.metodo_entrega === "envio" ? (shippingCost ?? 0) : 0,
+      orderInformation,
       items: items.map((i) => ({
         productId: parseInt(i.id, 10),
         quantity: i.quantity,
@@ -419,7 +438,7 @@ export function Checkout() {
       });
       if (res.ok) {
         const data = await res.json().catch(() => null);
-        setConfirmedTotal(finalTotal);
+        setConfirmedTotal(data?.order?.total ?? finalTotal);
         setStep("confirmado");
         clearCart();
 
@@ -722,33 +741,12 @@ export function Checkout() {
                           <div className="col-span-2 relative">
                             <div className="flex items-center justify-between mb-1.5">
                               <label className="block text-sm">
-                                Calle *
+                                Dirección *
                               </label>
-                              {!manualAddress ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setManualAddress(true);
-                                    setShowSuggestions(false);
-                                    setAddressSuggestions([]);
-                                    setIsAddressVerified(false);
-                                  }}
-                                  className="text-xs text-primary hover:underline"
-                                >
-                                  No encuentro mi calle, ingresarla a mano
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setManualAddress(false);
-                                    setIsAddressVerified(false);
-                                    setShowSuggestions(true);
-                                  }}
-                                  className="text-xs text-primary hover:underline"
-                                >
-                                  ← Volver al buscador
-                                </button>
+                              {isAddressVerified && !calculatingShipping && (
+                                <span className="text-xs text-primary">
+                                  Dirección validada
+                                </span>
                               )}
                             </div>
                             <div className="relative">
@@ -757,32 +755,24 @@ export function Checkout() {
                                 value={form.calle}
                                 onChange={(e) => {
                                   set("calle")(e);
-                                  if (!manualAddress) {
-                                    setShowSuggestions(true);
-                                    setIsAddressVerified(false);
-                                  }
+                                  setShowSuggestions(true);
+                                  setSelectedPlaceId(null);
+                                  setIsAddressVerified(false);
+                                  setShippingQuoteError(null);
+                                  setDistanciaKm(null);
+                                  setSelectedCoords(null);
+                                  setShippingCost(null);
                                 }}
-                                placeholder={
-                                  manualAddress
-                                    ? "Ej: Rivadavia 1234"
-                                    : "Ej: Av. Independencia"
-                                }
+                                placeholder="Ej: Av. Independencia 1200"
                                 className={`w-full px-3 py-2.5 bg-input-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-sm transition-colors ${
                                   errors.calle
                                     ? "border-destructive"
-                                    : manualAddress
-                                      ? "border-primary/50"
-                                      : "border-border"
+                                    : "border-border"
                                 }`}
                               />
-                              {!manualAddress && isSearchingAddress && (
+                              {(isSearchingAddress || calculatingShipping) && (
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
                                   <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                                </div>
-                              )}
-                              {manualAddress && (
-                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-primary font-medium bg-primary/10 px-1.5 py-0.5 rounded">
-                                  Manual
                                 </div>
                               )}
                             </div>
@@ -791,15 +781,19 @@ export function Checkout() {
                                 {errors.calle}
                               </p>
                             )}
-                            {manualAddress && !errors.calle && form.calle.trim().length > 0 && (
+                            {!errors.calle && shippingQuoteError && (
                               <p className="text-xs text-muted-foreground mt-1">
-                                ✏️ Dirección ingresada manualmente. Asegurate de escribir la calle y el número correctamente.
+                                {shippingQuoteError}
+                              </p>
+                            )}
+                            {!errors.calle && !shippingQuoteError && form.calle.trim().length > 0 && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Seleccioná una dirección sugerida para validar el envío con el backend.
                               </p>
                             )}
 
                             {/* Dropdown de Sugerencias */}
-                            {!manualAddress &&
-                              showSuggestions &&
+                            {showSuggestions &&
                               form.calle.trim().length > 2 &&
                               (isSearchingAddress ||
                                 addressSuggestions.length > 0) && (
@@ -812,10 +806,10 @@ export function Checkout() {
                                   ) : (
                                     addressSuggestions.map(
                                       (suggestion, idx) => {
-                                        const formatted = formatArgentinianAddress(suggestion);
+                                        const formatted = formatAddressSuggestion(suggestion);
                                         return (
                                           <button
-                                            key={idx}
+                                            key={`${suggestion.placeId}-${idx}`}
                                             type="button"
                                             onClick={() =>
                                               handleAddressSelect(suggestion)
@@ -854,7 +848,7 @@ export function Checkout() {
                     <button
                       onClick={() => {
                         if (!validateDatos()) return;
-                        if (form.metodo_entrega === "envio" && isAddressVerified) {
+                        if (form.metodo_entrega === "envio") {
                           setShowAddressConfirm(true);
                         } else {
                           setStep("pago");
