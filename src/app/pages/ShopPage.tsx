@@ -174,7 +174,7 @@ export function ShopPage() {
         {!isFilteredView && <HeroSection />}
         
         {isFilteredView && (
-          <div className="pt-8 pb-4" id="productos-lista">
+          <div className="pt-8 pb-0" id="productos-lista">
             <ShopFilters 
               categoryName={categoryId ? categoryName : searchQuery ? `Resultados para "${searchQuery}"` : sectionTitle}
               viewMode={viewMode}

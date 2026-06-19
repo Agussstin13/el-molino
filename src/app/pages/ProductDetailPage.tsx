@@ -140,20 +140,17 @@ function SmallProductCard({ product }: { product: Product }) {
           )}
           <span className="text-2xl font-black text-black leading-none">{formatARS(effectivePrice)}</span>
           
-          <div className="flex flex-col mt-0.5">
-            {product.wholesalePrice && !isGramProduct ? (
-              <span className="text-[11px] text-amber-600/90 font-medium">
-                Venta mayorista a partir de {product.wholesalePrice.quantity} u.
-              </span>
+          <div className="flex flex-col gap-1 items-end mt-2">
+            {product.wholesalePrice ? (
+              <p className="text-xs text-amber-600 font-medium bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 shadow-sm flex flex-col items-end">
+                <span>Venta mayorista a partir de {product.wholesalePrice.quantity} u.</span>
+                {isGramProduct && <span className="text-[10px] opacity-80">(precio por kilo: {formatARS(product.wholesalePrice.price)})</span>}
+              </p>
             ) : isGramProduct ? (
-              <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
-                ⚖️ Se vende por peso
-              </span>
-            ) : (
-              <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
-                📦 Se vende por unidad
-              </span>
-            )}
+              <p className="text-xs text-primary/80 font-medium bg-primary/10 px-2.5 py-1 rounded-md">
+                Producto por peso
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -547,14 +544,15 @@ export function ProductDetailPage() {
                     <span className="text-xs text-amber-600 font-medium bg-amber-500/10 px-2 py-1 rounded-md self-start">
                       Precio mayorista activo
                     </span>
-                  ) : product.wholesalePrice && !isGramProduct ? (
-                    <span className="text-[13px] text-amber-600/90 font-medium">
-                      Venta mayorista a partir de {product.wholesalePrice.quantity} u.
-                    </span>
+                  ) : product.wholesalePrice ? (
+                    <p className="text-sm text-amber-600 font-medium flex flex-col">
+                      <span>Venta mayorista a partir de {product.wholesalePrice.quantity} u.</span>
+                      {isGramProduct && <span className="text-xs opacity-80">(precio por kilo: {formatARS(product.wholesalePrice.price)})</span>}
+                    </p>
                   ) : isGramProduct ? (
-                    <span className="text-[13px] text-muted-foreground font-medium flex items-center gap-1.5">
-                      ⚖️ Se vende por {selectedGramage ? `${selectedGramage.grams >= 1000 ? `${selectedGramage.grams / 1000} kg` : `${selectedGramage.grams} g`}` : 'peso'}
-                    </span>
+                    <p className="text-sm text-primary/80 font-medium">
+                      El precio varía según el peso seleccionado
+                    </p>
                   ) : (
                     <span className="text-[13px] text-muted-foreground font-medium flex items-center gap-1.5">
                       📦 Se vende por unidad
@@ -641,8 +639,8 @@ export function ProductDetailPage() {
                       <Plus className="w-4 h-4" />
                     </button>
                   </div>
-                  {product.wholesalePrice && quantity < product.wholesalePrice.quantity && !isGramProduct && (
-                    <span className="text-xs text-muted-foreground">
+                  {product.wholesalePrice && quantity < product.wholesalePrice.quantity && (
+                    <span className="text-xs text-amber-600 ml-1">
                       ({product.wholesalePrice.quantity - quantity} más para precio mayorista)
                     </span>
                   )}

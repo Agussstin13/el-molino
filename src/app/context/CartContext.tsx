@@ -214,7 +214,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     subtotal === 0 ? 0
     : subtotal >= freeShippingThreshold ? 0
     : shippingRates.length > 0
-      ? shippingRates.filter(r => r.activo).sort((a, b) => a.desdeKm - b.desdeKm)[0]?.precio ?? SHIPPING_COST
+      ? shippingRates.filter(r => r.activo).sort((a, b) => a.hastaKm - b.hastaKm)[0]?.precio ?? SHIPPING_COST
       : SHIPPING_COST;
 
   const total = subtotal + shipping;

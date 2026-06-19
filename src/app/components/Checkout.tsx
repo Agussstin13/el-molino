@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, MapPin, ChevronRight, CheckCircle2, Truck, AlertCircle } from "lucide-react";
+import { X, MapPin, ChevronRight, CheckCircle2, Truck, AlertCircle, User } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useAlert } from "../context/AlertContext";
@@ -7,6 +7,8 @@ import {
   formatARS,
   getEffectivePrice,
 } from "../../lib/price";
+import { ClientLoginModal } from "./ClientLoginModal";
+
 const API_BASE = import.meta.env.VITE_API_BASE;
 
 interface FormData {
@@ -121,10 +123,12 @@ export function Checkout() {
   } = useCart();
   const { isClientAuthenticated, clientUser, updateClientProfile } = useAuth();
   const { showError, showSuccess } = useAlert();
-  const [step, setStep] = useState<"datos" | "pago" | "revisar" | "confirmado">(
-    "datos",
+  const [step, setStep] = useState<"login-prompt" | "datos" | "pago" | "revisar" | "confirmado">(
+    "login-prompt",
   );
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [confirmedTotal, setConfirmedTotal] = useState<number>(0);
+  const [confirmedOrderId, setConfirmedOrderId] = useState<number | null>(null);
   const [form, setForm] = useState<FormData>(() => {
     try {
       const stored = localStorage.getItem(FORM_STORAGE_KEY);
@@ -135,24 +139,36 @@ export function Checkout() {
     }
   });
 
+  // Bloquear el scroll de fondo cuando el modal está abierto
+  useEffect(() => {
+    if (isCheckoutOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [isCheckoutOpen]);
+
   useEffect(() => {
     if (clientUser) {
       setForm((f) => {
         const newForm = { ...f };
         let changed = false;
-        if (clientUser.nombre && !newForm.nombre) {
+        if (clientUser.nombre && newForm.nombre !== clientUser.nombre) {
           newForm.nombre = clientUser.nombre;
           changed = true;
         }
-        if (clientUser.apellido && !newForm.apellido) {
+        if (clientUser.apellido && newForm.apellido !== clientUser.apellido) {
           newForm.apellido = clientUser.apellido;
           changed = true;
         }
-        if (clientUser.dni && !newForm.dni) {
+        if (clientUser.dni && newForm.dni !== clientUser.dni) {
           newForm.dni = clientUser.dni;
           changed = true;
         }
-        if (clientUser.telefono && !newForm.telefono) {
+        if (clientUser.telefono && newForm.telefono !== clientUser.telefono) {
           newForm.telefono = clientUser.telefono;
           changed = true;
         }
@@ -163,6 +179,31 @@ export function Checkout() {
       });
     }
   }, [clientUser]);
+
+  useEffect(() => {
+    if (isCheckoutOpen && clientUser && step === "login-prompt") {
+      setStep("datos");
+    }
+  }, [isCheckoutOpen, clientUser, step]);
+
+  useEffect(() => {
+    if (!isCheckoutOpen) {
+      setForm((prev) => ({
+        ...prev,
+        calle: "",
+      }));
+      setAddressSuggestions([]);
+      setSelectedPlaceId(null);
+      setShippingCost(null);
+      setDistanciaKm(null);
+      setIsAddressVerified(false);
+      setSelectedCoords(null);
+      setShowAddressConfirm(false);
+      setShippingQuoteError(null);
+      // reset step
+      setStep(clientUser ? "datos" : "login-prompt");
+    }
+  }, [isCheckoutOpen, clientUser]);
 
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>(
     {},
@@ -200,8 +241,13 @@ export function Checkout() {
     const timer = setTimeout(async () => {
       setIsSearchingAddress(true);
       try {
+        const baseInput = form.calle.trim();
+        const searchTerm = baseInput.toLowerCase().includes("mar del plata") 
+          ? baseInput 
+          : `${baseInput}, Mar del Plata`;
+
         const res = await fetch(
-          `${API_BASE}/api/shipping/autocomplete?input=${encodeURIComponent(form.calle.trim())}`,
+          `${API_BASE}/api/shipping/autocomplete?input=${encodeURIComponent(searchTerm)}`,
         );
 
         if (!res.ok) {
@@ -439,6 +485,7 @@ export function Checkout() {
       if (res.ok) {
         const data = await res.json().catch(() => null);
         setConfirmedTotal(data?.order?.total ?? finalTotal);
+        setConfirmedOrderId(data?.order?.id ?? null);
         setStep("confirmado");
         clearCart();
 
@@ -604,8 +651,8 @@ export function Checkout() {
                 <a
                   href={`https://wa.me/5492236927799?text=${encodeURIComponent(
                     form.metodo_pago === "transferencia"
-                      ? `¡Hola! Acabo de hacer un pedido (#transferencia). Mi nombre es ${form.nombre} ${form.apellido} y el total es de $${confirmedTotal}. Adjunto el comprobante de transferencia.`
-                      : `¡Hola! Acabo de hacer un pedido con pago en efectivo. Mi nombre es ${form.nombre} ${form.apellido} y el total es de $${confirmedTotal}.`,
+                      ? `¡Hola! Acabo de hacer un pedido (#${confirmedOrderId ?? "N/A"}) con pago por transferencia. Mi nombre es ${form.nombre} ${form.apellido} y el total es de $${confirmedTotal}. Adjunto el comprobante.`
+                      : `¡Hola! Acabo de hacer un pedido (#${confirmedOrderId ?? "N/A"}) con pago en efectivo. Mi nombre es ${form.nombre} ${form.apellido} y el total es de $${confirmedTotal}.`,
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -627,32 +674,63 @@ export function Checkout() {
         ) : (
           <div className="flex-1 overflow-y-auto p-5">
             {/* Steps */}
-            <div className="flex flex-wrap items-center gap-2 mb-6">
-              <button
-                onClick={() => setStep("datos")}
-                className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full transition-colors ${step === "datos" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                1. Tus datos
-              </button>
-              <ChevronRight className="w-4 h-4 text-muted-foreground" />
-              <button
-                onClick={() => validateDatos() && setStep("pago")}
-                className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full transition-colors ${step === "pago" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                2. Pago
-              </button>
-              <ChevronRight className="w-4 h-4 text-muted-foreground" />
-              <button
-                onClick={() => validateDatos() && setStep("revisar")}
-                className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full transition-colors ${step === "revisar" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                3. Revisar
-              </button>
-            </div>
+            {step !== "login-prompt" && (
+              <div className="flex flex-wrap items-center gap-2 mb-6">
+                <button
+                  onClick={() => setStep("datos")}
+                  className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full transition-colors ${step === "datos" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  1. Tus datos
+                </button>
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                <button
+                  onClick={() => validateDatos() && setStep("pago")}
+                  className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full transition-colors ${step === "pago" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  2. Pago
+                </button>
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                <button
+                  onClick={() => validateDatos() && setStep("revisar")}
+                  className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full transition-colors ${step === "revisar" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  3. Revisar
+                </button>
+              </div>
+            )}
 
             <div className="grid md:grid-cols-5 gap-6">
               {/* Formulario */}
               <div className="md:col-span-3 space-y-5">
+                {step === "login-prompt" && (
+                  <div className="flex flex-col items-center justify-center py-10 space-y-8 animate-in fade-in zoom-in duration-300">
+                    <div className="bg-primary/10 p-5 rounded-full">
+                      <User className="w-10 h-10 text-primary" />
+                    </div>
+                    <div className="text-center space-y-2">
+                      <h2 className="text-2xl font-bold">¿Ya tenés cuenta?</h2>
+                      <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+                        Iniciá sesión para completar tus datos de envío automáticamente, o continuá como invitado.
+                      </p>
+                    </div>
+                    
+                    <div className="w-full max-w-sm space-y-3 pt-4">
+                      <button 
+                        onClick={() => setShowLoginModal(true)}
+                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3.5 rounded-xl font-semibold transition-all shadow-md hover:shadow-lg"
+                      >
+                        Iniciar Sesión
+                      </button>
+                      <button 
+                        onClick={() => setStep("datos")}
+                        className="w-full bg-secondary/50 hover:bg-secondary text-foreground py-3.5 rounded-xl font-medium transition-all"
+                      >
+                        Continuar como invitado
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {step === "datos" && (
                   <>
                     <div className="bg-primary/10 text-primary p-3 rounded-lg border border-primary/20 mb-4 text-sm font-medium flex items-center gap-2">
@@ -786,11 +864,7 @@ export function Checkout() {
                                 {shippingQuoteError}
                               </p>
                             )}
-                            {!errors.calle && !shippingQuoteError && form.calle.trim().length > 0 && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Seleccioná una dirección sugerida para validar el envío con el backend.
-                              </p>
-                            )}
+
 
                             {/* Dropdown de Sugerencias */}
                             {showSuggestions &&
@@ -1051,7 +1125,7 @@ export function Checkout() {
                       const price = getEffectivePrice(item, item.quantity);
                       return (
                         <div
-                          key={item.id}
+                          key={`${item.id}-${item.selectedGramage?.id || 'base'}`}
                           className="flex justify-between text-sm"
                         >
                           <span className="text-muted-foreground truncate mr-2">
@@ -1135,6 +1209,18 @@ export function Checkout() {
           </div>
         )}
       </div>
+
+      {showLoginModal && (
+        <ClientLoginModal
+          isOpen={showLoginModal}
+          onClose={() => {
+            setShowLoginModal(false);
+            if (clientUser) {
+              setStep("datos");
+            }
+          }}
+        />
+      )}
     </>
   );
 }

@@ -47,11 +47,16 @@ export function formatARS(amount: number): string {
  * - Si no → precio normal
  */
 export function getEffectivePrice(product: Product | CartItem, quantity: number): number {
+  const wholesaleActive = product.wholesalePrice && quantity >= product.wholesalePrice.quantity;
+
   if ('selectedGramage' in product && product.selectedGramage) {
+    if (wholesaleActive && product.wholesalePrice) {
+      return product.wholesalePrice.price * (product.selectedGramage.grams / 1000);
+    }
     return getEffectiveGramagePrice(product.selectedGramage);
   }
 
-  if (product.wholesalePrice && quantity >= product.wholesalePrice.quantity) {
+  if (wholesaleActive && product.wholesalePrice) {
     return product.wholesalePrice.price;
   }
   // La oferta se determina por offerPrice != null (ya no existe onOffer en el backend)

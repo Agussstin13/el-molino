@@ -3,11 +3,9 @@ import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 const API_BASE = import.meta.env.VITE_API_BASE;
 
-
-
 interface CarouselSlide {
   id: number;
-  imageUrl: string;       // el backend devuelve imageUrl, no imagenNombre
+  imageUrl: string; // el backend devuelve imageUrl, no imagenNombre
   title: string | null;
   description: string | null;
   displayOrder: number;
@@ -20,14 +18,21 @@ export function HeroSection() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loading, setLoading] = useState(true);
   const [slides, setSlides] = useState<
-    { id: number; image: string; titulo: string; subtitulo: string; redirectUrl: string | null }[]
+    {
+      id: number;
+      image: string;
+      titulo: string;
+      subtitulo: string;
+      redirectUrl: string | null;
+    }[]
   >([]);
 
   const DEFAULT_SLIDE = {
     id: -1,
     image: "",
     titulo: "Bienvenidos a El Molino",
-    subtitulo: "Descubrí la mejor calidad en productos naturales y artesanales.",
+    subtitulo:
+      "Descubrí la mejor calidad en productos naturales y artesanales.",
     redirectUrl: null,
   };
 
@@ -38,16 +43,16 @@ export function HeroSection() {
         if (!data || data.length === 0) {
           setSlides([]);
         } else {
-            setSlides(
-              data.map((s) => ({
-                id: s.id,
-                // imageUrl ya incluye /images/... así que se concatena directo al host
-                image: s.imageUrl ? `${API_BASE}${s.imageUrl}` : "",
-                titulo: s.title ?? "",
-                subtitulo: s.description ?? "",
-                redirectUrl: s.redirectUrl ?? null,
-              }))
-            );
+          setSlides(
+            data.map((s) => ({
+              id: s.id,
+              // imageUrl ya incluye /images/... así que se concatena directo al host
+              image: s.imageUrl ? `${API_BASE}${s.imageUrl}` : "",
+              titulo: s.title ?? "",
+              subtitulo: s.description ?? "",
+              redirectUrl: s.redirectUrl ?? null,
+            })),
+          );
         }
       })
       .catch(() => {
@@ -65,9 +70,7 @@ export function HeroSection() {
 
   const prevSlide = () => {
     if (slides.length === 0) return;
-    setCurrentSlide((prev) =>
-      prev === 0 ? slides.length - 1 : prev - 1
-    );
+    setCurrentSlide((prev) => (prev === 0 ? slides.length - 1 : prev - 1));
   };
 
   // Auto-scroll cada 6 segundos
@@ -84,6 +87,10 @@ export function HeroSection() {
     return (
       <section className="relative h-[500px] md:h-[625px] overflow-hidden bg-secondary animate-pulse" />
     );
+  }
+
+  if (slides.length === 0) {
+    return null;
   }
 
   return (
@@ -103,15 +110,21 @@ export function HeroSection() {
               }
             }}
             className={`absolute inset-0 transition-opacity duration-1000 ${
-              idx === currentSlide ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"
+              idx === currentSlide
+                ? "opacity-100 z-10 pointer-events-auto"
+                : "opacity-0 z-0 pointer-events-none"
             } ${banner.redirectUrl && idx === currentSlide ? "cursor-pointer" : ""}`}
           >
             {/* Background image */}
             <div
               className="absolute inset-0 bg-cover bg-center"
               style={{
-                backgroundImage: banner.image ? `url('${banner.image}')` : "none",
-                backgroundColor: banner.image ? undefined : "hsl(var(--secondary))",
+                backgroundImage: banner.image
+                  ? `url('${banner.image}')`
+                  : "none",
+                backgroundColor: banner.image
+                  ? undefined
+                  : "hsl(var(--secondary))",
               }}
             />
             {/* Gradient overlays removed so the image is fully visible */}
@@ -125,10 +138,7 @@ export function HeroSection() {
           <p className="text-accent text-sm uppercase tracking-widest mb-3 font-medium">
             Productos naturales y artesanales
           </p>
-          <h1
-            className="text-4xl md:text-5xl lg:text-6xl mb-5 text-primary leading-tight"
-           
-          >
+          <h1 className="text-4xl md:text-5xl lg:text-6xl mb-5 text-primary leading-tight">
             {slide.titulo}
           </h1>
           <p className="text-lg md:text-xl text-foreground/75 mb-8 max-w-lg">

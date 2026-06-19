@@ -459,18 +459,18 @@ export function AdminPanel() {
   };
 
   const handleSaveShippingRate = async () => {
-    const desde = parseFloat(shippingForm.desdeKm);
+    const desde = 0; // Hardcode since we only use Hasta
     const hasta = parseFloat(shippingForm.hastaKm);
     const precio = parseFloat(
       shippingForm.precio.replace(/\./g, "").replace(",", "."),
     );
 
-    if (isNaN(desde) || isNaN(hasta) || isNaN(precio)) {
+    if (isNaN(hasta) || isNaN(precio)) {
       showError("Datos incompletos", "Completá todos los campos del tramo.");
       return;
     }
-    if (hasta <= desde) {
-      showError("Rango inválido", "El km máximo debe ser mayor al km mínimo.");
+    if (hasta <= 0) {
+      showError("Rango inválido", "El km máximo debe ser mayor a 0.");
       return;
     }
 
@@ -1724,6 +1724,7 @@ export function AdminPanel() {
   };
 
   const navItems = [
+    { id: "orders" as AdminView, icon: ShoppingBag, label: "Pedidos" },
     { id: "products" as AdminView, icon: Package, label: "Productos" },
     {
       id: "daily-offers" as AdminView,
@@ -1731,7 +1732,6 @@ export function AdminPanel() {
       label: "Ofertas del día",
     },
     { id: "promotions" as AdminView, icon: Tag, label: "Cupones" },
-    { id: "orders" as AdminView, icon: ShoppingBag, label: "Pedidos" },
     { id: "carousel" as AdminView, icon: ImageIcon, label: "Carousel" },
     { id: "categories" as AdminView, icon: Layers, label: "Categorías" },
     { id: "shipping" as AdminView, icon: Truck, label: "Envíos" },
@@ -1749,6 +1749,17 @@ export function AdminPanel() {
     if (offersFilter === "active") return isOnOffer;
     if (offersFilter === "inactive") return !isOnOffer;
     return true;
+  });
+
+  const hasOffersChanges = products.some((p) => {
+    const draft = offersDraft[p.id];
+    if (!draft) return false;
+    const parsedDraftPrice = parseInputPrice(draft.offerPrice);
+    const currentOfferActive = p.offerPrice != null;
+    const draftOfferActive = draft.active;
+    const isStatusChanged = draftOfferActive !== currentOfferActive;
+    const isPriceChanged = parsedDraftPrice !== (p.offerPrice ?? 0);
+    return isStatusChanged || (draftOfferActive && isPriceChanged);
   });
 
   return (
@@ -1958,7 +1969,6 @@ export function AdminPanel() {
                             setProductForm((p) => ({
                               ...p,
                               measurementUnit: "gramo",
-                              enableWholesale: false,
                             }))
                           }
                           className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${
@@ -2045,9 +2055,7 @@ export function AdminPanel() {
                       </button>
                     </div>
 
-                    {productForm.measurementUnit === "unidad" && (
-                      <>
-                        <div className="col-span-2 pt-2 border-t border-border/40 mt-2">
+                    <div className="col-span-2 pt-2 border-t border-border/40 mt-2">
                           <label className="flex items-center gap-2 text-sm font-medium cursor-pointer select-none text-foreground">
                             <input
                               type="checkbox"
@@ -2113,8 +2121,6 @@ export function AdminPanel() {
                             </div>
                           </>
                         )}
-                      </>
-                    )}
 
                     {/* Gramajes — solo si producto por gramo */}
                     {productForm.measurementUnit === "gramo" && (
@@ -2776,6 +2782,7 @@ export function AdminPanel() {
               <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-border/40">
                 <button
                   type="button"
+                  disabled={!hasOffersChanges}
                   onClick={() => {
                     const initialDraft: Record<
                       string,
@@ -2795,15 +2802,23 @@ export function AdminPanel() {
                       "Se descartaron los cambios no guardados.",
                     );
                   }}
-                  className="px-4 py-2 border border-border rounded-lg hover:bg-secondary/40 transition-colors text-sm text-foreground"
+                  className={`px-4 py-2 border border-border rounded-lg transition-colors text-sm text-foreground ${
+                    !hasOffersChanges
+                      ? "opacity-50 cursor-not-allowed"
+                      : "hover:bg-secondary/40"
+                  }`}
                 >
                   Descartar
                 </button>
                 <button
                   type="button"
-                  disabled={isSavingOffers}
+                  disabled={isSavingOffers || !hasOffersChanges}
                   onClick={handleSaveDailyOffers}
-                  className="px-6 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-lg transition-colors text-sm font-semibold shadow-sm flex items-center gap-2"
+                  className={`px-6 py-2 bg-primary disabled:opacity-50 text-primary-foreground rounded-lg transition-colors text-sm font-semibold shadow-sm flex items-center gap-2 ${
+                    !hasOffersChanges || isSavingOffers
+                      ? "cursor-not-allowed"
+                      : "hover:bg-primary/90"
+                  }`}
                 >
                   {isSavingOffers ? "Guardando cambios..." : "Guardar cambios"}
                 </button>
@@ -4076,26 +4091,7 @@ export function AdminPanel() {
                   <h3 className="text-base mb-4">
                     {editingShippingId ? "Editar tramo" : "Nuevo tramo"}
                   </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium mb-1.5">
-                        Desde (km)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.1"
-                        value={shippingForm.desdeKm}
-                        onChange={(e) =>
-                          setShippingForm((f) => ({
-                            ...f,
-                            desdeKm: e.target.value,
-                          }))
-                        }
-                        placeholder="0"
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20"
-                      />
-                    </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-xs font-medium mb-1.5">
                         Hasta (km)
@@ -4186,9 +4182,6 @@ export function AdminPanel() {
                     <thead className="bg-secondary/40 border-b border-border">
                       <tr>
                         <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                          Desde
-                        </th>
-                        <th className="text-left px-5 py-3 font-medium text-muted-foreground">
                           Hasta
                         </th>
                         <th className="text-left px-5 py-3 font-medium text-muted-foreground">
@@ -4203,13 +4196,12 @@ export function AdminPanel() {
                     <tbody className="divide-y divide-border">
                       {shippingRates
                         .slice()
-                        .sort((a, b) => a.desdeKm - b.desdeKm)
+                        .sort((a, b) => a.hastaKm - b.hastaKm)
                         .map((rate) => (
                           <tr
                             key={rate.id}
                             className="hover:bg-secondary/20 transition-colors"
                           >
-                            <td className="px-5 py-3">{rate.desdeKm} km</td>
                             <td className="px-5 py-3">{rate.hastaKm} km</td>
                             <td className="px-5 py-3 font-semibold text-primary">
                               {formatARS(rate.precio)}
