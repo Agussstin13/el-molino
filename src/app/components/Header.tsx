@@ -23,7 +23,7 @@ export function Header() {
   const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/categories?onlyActive=true`)
+    fetch(`${API_BASE}/api/categories`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) setCategories(data);

@@ -129,6 +129,7 @@ export function Checkout() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [confirmedTotal, setConfirmedTotal] = useState<number>(0);
   const [confirmedOrderId, setConfirmedOrderId] = useState<number | null>(null);
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [form, setForm] = useState<FormData>(() => {
     try {
       const stored = localStorage.getItem(FORM_STORAGE_KEY);
@@ -486,11 +487,12 @@ export function Checkout() {
         const data = await res.json().catch(() => null);
         setConfirmedTotal(data?.order?.total ?? finalTotal);
         setConfirmedOrderId(data?.order?.id ?? null);
+        setPaymentUrl(data?.paymentUrl ?? null);
         setStep("confirmado");
         clearCart();
 
         if (form.metodo_pago === "mercadopago" && data?.paymentUrl) {
-          window.location.href = data.paymentUrl;
+          window.open(data.paymentUrl, '_blank');
         }
       } else {
         const errData = await res.json().catch(() => null);
@@ -513,7 +515,7 @@ export function Checkout() {
     setShippingCost(null);
   };
 
-  // finalTotal usa el shippingCost calculado por distancia si existe, si no el del contexto
+  // finalTotal usa el shippingCost calculado por distancia si existe, si no el subtotal
   const finalTotal =
     subtotal === 0
       ? 0
@@ -521,7 +523,7 @@ export function Checkout() {
         ? subtotal
         : shippingCost !== null
           ? subtotal + shippingCost
-          : total;
+          : subtotal;
 
   return (
     <>
@@ -619,7 +621,7 @@ export function Checkout() {
 
             <p className="text-muted-foreground max-w-sm mt-2">
               {form.metodo_pago === "mercadopago"
-                ? "Te redirigiremos al link de pago de Mercado Pago para completar la transacción."
+                ? "Se ha abierto una nueva pestaña para completar el pago con Mercado Pago. Si no la ves, hacé clic en el botón de abajo."
                 : form.metodo_pago === "transferencia"
                   ? "Realizá la transferencia con los datos a continuación y enviá el comprobante haciendo clic en el botón verde de abajo."
                   : "Por favor, comunicate por WhatsApp haciendo clic en el botón de abajo para coordinar tu pedido."}
@@ -661,6 +663,16 @@ export function Checkout() {
                   {form.metodo_pago === "transferencia"
                     ? "Enviar comprobante por WhatsApp"
                     : "Coordinar entrega por WhatsApp"}
+                </a>
+              )}
+              {form.metodo_pago === "mercadopago" && paymentUrl && (
+                <a
+                  href={paymentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-[#009EE3] hover:bg-[#008ACB] text-white px-6 py-3.5 rounded-xl transition-all font-medium flex items-center justify-center gap-2 shadow-lg shadow-[#009EE3]/20 active:scale-[0.98]"
+                >
+                  Pagar en Mercado Pago
                 </a>
               )}
               <button

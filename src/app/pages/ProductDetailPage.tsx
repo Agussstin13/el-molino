@@ -347,13 +347,23 @@ export function ProductDetailPage() {
   }
   // No permitir que maxQtyAllowed sea menor a 0
   maxQtyAllowed = Math.max(0, maxQtyAllowed);
+  const currentQuantityInCart = items
+    .filter((i) => i.id === product.id && i.selectedGramage?.id === selectedGramage?.id)
+    .reduce((acc, i) => acc + i.quantity, 0);
+
+  const totalQuantity = currentQuantityInCart + quantity;
+
+  const wholesale = isWholesaleActive(product, totalQuantity);
+
   const displayPrice = isGramProduct && selectedGramage
-    ? getEffectiveGramagePrice(selectedGramage)
-    : getEffectivePrice(product, quantity);
+    ? (wholesale && product.wholesalePrice
+        ? product.wholesalePrice.price * (selectedGramage.grams / 1000)
+        : getEffectiveGramagePrice(selectedGramage))
+    : getEffectivePrice(product, totalQuantity);
+
   const effectivePrice = displayPrice;
-  const wholesale = isWholesaleActive(product, quantity);
   const isDiscounted = isGramProduct
-    ? !!(selectedGramage?.offerPrice != null && selectedGramage.offerPrice > 0)
+    ? !!(selectedGramage?.offerPrice != null && selectedGramage.offerPrice > 0 && !wholesale)
     : !!(product.offerPrice != null && product.offerPrice > 0 && !wholesale);
 
   const handleAdd = () => {
@@ -639,9 +649,9 @@ export function ProductDetailPage() {
                       <Plus className="w-4 h-4" />
                     </button>
                   </div>
-                  {product.wholesalePrice && quantity < product.wholesalePrice.quantity && (
+                  {product.wholesalePrice && totalQuantity < product.wholesalePrice.quantity && (
                     <span className="text-xs text-amber-600 ml-1">
-                      ({product.wholesalePrice.quantity - quantity} más para precio mayorista)
+                      ({product.wholesalePrice.quantity - totalQuantity} más para precio mayorista)
                     </span>
                   )}
                   {maxQtyAllowed === 0 && (

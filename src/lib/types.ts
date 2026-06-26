@@ -72,7 +72,6 @@ export interface Order {
 export interface Category {
   id: number;
   nombre: string;
-  activo: boolean;
   orden: number;
   imagenNombre: string;
 }

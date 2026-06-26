@@ -92,7 +92,6 @@ const EMPTY_CATEGORY: Omit<Category, "id"> = {
   nombre: "",
   imagenNombre: "",
   orden: 0,
-  activo: true,
 };
 
 export function AdminPanel() {
@@ -103,6 +102,7 @@ export function AdminPanel() {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [showCouponForm, setShowCouponForm] = useState(false);
+  const [editingCouponId, setEditingCouponId] = useState<string | null>(null);
   const [couponForm, setCouponForm] =
     useState<Omit<Coupon, "id">>(EMPTY_COUPON);
   const [tipoDescuento, setTipoDescuento] = useState<"monto" | "porcentaje">(
@@ -526,7 +526,8 @@ export function AdminPanel() {
             showSuccess("¡Listo!", "Tramo eliminado.");
             fetchShippingRates();
           } else {
-            showError("Error", "No se pudo eliminar el tramo.");
+            const err = await res.json().catch(() => ({}));
+            showError("Error", err.detail || err.title || err.message || "No se pudo eliminar el tramo.");
           }
         } catch {
           showError("Error de red", "No se pudo conectar con el servidor.");
@@ -552,7 +553,8 @@ export function AdminPanel() {
       if (res.ok) {
         showSuccess("¡Listo!", "Umbral de envío gratis actualizado.");
       } else {
-        showError("Error", "No se pudo guardar el umbral.");
+        const err = await res.json().catch(() => ({}));
+        showError("Error", err.detail || err.title || err.message || "No se pudo guardar el umbral.");
       }
     } catch {
       showError("Error de red", "No se pudo conectar con el servidor.");
@@ -1128,6 +1130,41 @@ export function AdminPanel() {
   };
 
   const handleSaveCoupon = async () => {
+    if (tipoDescuento === "porcentaje" && (!couponForm.porcentaje || couponForm.porcentaje <= 0)) {
+      showError("Datos inválidos", "El porcentaje de descuento debe ser mayor a 0.");
+      return;
+    }
+    
+    if (tipoDescuento === "monto") {
+      if (!couponForm.monto || couponForm.monto <= 0) {
+        showError("Datos inválidos", "El monto de descuento debe ser mayor a 0.");
+        return;
+      }
+      if (couponForm.compra_minima !== null && couponForm.compra_minima !== undefined) {
+        if (couponForm.monto >= couponForm.compra_minima) {
+          showError("Datos inválidos", "El monto de descuento debe ser estrictamente menor que la compra mínima.");
+          return;
+        }
+      }
+    }
+
+    if (couponForm.compra_minima !== null && couponForm.compra_minima !== undefined && couponForm.compra_minima <= 0) {
+      showError("Datos inválidos", "La compra mínima debe ser mayor a 0.");
+      return;
+    }
+
+    if (tipoDescuento === "porcentaje" && couponForm.tope !== null && couponForm.tope !== undefined) {
+      if (couponForm.tope <= 0) {
+        showError("Datos inválidos", "El tope máximo de descuento debe ser mayor a 0.");
+        return;
+      }
+      
+      if (couponForm.compra_minima !== null && couponForm.compra_minima !== undefined && couponForm.tope > couponForm.compra_minima) {
+        showError("Datos inválidos", "El tope máximo de descuento no puede ser mayor que la compra mínima.");
+        return;
+      }
+    }
+
     const backendCoupon = {
       nombre: couponForm.nombre,
       detalle: couponForm.detalle,
@@ -1147,28 +1184,55 @@ export function AdminPanel() {
     };
 
     try {
-      const res = await fetch(`${API_BASE}/api/coupons`, {
-        method: "POST",
+      const url = editingCouponId 
+        ? `${API_BASE}/api/coupons/${editingCouponId}` 
+        : `${API_BASE}/api/coupons`;
+      const method = editingCouponId ? "PUT" : "POST";
+      const payload = editingCouponId 
+        ? { ...backendCoupon, id: parseInt(editingCouponId) } 
+        : backendCoupon;
+
+      const res = await fetch(url, {
+        method,
         headers: getAuthHeaders(),
-        body: JSON.stringify(backendCoupon),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
-        const created = await res.json();
-        const newCoupon: Coupon = {
-          ...couponForm,
-          id: created.id.toString(),
-          monto: created.monto,
-          porcentaje: created.porcentaje,
-          tope: created.tope,
-          compra_minima: created.compraMinima,
-          activo: created.activo,
-          valido_mayorista: created.validoMayorista,
-        };
-        setCoupons((prev) => [newCoupon, ...prev]);
+        if (editingCouponId) {
+          const updatedCoupon: Coupon = {
+            ...couponForm,
+            id: editingCouponId,
+            monto: backendCoupon.monto,
+            porcentaje: backendCoupon.porcentaje,
+            tope: backendCoupon.tope,
+            compra_minima: backendCoupon.compraMinima,
+            activo: backendCoupon.activo,
+            valido_mayorista: backendCoupon.validoMayorista,
+          };
+          setCoupons(coupons.map(c => c.id === editingCouponId ? updatedCoupon : c));
+          showSuccess("¡Listo!", "El cupón se actualizó correctamente.");
+        } else {
+          const created = await res.json();
+          const newCoupon: Coupon = {
+            ...couponForm,
+            id: created.id.toString(),
+            monto: created.monto,
+            porcentaje: created.porcentaje,
+            tope: created.tope,
+            compra_minima: created.compraMinima,
+            activo: created.activo,
+            valido_mayorista: created.validoMayorista,
+          };
+          setCoupons((prev) => [newCoupon, ...prev]);
+          showSuccess("¡Listo!", "El cupón se guardó correctamente.");
+        }
         setCouponForm(EMPTY_COUPON);
+        setEditingCouponId(null);
         setShowCouponForm(false);
-        showSuccess("¡Listo!", "El cupón se guardó correctamente.");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showError("Error", err.detail || err.title || err.message || "No pudimos guardar el cupón.");
       }
     } catch (e) {
       console.error(e);
@@ -1177,6 +1241,23 @@ export function AdminPanel() {
         "No pudimos guardar el cupón. Revisá tu conexión.",
       );
     }
+  };
+
+  const handleEditCoupon = (coupon: Coupon) => {
+    setEditingCouponId(coupon.id);
+    setCouponForm({
+      nombre: coupon.nombre,
+      detalle: coupon.detalle,
+      codigo: coupon.codigo,
+      monto: coupon.monto,
+      porcentaje: coupon.porcentaje,
+      tope: coupon.tope,
+      compra_minima: coupon.compra_minima,
+      activo: coupon.activo,
+      valido_mayorista: coupon.valido_mayorista,
+    });
+    setTipoDescuento(coupon.porcentaje ? "porcentaje" : "monto");
+    setShowCouponForm(true);
   };
 
   const handleDeleteCoupon = async (id: string) => {
@@ -1355,9 +1436,10 @@ export function AdminPanel() {
           "La imagen del carousel se guardó correctamente.",
         );
       } else {
+        const err = await res.json().catch(() => ({}));
         showError(
           "No se pudo guardar",
-          "Hubo un problema al guardar la imagen.",
+          err.detail || err.title || err.message || "Hubo un problema al guardar la imagen.",
         );
       }
     } catch {
@@ -1472,7 +1554,8 @@ export function AdminPanel() {
           ),
         );
       } else {
-        showError("Error", "No se pudo cambiar el estado de la imagen.");
+        const err = await res.json().catch(() => ({}));
+        showError("Error", err.detail || err.title || err.message || "No se pudo cambiar el estado de la imagen.");
       }
     } catch {
       showError("Error de red", "No se pudo conectar con el servidor.");
@@ -1500,7 +1583,6 @@ export function AdminPanel() {
 
       const formData = new FormData();
       formData.append("Name", categoryForm.nombre);
-      formData.append("Active", String(categoryForm.activo));
       formData.append("DisplayOrder", String(categoryForm.orden));
       if (categoryImageFile) formData.append("Image", categoryImageFile);
       // En edición, pasar la URL actual para que el servicio pueda borrar la vieja si se sube una nueva
@@ -1528,7 +1610,6 @@ export function AdminPanel() {
             nombre: updated.name ?? "",
             imagenNombre: updated.imagePath ?? "",
             orden: updated.displayOrder,
-            activo: updated.active,
           };
         } else if (editingCategoryId) {
           // Sin nueva imagen — construir desde el estado local
@@ -1537,7 +1618,6 @@ export function AdminPanel() {
             nombre: categoryForm.nombre,
             imagenNombre: categoryForm.imagenNombre,
             orden: categoryForm.orden,
-            activo: categoryForm.activo,
           };
         } else {
           // POST — el backend devuelve la categoría creada
@@ -1547,7 +1627,6 @@ export function AdminPanel() {
             nombre: json.name ?? "",
             imagenNombre: json.imagePath ?? "",
             orden: json.displayOrder,
-            activo: json.active,
           };
         }
 
@@ -1586,9 +1665,10 @@ export function AdminPanel() {
         setEditingCategoryId(null);
         showSuccess("¡Listo!", "La categoría se guardó correctamente.");
       } else {
+        const err = await res.json().catch(() => ({}));
         showError(
           "No se pudo guardar",
-          "Hubo un problema al guardar la categoría.",
+          err.detail || err.title || err.message || "Hubo un problema al guardar la categoría.",
         );
       }
     } catch {
@@ -1603,7 +1683,6 @@ export function AdminPanel() {
       nombre: cat.nombre,
       imagenNombre: cat.imagenNombre ?? "",
       orden: cat.orden,
-      activo: cat.activo,
     });
     setCategoryImageFile(null);
     setCategoryImagePreview("");
@@ -1676,25 +1755,6 @@ export function AdminPanel() {
     );
   };
 
-  const handleToggleCategory = async (cat: Category) => {
-    try {
-      const res = await fetch(`${API_BASE}/api/categories/${cat.id}/toggle`, {
-        method: "PATCH",
-        headers: getAuthHeaders(null),
-      });
-      if (res.ok) {
-        setCategories((prev) =>
-          prev.map((c) =>
-            c.id === cat.id ? { ...c, activo: !cat.activo } : c,
-          ),
-        );
-      } else {
-        showError("Error", "No se pudo cambiar el estado de la categoría.");
-      }
-    } catch {
-      showError("Error de red", "No se pudo conectar con el servidor.");
-    }
-  };
 
   const handleReorderCategories = async (newOrder: Category[]) => {
     // Actualizamos el estado local inmediatamente para que el movimiento sea fluido
@@ -2833,7 +2893,17 @@ export function AdminPanel() {
                 <h1>Cupones de Descuento</h1>
                 <button
                   id="new-coupon-btn"
-                  onClick={() => setShowCouponForm((v) => !v)}
+                  onClick={() => {
+                    if (showCouponForm) {
+                      setShowCouponForm(false);
+                      setEditingCouponId(null);
+                      setCouponForm(EMPTY_COUPON);
+                    } else {
+                      setShowCouponForm(true);
+                      setEditingCouponId(null);
+                      setCouponForm(EMPTY_COUPON);
+                    }
+                  }}
                   className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg transition-colors shadow-sm text-sm"
                 >
                   {showCouponForm ? (
@@ -2848,7 +2918,7 @@ export function AdminPanel() {
               {/* Formulario nuevo cupón */}
               {showCouponForm && (
                 <div className="bg-card border-2 border-primary/30 rounded-xl p-6 mb-6 shadow-sm">
-                  <h3 className="mb-5 text-base">Crear cupón</h3>
+                  <h3 className="mb-5 text-base">{editingCouponId ? "Editar cupón" : "Crear cupón"}</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm mb-1.5">Nombre *</label>
@@ -2928,9 +2998,16 @@ export function AdminPanel() {
                             min={1}
                             max={100}
                             value={couponForm.porcentaje ?? ""}
-                            onChange={(e) =>
-                              setCF("porcentaje", Number(e.target.value))
-                            }
+                            onChange={(e) => {
+                              if (!e.target.value) {
+                                setCF("porcentaje", null);
+                                return;
+                              }
+                              const val = Number(e.target.value);
+                              if (val <= 100) {
+                                setCF("porcentaje", val);
+                              }
+                            }}
                             placeholder="15"
                             className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                           />
@@ -2964,7 +3041,7 @@ export function AdminPanel() {
                           min={0}
                           value={couponForm.monto ?? ""}
                           onChange={(e) =>
-                            setCF("monto", Number(e.target.value))
+                            setCF("monto", e.target.value ? Number(e.target.value) : null)
                           }
                           placeholder="500"
                           className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -3088,6 +3165,7 @@ export function AdminPanel() {
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
                       <button
+                        onClick={() => handleEditCoupon(coupon)}
                         className="p-2 hover:bg-secondary rounded-lg transition-colors"
                         title="Editar"
                       >
@@ -3935,7 +4013,7 @@ export function AdminPanel() {
                     <Reorder.Item
                       key={cat.id}
                       value={cat}
-                      className={`relative group bg-white rounded-2xl border border-border overflow-hidden shadow-sm ${!cat.activo && "opacity-70 grayscale-[0.5]"} cursor-grab active:cursor-grabbing`}
+                      className={`relative group bg-white rounded-2xl border border-border overflow-hidden shadow-sm cursor-grab active:cursor-grabbing`}
                       transition={{
                         type: "spring",
                         stiffness: 800,
@@ -3966,11 +4044,6 @@ export function AdminPanel() {
                               <GripVertical className="w-3 h-3" />
                               Orden {cat.orden}
                             </span>
-                            {!cat.activo && (
-                              <span className="bg-destructive/90 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-tighter">
-                                Inactiva
-                              </span>
-                            )}
                           </div>
                         </div>
                         <div className="flex-1 p-5 flex flex-col justify-between">
@@ -3995,18 +4068,7 @@ export function AdminPanel() {
                               </button>
                             </div>
                           </div>
-                          <div className="flex items-center justify-between pt-4 border-t border-border/50">
-                            <button
-                              onClick={() => handleToggleCategory(cat)}
-                              className={`flex items-center gap-2 text-xs font-semibold transition-colors ${cat.activo ? "text-accent hover:text-accent/80" : "text-muted-foreground hover:text-foreground"}`}
-                            >
-                              {cat.activo ? (
-                                <ToggleRight className="w-5 h-5" />
-                              ) : (
-                                <ToggleLeft className="w-5 h-5" />
-                              )}
-                              {cat.activo ? "ACTIVA" : "INACTIVA"}
-                            </button>
+                          <div className="flex items-center justify-end pt-4 border-t border-border/50">
                             <div className="flex items-center gap-2 text-muted-foreground">
                               <GripVertical className="w-5 h-5 opacity-30" />
                               <span className="text-[10px] font-bold uppercase tracking-widest opacity-30">

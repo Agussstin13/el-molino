@@ -32,7 +32,7 @@ export function ShopPage() {
 
   useEffect(() => {
     document.title = 'El Molino - Tienda';
-    fetch(`${API_BASE}/api/categories?onlyActive=true`)
+    fetch(`${API_BASE}/api/categories`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) setCategories(data);

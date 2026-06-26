@@ -7,7 +7,6 @@ interface Category {
   id: number;
   name: string;
   imagePath: string | null; // el backend devuelve imagePath con /images/... incluido
-  active: boolean;
   displayOrder: number;
 }
 
@@ -25,7 +24,6 @@ export function CategoryGrid() {
         if (Array.isArray(data)) {
           setCategories(
             data
-              .filter((c: Category) => c.active)
               .sort((a: Category, b: Category) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
           );
         }
