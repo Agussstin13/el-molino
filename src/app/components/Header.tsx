@@ -1,4 +1,4 @@
-import { Search, ShoppingCart, User, Menu, X, Home, Instagram, Phone, ChevronRight, List, ChevronDown, Package } from "lucide-react";
+import { Search, ShoppingCart, User, Menu, X, Home, Instagram, Phone, ChevronRight, List, ChevronDown, Package, ClipboardList } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
@@ -165,6 +165,17 @@ export function Header() {
                   <Package className="w-5 h-5 text-primary" />
                   Todos los Productos
                 </Link>
+
+                {isClientAuthenticated && (
+                  <Link
+                    to="/mis-pedidos"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-secondary transition-colors text-foreground font-medium"
+                  >
+                    <ClipboardList className="w-5 h-5 text-primary" />
+                    Mis pedidos
+                  </Link>
+                )}
                 
                 <div className="pt-2 pb-2">
                   <button 

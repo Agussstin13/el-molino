@@ -57,7 +57,7 @@ export interface Order {
   id: string;
   customer: string;
   total: number;
-  status: "pendiente" | "enviado";
+  status: "pendiente" | "en_preparacion" | "enviado" | "entregado" | "cancelado";
   date: string;
   metodo_pago: string;
   informacion?: string;
@@ -67,6 +67,10 @@ export interface Order {
   estadoPago?: string;
   shippingCost?: number;
   items?: OrderItem[];
+  guestToken?: string;
+  cancelledAt?: string;
+  mercadoPagoPreferenceId?: string;
+  userId?: number;
 }
 
 export interface Category {

@@ -67,13 +67,19 @@ const EMPTY_CAROUSEL: Omit<CarouselImage, "id"> = {
 };
 
 const STATUS_LABELS: Record<Order["status"], string> = {
-  pendiente: "Pendiente",
-  enviado: "Enviado",
+  pendiente:      "Pendiente",
+  en_preparacion: "En preparación",
+  enviado:        "Enviado",
+  entregado:      "Entregado",
+  cancelado:      "Cancelado",
 };
 
 const STATUS_COLORS: Record<Order["status"], string> = {
-  pendiente: "bg-chart-4/20 text-chart-4",
-  enviado: "bg-chart-2/20 text-chart-2",
+  pendiente:      "bg-amber-100 text-amber-700",
+  en_preparacion: "bg-blue-100 text-blue-700",
+  enviado:        "bg-indigo-100 text-indigo-700",
+  entregado:      "bg-green-100 text-green-700",
+  cancelado:      "bg-red-100 text-red-500",
 };
 
 const EMPTY_COUPON: Omit<Coupon, "id"> = {
@@ -145,7 +151,7 @@ export function AdminPanel() {
     null,
   );
   const [ordersFilter, setOrdersFilter] = useState<
-    "todos" | "pendientes" | "enviados"
+    "todos" | "pendientes" | "en_preparacion" | "enviados" | "entregados" | "cancelados"
   >("pendientes");
 
   // Category state
@@ -778,9 +784,8 @@ export function AdminPanel() {
 
   const handleUpdateOrderStatus = async (
     orderId: string,
-    currentStatus: Order["status"],
+    newStatus: Order["status"],
   ) => {
-    const newStatus = currentStatus === "pendiente" ? "enviado" : "pendiente";
     try {
       const res = await fetch(`${API_BASE}/api/orders/${orderId}/status`, {
         method: "PUT",
@@ -796,7 +801,7 @@ export function AdminPanel() {
         );
         showSuccess(
           "Éxito",
-          `El pedido ahora está ${newStatus === "enviado" ? "Enviado" : "Pendiente"}`,
+          `El pedido ahora está en estado: ${STATUS_LABELS[newStatus]}`,
         );
       } else {
         const errorData = await res.json().catch(() => null);
@@ -3191,36 +3196,26 @@ export function AdminPanel() {
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-6">
                 <h1 className="text-2xl font-bold">Historial de Pedidos</h1>
                 <div className="flex bg-secondary/40 p-1 border border-border rounded-lg self-start sm:self-auto">
-                  <button
-                    onClick={() => setOrdersFilter("pendientes")}
-                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                      ordersFilter === "pendientes"
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Pendientes
-                  </button>
-                  <button
-                    onClick={() => setOrdersFilter("enviados")}
-                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                      ordersFilter === "enviados"
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Enviados
-                  </button>
-                  <button
-                    onClick={() => setOrdersFilter("todos")}
-                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                      ordersFilter === "todos"
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Todos
-                  </button>
+                  {([
+                    ["pendientes", "Pendientes"],
+                    ["en_preparacion", "En preparación"],
+                    ["enviados", "Enviados"],
+                    ["entregados", "Entregados"],
+                    ["cancelados", "Cancelados"],
+                    ["todos", "Todos"],
+                  ] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setOrdersFilter(val)}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                        ordersFilter === val
+                          ? "bg-card text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
               <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
@@ -3253,10 +3248,11 @@ export function AdminPanel() {
                       .filter(
                         (o) =>
                           ordersFilter === "todos" ||
-                          (ordersFilter === "pendientes" &&
-                            o.status === "pendiente") ||
-                          (ordersFilter === "enviados" &&
-                            o.status === "enviado"),
+                          (ordersFilter === "pendientes" && o.status === "pendiente") ||
+                          (ordersFilter === "en_preparacion" && o.status === "en_preparacion") ||
+                          (ordersFilter === "enviados" && o.status === "enviado") ||
+                          (ordersFilter === "entregados" && o.status === "entregado") ||
+                          (ordersFilter === "cancelados" && o.status === "cancelado"),
                       )
                       .map((order) => (
                         <React.Fragment key={order.id}>
@@ -3442,26 +3438,24 @@ export function AdminPanel() {
                                         </div>
                                         <div className="pt-3 mt-1 border-t border-border/50">
                                           <p className="text-muted-foreground text-xs mb-2">
-                                            Acción rápida
+                                            Cambiar estado del pedido
                                           </p>
-                                          <button
-                                            onClick={(e) => {
+                                          <select
+                                            className="w-full py-2 px-3 rounded-md text-sm font-medium border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                                            value={order.status}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={(e) => {
                                               e.stopPropagation();
                                               handleUpdateOrderStatus(
                                                 order.id,
-                                                order.status,
+                                                e.target.value as Order["status"],
                                               );
                                             }}
-                                            className={`w-full py-2 px-3 rounded-md text-sm font-medium shadow-sm transition-all hover:opacity-90 active:scale-[0.98] flex items-center justify-center gap-2 ${
-                                              order.status === "pendiente"
-                                                ? "bg-chart-2 text-white"
-                                                : "bg-chart-4 text-white"
-                                            }`}
                                           >
-                                            {order.status === "pendiente"
-                                              ? "Marcar como Enviado"
-                                              : "Devolver a Pendiente"}
-                                          </button>
+                                            {(Object.entries(STATUS_LABELS) as [Order["status"], string][]).map(([val, label]) => (
+                                              <option key={val} value={val}>{label}</option>
+                                            ))}
+                                          </select>
                                         </div>
                                       </div>
                                     </div>

@@ -7,6 +7,8 @@ import { ShopPage } from './pages/ShopPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { AdminLoginPage } from './pages/AdminLoginPage';
 import { AdminPanel } from './components/AdminPanel';
+import { OrdersPage } from './pages/OrdersPage';
+import { GuestOrderPage } from './pages/GuestOrderPage';
 import { WhatsAppFloatingButton } from './components/WhatsAppFloatingButton';
 import type { ReactNode } from 'react';
 
@@ -16,6 +18,14 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
     return <Navigate to="/admin/login" replace />;
   }
   return <>{children}</>;
+}
+
+function ProtectedClientRoute({ children }: { children: ReactNode }) {
+  const { isClientAuthenticated } = useAuth();
+  if (!isClientAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;  
 }
 
 export default function App() {
@@ -30,6 +40,15 @@ export default function App() {
                 <Route path="/products/top-selling" element={<ShopPage />} />
                 <Route path="/productos" element={<ShopPage />} />
                 <Route path="/producto/:id" element={<ProductDetailPage />} />
+                <Route path="/pedido/:token" element={<GuestOrderPage />} />
+                <Route
+                  path="/mis-pedidos"
+                  element={
+                    <ProtectedClientRoute>
+                      <OrdersPage />
+                    </ProtectedClientRoute>
+                  }
+                />
                 <Route path="/admin/login" element={<AdminLoginPage />} />
                 <Route
                   path="/admin"

@@ -491,6 +491,18 @@ export function Checkout() {
         setStep("confirmado");
         clearCart();
 
+        // Save guest token so the user can check their order later
+        if (!userToken && data?.order?.guestToken) {
+          const savedTokens = JSON.parse(localStorage.getItem("guestOrderTokens") || "[]");
+          savedTokens.unshift({
+            orderId: data.order.id,
+            token: data.order.guestToken,
+            date: new Date().toISOString(),
+          });
+          // Keep only the last 10 guest orders
+          localStorage.setItem("guestOrderTokens", JSON.stringify(savedTokens.slice(0, 10)));
+        }
+
         if (form.metodo_pago === "mercadopago" && data?.paymentUrl) {
           window.open(data.paymentUrl, '_blank');
         }
