@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import type { CartItem, Product } from '../../lib/types';
 import {
   getEffectivePrice,
+  getEffectiveGramagePrice,
   isWholesaleActive,
   SHIPPING_COST,
   type ShippingRate,
@@ -129,29 +130,37 @@ export function CartProvider({ children }: { children: ReactNode }) {
               }
             }
 
-            const requiredGrams = updatedItem.measurementUnit === 'gramo' && updatedItem.selectedGramage 
-              ? updatedItem.selectedGramage.grams 
+            const requiredGrams = updatedItem.measurementUnit === 'gramo' && updatedItem.selectedGramage
+              ? updatedItem.selectedGramage.grams
               : 1;
 
             const alreadyUsed = usedStockMap.get(updatedItem.id) || 0;
             const remainingStock = updatedItem.stock - alreadyUsed;
-            
+
             const maxAllowedForThisItem = Math.floor(remainingStock / requiredGrams);
 
             if (updatedItem.quantity > maxAllowedForThisItem) {
               updatedItem.quantity = Math.max(0, maxAllowedForThisItem);
               hasChanges = true;
             }
-            
-            if (item.stock !== updatedItem.stock || item.price !== updatedItem.price) {
-               hasChanges = true;
+
+            if (
+              item.stock !== updatedItem.stock ||
+              item.price !== updatedItem.price ||
+              item.offerPrice !== updatedItem.offerPrice ||
+              item.discount !== updatedItem.discount ||
+              JSON.stringify(item.wholesalePrice) !== JSON.stringify(updatedItem.wholesalePrice) ||
+              JSON.stringify(item.gramages) !== JSON.stringify(updatedItem.gramages) ||
+              JSON.stringify(item.selectedGramage) !== JSON.stringify(updatedItem.selectedGramage)
+            ) {
+              hasChanges = true;
             }
 
             if (updatedItem.quantity > 0) {
               usedStockMap.set(updatedItem.id, alreadyUsed + (updatedItem.quantity * requiredGrams));
               return updatedItem;
             }
-            
+
             hasChanges = true;
             return null;
           }).filter(Boolean) as CartItem[];
@@ -162,7 +171,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         console.error("Error al sincronizar el carrito:", err);
       }
     };
-    
+
     syncCart();
   }, []);
 
@@ -201,10 +210,37 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItems(prev => prev.filter(item => !(item.id === id && item.selectedGramage?.id === selectedGramageId)));
   };
 
+  const getTotalForWholesale = (targetItem: CartItem, cartItems: CartItem[]) => {
+    return cartItems
+      .filter(item => item.id === targetItem.id)
+      .reduce((acc, item) => {
+        if (item.measurementUnit === 'gramo' && item.selectedGramage) {
+          return acc + item.quantity * item.selectedGramage.grams;
+        }
+
+        return acc + item.quantity;
+      }, 0);
+  };
+
+  const getCartItemUnitPrice = (item: CartItem, cartItems: CartItem[]) => {
+    const totalForWholesale = getTotalForWholesale(item, cartItems);
+    const wholesale = isWholesaleActive(item, totalForWholesale);
+
+    if (item.measurementUnit === 'gramo' && item.selectedGramage) {
+      if (wholesale && item.wholesalePrice) {
+        return item.wholesalePrice.price * (item.selectedGramage.grams / 1000);
+      }
+
+      return getEffectiveGramagePrice(item.selectedGramage);
+    }
+
+    return getEffectivePrice(item, totalForWholesale);
+  };
+
   const cartCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
   const subtotal = items.reduce(
-    (sum, item) => sum + getEffectivePrice(item, item.quantity) * item.quantity,
+    (sum, item) => sum + getCartItemUnitPrice(item, items) * item.quantity,
     0
   );
 
@@ -212,15 +248,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // El costo real se calcula en el Checkout una vez que el cliente ingresa su dirección.
   const shipping =
     subtotal === 0 ? 0
-    : subtotal >= freeShippingThreshold ? 0
-    : shippingRates.length > 0
-      ? shippingRates.filter(r => r.activo).sort((a, b) => a.hastaKm - b.hastaKm)[0]?.precio ?? SHIPPING_COST
-      : SHIPPING_COST;
+      : subtotal >= freeShippingThreshold ? 0
+        : shippingRates.length > 0
+          ? shippingRates.filter(r => r.activo).sort((a, b) => a.hastaKm - b.hastaKm)[0]?.precio ?? SHIPPING_COST
+          : SHIPPING_COST;
 
   const total = subtotal + shipping;
 
   const isWholesaleForItem = (item: CartItem) =>
-    isWholesaleActive(item, item.quantity);
+    isWholesaleActive(item, getTotalForWholesale(item, items));
 
   const clearCart = () => setItems([]);
 

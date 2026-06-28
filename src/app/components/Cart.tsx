@@ -78,11 +78,6 @@ export function Cart() {
                       : getEffectiveGramagePrice(item.selectedGramage)
                     : getEffectivePrice(item, totalForWholesale);
 
-                const missingForWholesale =
-                  item.wholesalePrice && !wholesale
-                    ? item.wholesalePrice.quantity - totalForWholesale
-                    : 0;
-
                 return (
                   <div
                     key={`${item.id}-${item.selectedGramage?.id || 'base'}`}

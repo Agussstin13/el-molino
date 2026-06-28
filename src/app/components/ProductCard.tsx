@@ -1,4 +1,4 @@
-import { ShoppingCart, Tag } from "lucide-react";
+import { ShoppingCart } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Product } from "../../lib/types";
@@ -139,23 +139,24 @@ export function ProductCard({
         {/* Botón List View */}
         <button
           onClick={handleAdd}
-          disabled={!isGramProduct && !canAddMore && product.stock > 0}
-          className={`flex-shrink-0 px-4 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-300 whitespace-nowrap flex items-center justify-center gap-2 w-[140px] active:scale-95 ${
-            !isGramProduct && !canAddMore && product.stock > 0
-              ? "bg-muted/50 text-muted-foreground border border-border/50 cursor-not-allowed"
-              : justAdded
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "bg-primary/5 text-primary hover:bg-primary hover:text-primary-foreground border border-primary/20"
-          }`}
+          disabled={!isGramProduct && !canAddMore}
+          className={`flex-shrink-0 px-4 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-300 whitespace-nowrap flex items-center justify-center gap-2 w-[140px] active:scale-95 ${!isGramProduct && !canAddMore
+            ? "bg-muted/50 text-muted-foreground border border-border/50 cursor-not-allowed"
+            : justAdded
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "bg-primary/5 text-primary hover:bg-primary hover:text-primary-foreground border border-primary/20"
+            }`}
         >
           {!isGramProduct && <ShoppingCart className="w-3.5 h-3.5" />}
           {isGramProduct
             ? "Ver opciones"
-            : !canAddMore && product.stock > 0
-              ? "Max stock"
-              : justAdded
-                ? "Listo ✓"
-                : "Agregar"}
+            : product.stock === 0
+              ? "Sin stock"
+              : !canAddMore
+                ? "Max stock"
+                : justAdded
+                  ? "Listo ✓"
+                  : "Agregar"}
         </button>
       </div>
     );
@@ -220,23 +221,24 @@ export function ProductCard({
         {/* Botón Grid View */}
         <button
           onClick={handleAdd}
-          disabled={!isGramProduct && !canAddMore && product.stock > 0}
-          className={`mt-2 w-full py-2.5 rounded-xl text-[13px] font-medium flex items-center justify-center gap-2 transition-all duration-300 active:scale-[0.97] ${
-            !isGramProduct && !canAddMore && product.stock > 0
-              ? "bg-muted/50 text-muted-foreground border border-border/50 cursor-not-allowed"
-              : justAdded
-                ? "bg-primary text-primary-foreground shadow-md"
-                : "bg-primary/5 text-primary border border-primary/20 hover:bg-primary hover:text-primary-foreground hover:shadow-md"
-          }`}
+          disabled={!isGramProduct && !canAddMore}
+          className={`mt-2 w-full py-2.5 rounded-xl text-[13px] font-medium flex items-center justify-center gap-2 transition-all duration-300 active:scale-[0.97] ${!isGramProduct && !canAddMore
+            ? "bg-muted/50 text-muted-foreground border border-border/50 cursor-not-allowed"
+            : justAdded
+              ? "bg-primary text-primary-foreground shadow-md"
+              : "bg-primary/5 text-primary border border-primary/20 hover:bg-primary hover:text-primary-foreground hover:shadow-md"
+            }`}
         >
           {!isGramProduct && <ShoppingCart className="w-4 h-4" />}
           {isGramProduct
             ? "Ver opciones"
-            : !canAddMore && product.stock > 0
-              ? "Stock máximo"
-              : justAdded
-                ? "¡Agregado! ✓"
-                : "Agregar al carrito"}
+            : product.stock === 0
+              ? "Sin stock"
+              : !canAddMore
+                ? "Stock máximo"
+                : justAdded
+                  ? "¡Agregado! ✓"
+                  : "Agregar al carrito"}
         </button>
       </div>
 

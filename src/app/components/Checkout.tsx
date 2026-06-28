@@ -6,6 +6,8 @@ import { useAlert } from "../context/AlertContext";
 import {
   formatARS,
   getEffectivePrice,
+  getEffectiveGramagePrice,
+  isWholesaleActive,
 } from "../../lib/price";
 import { ClientLoginModal } from "./ClientLoginModal";
 
@@ -1146,10 +1148,28 @@ export function Checkout() {
                   <h3 className="mb-4 text-base">Resumen del pedido</h3>
                   <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
                     {items.map((item) => {
-                      const price = getEffectivePrice(item, item.quantity);
+                      const totalForWholesale = items
+                        .filter((i) => i.id === item.id)
+                        .reduce((acc, i) => {
+                          if (i.measurementUnit === "gramo" && i.selectedGramage) {
+                            return acc + i.quantity * i.selectedGramage.grams;
+                          }
+
+                          return acc + i.quantity;
+                        }, 0);
+
+                      const wholesale = isWholesaleActive(item, totalForWholesale);
+
+                      const price =
+                        item.measurementUnit === "gramo" && item.selectedGramage
+                          ? wholesale && item.wholesalePrice
+                            ? item.wholesalePrice.price * (item.selectedGramage.grams / 1000)
+                            : getEffectiveGramagePrice(item.selectedGramage)
+                          : getEffectivePrice(item, totalForWholesale);
+
                       return (
                         <div
-                          key={`${item.id}-${item.selectedGramage?.id || 'base'}`}
+                          key={`${item.id}-${item.selectedGramage?.id || "base"}`}
                           className="flex justify-between text-sm"
                         >
                           <span className="text-muted-foreground truncate mr-2">
