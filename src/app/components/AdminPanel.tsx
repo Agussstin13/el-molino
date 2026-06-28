@@ -15,7 +15,6 @@ import {
   AlertCircle,
   Info,
   Layers,
-  ArrowLeft,
   Upload,
   Percent,
   Search,
@@ -1760,7 +1759,6 @@ export function AdminPanel() {
     );
   };
 
-
   const handleReorderCategories = async (newOrder: Category[]) => {
     // Actualizamos el estado local inmediatamente para que el movimiento sea fluido
     const updatedWithOrder = newOrder.map((cat, index) => ({
@@ -2167,7 +2165,10 @@ export function AdminPanel() {
                             </div>
                             <div className="col-span-2 sm:col-span-1">
                               <label className="block text-sm mb-1.5 font-medium">
-                                Cantidad mínima mayorista *
+                                {
+                                  productForm.measurementUnit === "gramo" ? "Cantidad mínima mayorista (gramos) *"
+                                  : "Cantidad mínima mayorista*"
+                                }
                               </label>
                               <input
                                 type="number"

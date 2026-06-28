@@ -100,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
+      email = email.trim().toLowerCase();
       const res = await fetch(`${API_BASE}/api/Auth/login/user`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

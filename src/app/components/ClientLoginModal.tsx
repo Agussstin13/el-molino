@@ -39,6 +39,7 @@ export function ClientLoginModal({ isOpen, onClose }: ClientLoginModalProps) {
           setLoading(false);
           return;
         }
+
         const result = await registerClient({
           email, password, nombre, apellido, dni, fechaNacimiento: new Date(fechaNacimiento).toISOString(), telefono
         });

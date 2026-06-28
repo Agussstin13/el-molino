@@ -2,6 +2,8 @@ import { MapPin, Phone, Instagram, Send } from "lucide-react";
 import React, { useState } from "react";
 import logo from "../../imports/image.png";
 
+const PHONE_NUMBER = import.meta.env.VITE_PHONE_NUMBER;
+
 export function Footer() {
   const [formData, setFormData] = useState({
     name: "",
@@ -72,7 +74,7 @@ export function Footer() {
               </li>
               <li className="flex items-center gap-3 text-muted-foreground text-sm group">
                 <Phone className="w-5 h-5 text-primary shrink-0 group-hover:scale-110 transition-transform" />
-                <a href="https://wa.me/5492236927799" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">+54 9 223 6927799</a>
+                <a href={`https://wa.me/${PHONE_NUMBER}`} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">{PHONE_NUMBER}</a>
               </li>
             </ul>
           </div>

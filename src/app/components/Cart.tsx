@@ -1,6 +1,11 @@
 import { X, Trash2, Plus, Minus, ShoppingBag } from 'lucide-react';
 import { useCart } from '../context/CartContext';
-import { formatARS, getEffectivePrice, FREE_SHIPPING_THRESHOLD, SHIPPING_COST } from '../../lib/price';
+import {
+  formatARS,
+  getEffectivePrice,
+  getEffectiveGramagePrice,
+  isWholesaleActive,
+} from '../../lib/price';
 
 export function Cart() {
   const {
@@ -11,9 +16,6 @@ export function Cart() {
     updateQuantity,
     removeItem,
     subtotal,
-    shipping,
-    total,
-    isWholesaleForItem,
   } = useCart();
 
   if (!isCartOpen) return null;
@@ -55,8 +57,31 @@ export function Cart() {
           ) : (
             <div className="space-y-3">
               {items.map(item => {
-                const unitPrice = getEffectivePrice(item, item.quantity);
-                const wholesale = isWholesaleForItem(item);
+                const isGramProduct = item.measurementUnit === "gramo";
+
+                const totalForWholesale = items
+                  .filter((i) => i.id === item.id)
+                  .reduce((acc, i) => {
+                    if (i.measurementUnit === "gramo" && i.selectedGramage) {
+                      return acc + i.quantity * i.selectedGramage.grams;
+                    }
+
+                    return acc + i.quantity;
+                  }, 0);
+
+                const wholesale = isWholesaleActive(item, totalForWholesale);
+
+                const unitPrice =
+                  isGramProduct && item.selectedGramage
+                    ? wholesale && item.wholesalePrice
+                      ? item.wholesalePrice.price * (item.selectedGramage.grams / 1000)
+                      : getEffectiveGramagePrice(item.selectedGramage)
+                    : getEffectivePrice(item, totalForWholesale);
+
+                const missingForWholesale =
+                  item.wholesalePrice && !wholesale
+                    ? item.wholesalePrice.quantity - totalForWholesale
+                    : 0;
 
                 return (
                   <div

@@ -1,6 +1,8 @@
 import { motion } from 'motion/react';
 import { useLocation } from 'react-router-dom';
 
+const PHONE_NUMBER = import.meta.env.VITE_PHONE_NUMBER;
+
 function WhatsAppSvg() {
   return (
     <svg viewBox="0 0 24 24" className="w-8 h-8" fill="currentColor">
@@ -16,9 +18,8 @@ export function WhatsAppFloatingButton() {
 
   if (isAdminPage) return null;
 
-  const WA_NUMBER = '5492236927799'; // +54 9 223 6927799
   const message = encodeURIComponent('Hola! Quisiera hacer una consulta.');
-  const whatsappUrl = `https://wa.me/${WA_NUMBER}?text=${message}`;
+  const whatsappUrl = `https://wa.me/${PHONE_NUMBER}?text=${message}`;
 
   return (
     <motion.a

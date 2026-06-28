@@ -10,6 +10,7 @@ import {
 import { ClientLoginModal } from "./ClientLoginModal";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
+const PHONE_NUMBER = import.meta.env.VITE_PHONE_NUMBER;
 
 interface FormData {
   nombre: string;
@@ -92,9 +93,8 @@ const InputField = ({
         onChange={onChange}
         placeholder={placeholder}
         readOnly={readOnly}
-        className={`w-full px-3 py-2.5 bg-input-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-sm transition-colors ${
-          error ? "border-destructive" : "border-border"
-        } ${readOnly ? "opacity-70 cursor-not-allowed bg-secondary/50" : ""}`}
+        className={`w-full px-3 py-2.5 bg-input-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-sm transition-colors ${error ? "border-destructive" : "border-border"
+          } ${readOnly ? "opacity-70 cursor-not-allowed bg-secondary/50" : ""}`}
       />
       {showUpdateBtn && onUpdate && (
         <button
@@ -116,13 +116,11 @@ export function Checkout() {
     items,
     closeCheckout,
     subtotal,
-    shipping,
-    total,
     clearCart,
     freeShippingThreshold,
   } = useCart();
-  const { isClientAuthenticated, clientUser, updateClientProfile } = useAuth();
-  const { showError, showSuccess } = useAlert();
+  const { clientUser } = useAuth();
+  const { showError } = useAlert();
   const [step, setStep] = useState<"login-prompt" | "datos" | "pago" | "revisar" | "confirmado">(
     "login-prompt",
   );
@@ -243,8 +241,8 @@ export function Checkout() {
       setIsSearchingAddress(true);
       try {
         const baseInput = form.calle.trim();
-        const searchTerm = baseInput.toLowerCase().includes("mar del plata") 
-          ? baseInput 
+        const searchTerm = baseInput.toLowerCase().includes("mar del plata")
+          ? baseInput
           : `${baseInput}, Mar del Plata`;
 
         const res = await fetch(
@@ -407,18 +405,18 @@ export function Checkout() {
 
   const set =
     (field: keyof FormData) =>
-    (
-      e: React.ChangeEvent<
-        HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-      >,
-    ) => {
-      setForm((f) => {
-        const newForm = { ...f, [field]: e.target.value };
-        localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(newForm));
-        return newForm;
-      });
-      if (errors[field]) setErrors((err) => ({ ...err, [field]: "" }));
-    };
+      (
+        e: React.ChangeEvent<
+          HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+        >,
+      ) => {
+        setForm((f) => {
+          const newForm = { ...f, [field]: e.target.value };
+          localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(newForm));
+          return newForm;
+        });
+        if (errors[field]) setErrors((err) => ({ ...err, [field]: "" }));
+      };
 
   const validateDatos = (): boolean => {
     const newErrors: Partial<Record<keyof FormData, string>> = {};
@@ -612,22 +610,24 @@ export function Checkout() {
 
         {/* Confirmado */}
         {step === "confirmado" ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
-            {form.metodo_pago === "mercadopago" ? (
-              <CheckCircle2 className="w-20 h-20 text-accent" />
-            ) : (
-              <AlertCircle className="w-20 h-20 text-amber-500" />
-            )}
-            
+          <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-start gap-4 p-6 text-center">
+            <div className="w-20 h-20 flex items-center justify-center shrink-0">
+              {form.metodo_pago === "mercadopago" ? (
+                <CheckCircle2 className="w-20 h-20 shrink-0 text-primary" />
+              ) : (
+                <AlertCircle className="w-20 h-20 shrink-0 text-amber-500" />
+              )}
+            </div>
+
             <h3 className="text-2xl text-primary">
-              {form.metodo_pago === "mercadopago" 
-                ? "¡Pedido confirmado!" 
+              {form.metodo_pago === "mercadopago"
+                ? "¡Pedido confirmado!"
                 : "¡Casi listo!"}
             </h3>
 
             {form.metodo_pago !== "mercadopago" && (
               <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg max-w-md text-amber-900 text-sm font-medium">
-                ATENCIÓN: Tu pedido está guardado, pero <strong>NO ESTÁ FINALIZADO</strong> hasta que envíes el comprobante de pago o confirmes por WhatsApp.
+                ATENCIÓN: Tu pedido está guardado, pero <strong>NO ESTÁ FINALIZADO</strong> hasta que {form.metodo_pago === "transferencia" ? "envíes el comprobante de pago" : "confirmes"} por WhatsApp.
               </div>
             )}
 
@@ -662,21 +662,21 @@ export function Checkout() {
             <div className="flex flex-col gap-3 w-full max-w-sm mt-6">
               {(form.metodo_pago === "transferencia" ||
                 form.metodo_pago === "efectivo") && (
-                <a
-                  href={`https://wa.me/5492236927799?text=${encodeURIComponent(
-                    form.metodo_pago === "transferencia"
-                      ? `¡Hola! Acabo de hacer un pedido (#${confirmedOrderId ?? "N/A"}) con pago por transferencia. Mi nombre es ${form.nombre} ${form.apellido} y el total es de $${confirmedTotal}. Adjunto el comprobante.`
-                      : `¡Hola! Acabo de hacer un pedido (#${confirmedOrderId ?? "N/A"}) con pago en efectivo. Mi nombre es ${form.nombre} ${form.apellido} y el total es de $${confirmedTotal}.`,
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-[#25D366] hover:bg-[#1ebd5a] text-white px-6 py-3.5 rounded-xl transition-all font-medium flex items-center justify-center gap-2 shadow-lg shadow-[#25D366]/20 active:scale-[0.98]"
-                >
-                  {form.metodo_pago === "transferencia"
-                    ? "Enviar comprobante por WhatsApp"
-                    : "Coordinar entrega por WhatsApp"}
-                </a>
-              )}
+                  <a
+                    href={`https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent(
+                      form.metodo_pago === "transferencia"
+                        ? `¡Hola! Acabo de hacer un pedido (#${confirmedOrderId ?? "N/A"}) con pago por transferencia. Mi nombre es ${form.nombre} ${form.apellido} y el total es de $${confirmedTotal}. Adjunto el comprobante.`
+                        : `¡Hola! Acabo de hacer un pedido (#${confirmedOrderId ?? "N/A"}) con pago en efectivo. Mi nombre es ${form.nombre} ${form.apellido} y el total es de $${confirmedTotal}.`,
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-[#25D366] hover:bg-[#1ebd5a] text-white px-6 py-3.5 rounded-xl transition-all font-medium flex items-center justify-center gap-2 shadow-lg shadow-[#25D366]/20 active:scale-[0.98]"
+                  >
+                    {form.metodo_pago === "transferencia"
+                      ? "Enviar comprobante por WhatsApp"
+                      : "Coordinar entrega por WhatsApp"}
+                  </a>
+                )}
               {form.metodo_pago === "mercadopago" && paymentUrl && (
                 <a
                   href={paymentUrl}
@@ -737,15 +737,15 @@ export function Checkout() {
                         Iniciá sesión para completar tus datos de envío automáticamente, o continuá como invitado.
                       </p>
                     </div>
-                    
+
                     <div className="w-full max-w-sm space-y-3 pt-4">
-                      <button 
+                      <button
                         onClick={() => setShowLoginModal(true)}
                         className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3.5 rounded-xl font-semibold transition-all shadow-md hover:shadow-lg"
                       >
                         Iniciar Sesión
                       </button>
-                      <button 
+                      <button
                         onClick={() => setStep("datos")}
                         className="w-full bg-secondary/50 hover:bg-secondary text-foreground py-3.5 rounded-xl font-medium transition-all"
                       >
@@ -866,11 +866,11 @@ export function Checkout() {
                                   setShippingCost(null);
                                 }}
                                 placeholder="Ej: Av. Independencia 1200"
-                                className={`w-full px-3 py-2.5 bg-input-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-sm transition-colors ${
-                                  errors.calle
+                                className={`w-full px-3 py-2.5 bg-input-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-sm transition-colors 
+                                  ${errors.calle
                                     ? "border-destructive"
                                     : "border-border"
-                                }`}
+                                  }`}
                               />
                               {(isSearchingAddress || calculatingShipping) && (
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -897,7 +897,7 @@ export function Checkout() {
                                 addressSuggestions.length > 0) && (
                                 <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
                                   {isSearchingAddress &&
-                                  addressSuggestions.length === 0 ? (
+                                    addressSuggestions.length === 0 ? (
                                     <div className="p-3 text-sm text-muted-foreground text-center">
                                       Buscando direcciones...
                                     </div>

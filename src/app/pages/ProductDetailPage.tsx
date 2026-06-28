@@ -14,6 +14,7 @@ import { Cart } from "../components/Cart";
 import { Checkout } from "../components/Checkout";
 import { Footer } from "../components/Footer";
 const API_BASE = import.meta.env.VITE_API_BASE;
+const PHONE_NUMBER = import.meta.env.VITE_PHONE_NUMBER;
 const imgUrl = (path: string) =>
   path ? (path.startsWith('/') ? `${API_BASE}${path}` : `${API_BASE}/images/${path}`) : '';
 
@@ -139,11 +140,15 @@ function SmallProductCard({ product }: { product: Product }) {
             </div>
           )}
           <span className="text-2xl font-black text-black leading-none">{formatARS(effectivePrice)}</span>
-          
+
           <div className="flex flex-col gap-1 items-end mt-2">
             {product.wholesalePrice ? (
               <p className="text-xs text-amber-600 font-medium bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 shadow-sm flex flex-col items-end">
-                <span>Venta mayorista a partir de {product.wholesalePrice.quantity} u.</span>
+                <span>
+                  {isGramProduct
+                    ? `Venta mayorista a partir de ${product.wholesalePrice.quantity} g.`
+                    : `Venta mayorista a partir de ${product.wholesalePrice.quantity} u.`}
+                </span>
                 {isGramProduct && <span className="text-[10px] opacity-80">(precio por kilo: {formatARS(product.wholesalePrice.price)})</span>}
               </p>
             ) : isGramProduct ? (
@@ -276,7 +281,7 @@ export function ProductDetailPage() {
           );
           // Crear un Set con los IDs existentes para búsqueda eficiente
           const activeIds = new Set(activeDbProducts.map(p => p.id));
-          
+
           // Agregamos el producto actual y filtramos los previos que ya no existen en DB
           const next = [cur, ...stored.filter((r) => r.id !== cur.id && activeIds.has(r.id))].slice(
             0,
@@ -332,34 +337,40 @@ export function ProductDetailPage() {
   }
 
   /* ── Datos derivados ── */
-  /* ── Datos derivados ── */
   const isGramProduct = product.measurementUnit === "gramo";
 
-  const currentUsedInCart = items.filter(i => i.id === product.id).reduce((acc, i) => {
-    if (i.measurementUnit === 'gramo' && i.selectedGramage) return acc + (i.quantity * i.selectedGramage.grams);
-    return acc + i.quantity;
-  }, 0);
+  const currentUsedInCart = items
+    .filter((i) => i.id === product.id)
+    .reduce((acc, i) => {
+      if (i.measurementUnit === "gramo" && i.selectedGramage) {
+        return acc + i.quantity * i.selectedGramage.grams;
+      }
+
+      return acc + i.quantity;
+    }, 0);
 
   const remainingStock = product.stock - currentUsedInCart;
+
   let maxQtyAllowed = remainingStock;
+
   if (isGramProduct && selectedGramage) {
     maxQtyAllowed = Math.floor(remainingStock / selectedGramage.grams);
   }
-  // No permitir que maxQtyAllowed sea menor a 0
+
   maxQtyAllowed = Math.max(0, maxQtyAllowed);
-  const currentQuantityInCart = items
-    .filter((i) => i.id === product.id && i.selectedGramage?.id === selectedGramage?.id)
-    .reduce((acc, i) => acc + i.quantity, 0);
 
-  const totalQuantity = currentQuantityInCart + quantity;
+  const totalForWholesale =
+    isGramProduct && selectedGramage
+      ? currentUsedInCart + quantity * selectedGramage.grams
+      : currentUsedInCart + quantity;
 
-  const wholesale = isWholesaleActive(product, totalQuantity);
+  const wholesale = isWholesaleActive(product, totalForWholesale);
 
   const displayPrice = isGramProduct && selectedGramage
     ? (wholesale && product.wholesalePrice
-        ? product.wholesalePrice.price * (selectedGramage.grams / 1000)
-        : getEffectiveGramagePrice(selectedGramage))
-    : getEffectivePrice(product, totalQuantity);
+      ? product.wholesalePrice.price * (selectedGramage.grams / 1000)
+      : getEffectiveGramagePrice(selectedGramage))
+    : getEffectivePrice(product, totalForWholesale);
 
   const effectivePrice = displayPrice;
   const isDiscounted = isGramProduct
@@ -368,14 +379,13 @@ export function ProductDetailPage() {
 
   const handleAdd = () => {
     if (quantity > maxQtyAllowed) return;
-    addToCart(product, quantity, isGramProduct ? selectedGramage : undefined);
+    addToCart(product, quantity, isGramProduct ? selectedGramage ?? undefined : undefined);
     setAdded(true);
     setQuantity(1);
     setTimeout(() => setAdded(false), 2500);
   };
 
   // ⚠️ Reemplazá con el número real de WhatsApp (formato: código país + número, sin + ni espacios)
-  const WA_NUMBER = "5491100000000";
   const waMsg = encodeURIComponent(
     `Hola! Me interesa el producto: *${product.name}* (${formatARS(effectivePrice)}). ¿Tienen stock?`,
   );
@@ -548,7 +558,7 @@ export function ProductDetailPage() {
                     {formatARS(effectivePrice)}
                   </span>
                 </div>
-                
+
                 <div className="flex flex-col mt-1 gap-1">
                   {wholesale ? (
                     <span className="text-xs text-amber-600 font-medium bg-amber-500/10 px-2 py-1 rounded-md self-start">
@@ -556,7 +566,11 @@ export function ProductDetailPage() {
                     </span>
                   ) : product.wholesalePrice ? (
                     <p className="text-sm text-amber-600 font-medium flex flex-col">
-                      <span>Venta mayorista a partir de {product.wholesalePrice.quantity} u.</span>
+                      <span>
+                        {isGramProduct
+                          ? `Venta mayorista a partir de ${product.wholesalePrice.quantity} g.`
+                          : `Venta mayorista a partir de ${product.wholesalePrice.quantity} u.`}
+                      </span>
                       {isGramProduct && <span className="text-xs opacity-80">(precio por kilo: {formatARS(product.wholesalePrice.price)})</span>}
                     </p>
                   ) : isGramProduct ? (
@@ -582,7 +596,7 @@ export function ProductDetailPage() {
 
               {/* WhatsApp CTA */}
               <a
-                href={`https://wa.me/${WA_NUMBER}?text=${waMsg}`}
+                href={`https://wa.me/${PHONE_NUMBER}?text=${waMsg}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 id="detail-whatsapp-btn"
@@ -606,11 +620,11 @@ export function ProductDetailPage() {
                       <button
                         key={g.id}
                         onClick={() => setSelectedGramage(g)}
-                        className={`px-4 py-2 rounded-xl border text-sm font-semibold transition-all ${
-                          selectedGramage?.id === g.id
+                        className={`px-4 py-2 rounded-xl border text-sm font-semibold transition-all 
+                          ${selectedGramage?.id === g.id
                             ? "bg-foreground text-background border-foreground"
                             : "border-border text-foreground hover:border-foreground/50"
-                        }`}
+                          }`}
                       >
                         {g.grams >= 1000 ? `${g.grams / 1000} kg` : `${g.grams} g`}
                         {g.offerPrice != null && g.offerPrice > 0 && (
@@ -649,13 +663,17 @@ export function ProductDetailPage() {
                       <Plus className="w-4 h-4" />
                     </button>
                   </div>
-                  {product.wholesalePrice && totalQuantity < product.wholesalePrice.quantity && (
+                  {product.wholesalePrice && totalForWholesale < product.wholesalePrice.quantity && (
                     <span className="text-xs text-amber-600 ml-1">
-                      ({product.wholesalePrice.quantity - totalQuantity} más para precio mayorista)
+                      (
+                      {isGramProduct
+                        ? `${product.wholesalePrice.quantity - totalForWholesale} g más para precio mayorista`
+                        : `${product.wholesalePrice.quantity - totalForWholesale} más para precio mayorista`}
+                      )
                     </span>
                   )}
                   {maxQtyAllowed === 0 && (
-                     <span className="text-xs text-destructive font-medium ml-2">Stock máximo alcanzado en el carrito</span>
+                    <span className="text-xs text-destructive font-medium ml-2">Stock máximo alcanzado en el carrito</span>
                   )}
                 </div>
               )}
@@ -665,13 +683,13 @@ export function ProductDetailPage() {
                 onClick={handleAdd}
                 disabled={product.stock === 0 || maxQtyAllowed === 0 || quantity > maxQtyAllowed}
                 id="detail-add-to-cart"
-                className={`mt-2 flex items-center justify-center gap-2 py-3.5 px-6 rounded-2xl font-medium transition-all duration-300 text-base active:scale-[0.98] ${
-                  product.stock === 0 || maxQtyAllowed === 0 || quantity > maxQtyAllowed
+                className={`mt-2 flex items-center justify-center gap-2 py-3.5 px-6 rounded-2xl font-medium transition-all duration-300 text-base active:scale-[0.98] 
+                  ${product.stock === 0 || maxQtyAllowed === 0 || quantity > maxQtyAllowed
                     ? "bg-muted/50 text-muted-foreground border border-border/50 cursor-not-allowed"
                     : added
                       ? "bg-primary text-primary-foreground shadow-md"
                       : "bg-primary/5 text-primary border border-primary/20 hover:bg-primary hover:text-primary-foreground hover:shadow-lg"
-                }`}
+                  }`}
               >
                 <ShoppingCart className="w-5 h-5" />
                 {product.stock === 0

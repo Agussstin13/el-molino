@@ -6,6 +6,7 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { ClientLoginModal } from "./ClientLoginModal";
 const API_BASE = import.meta.env.VITE_API_BASE;
+const PHONE_NUMBER = import.meta.env.VITE_PHONE_NUMBER;
 
 interface Category {
   id: number;
@@ -224,7 +225,7 @@ export function Header() {
                   </div>
                   @elmolinomdp
                 </a>
-                <a href="https://wa.me/5492236927799" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-sm text-foreground hover:text-primary transition-colors">
+                <a href={`https://wa.me/${PHONE_NUMBER}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-sm text-foreground hover:text-primary transition-colors">
                   <div className="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center flex-shrink-0">
                     <Phone className="w-4 h-4 text-primary" />
                   </div>

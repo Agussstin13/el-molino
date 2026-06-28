@@ -89,3 +89,9 @@ export interface CarouselImage {
   activo: boolean;
   redirectUrl?: string | null;
 }
+
+export interface GuestOrderToken {
+  orderId: number;
+  token: string;
+  date: string;
+};
