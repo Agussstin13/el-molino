@@ -2438,7 +2438,7 @@ export function AdminPanel() {
                           <p>
                             • Relación de aspecto recomendada: 1:1 (Cuadrada)
                           </p>
-                          <p>• Tamaño máximo de archivo: 2 MB</p>
+                          <p>• Tamaño máximo de archivo: 5 MB</p>
                         </div>
                       </div>
                     </div>
