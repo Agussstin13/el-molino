@@ -1,7 +1,7 @@
 import { motion } from 'motion/react';
 import { useLocation } from 'react-router-dom';
 
-const PHONE_NUMBER = import.meta.env.VITE_PHONE_NUMBER;
+const PHONE_NUMBER = "5492236927799";
 
 function WhatsAppSvg() {
   return (

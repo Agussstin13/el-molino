@@ -106,9 +106,11 @@ export function ProductCard({
             </div>
 
             <div className="min-h-[16px] flex items-end justify-between mt-1 gap-2 w-full">
-              {/* Formato de Venta (Izquierda) */}
+              {/* Formato de Venta (Izquierda) y Stock */}
               <span className="text-[10px] text-muted-foreground font-medium flex items-center shrink-0">
                 {isGramProduct ? "Por peso" : "Por unidad"}
+                <span className="mx-1.5 text-border">•</span>
+                Stock: {isGramProduct ? (product.stock >= 1000 ? `${(product.stock / 1000).toFixed(2).replace(/\.00$/, '')} kg` : `${product.stock} g`) : product.stock}
               </span>
 
               {/* Mayorista (Derecha) */}
@@ -201,7 +203,7 @@ export function ProductCard({
         {/* Precios y Tags (Flex grow para empujar hacia abajo) */}
         <div className="flex flex-col mt-auto">
           {/* Precio efectivo y Oferta en la misma línea */}
-          <div className="flex items-end gap-2 mb-4 min-h-[26px]">
+          <div className="flex items-end gap-2 mb-2 min-h-[26px]">
             <span className="text-[26px] font-black text-black leading-none">
               {formatARS(effectivePrice)}
             </span>
@@ -216,6 +218,9 @@ export function ProductCard({
               </div>
             ) : null}
           </div>
+          <span className="text-[11px] text-muted-foreground font-medium mb-3">
+             Stock: {isGramProduct ? (product.stock >= 1000 ? `${(product.stock / 1000).toFixed(2).replace(/\.00$/, '')} kg` : `${product.stock} g`) : `${product.stock} u.`}
+          </span>
         </div>
 
         {/* Botón Grid View */}

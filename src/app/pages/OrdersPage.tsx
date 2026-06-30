@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
+import { Cart } from '../components/Cart';
+import { Checkout } from '../components/Checkout';
 import { useAuth } from '../context/AuthContext';
 import { useAlert } from '../context/AlertContext';
 import { formatARS } from '../../lib/price';
@@ -38,11 +40,13 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
 };
 
 function getPaymentStatus(status?: string) {
-  return PAYMENT_STATUS_CONFIG[status ?? 'pendiente'] ?? { label: 'No pagado', color: 'text-amber-700', bg: 'bg-amber-100' };
+  const normalized = (status || 'pendiente').toLowerCase();
+  return PAYMENT_STATUS_CONFIG[normalized] ?? { label: 'No pagado', color: 'text-amber-700', bg: 'bg-amber-100' };
 }
 
 function getOrderStatus(status?: string) {
-  return ORDER_STATUS_CONFIG[status ?? 'pendiente'] ?? ORDER_STATUS_CONFIG.pendiente;
+  const normalized = (status || 'pendiente').toLowerCase();
+  return ORDER_STATUS_CONFIG[normalized] ?? ORDER_STATUS_CONFIG.pendiente;
 }
 
 function mapOrder(o: any) {
@@ -185,7 +189,7 @@ function OrderCard({ order, userToken, onOrderCancelled, onOrderHidden }: {
             </span>
             {/* Payment status */}
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${paymentStatusCfg.bg} ${paymentStatusCfg.color}`}>
-              {order.paymentStatus === 'aprobado'
+              {order.paymentStatus?.toLowerCase() === 'aprobado'
                 ? <CheckCircle2 className="w-3.5 h-3.5" />
                 : <AlertCircle className="w-3.5 h-3.5" />
               }
@@ -278,6 +282,25 @@ function OrderCard({ order, userToken, onOrderCancelled, onOrderHidden }: {
             </div>
           </div>
 
+          {/* Transfer Details */}
+          {order.paymentMethod === 'transferencia' && (
+            <div className="bg-secondary/40 rounded-xl p-4 text-sm space-y-2 border border-border">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Datos para transferir</p>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Titular</span>
+                <span className="font-medium text-right">Mateo Agustin Lucero</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Banco</span>
+                <span className="font-medium text-right">Mercado Pago</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Alias</span>
+                <span className="font-medium font-mono text-right">elmolinomdp</span>
+              </div>
+            </div>
+          )}
+
           {/* Notes */}
           {order.orderInformation && (
             <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 text-sm flex gap-3">
@@ -354,6 +377,7 @@ function OrderCard({ order, userToken, onOrderCancelled, onOrderHidden }: {
 
 export function OrdersPage() {
   const { isClientAuthenticated, clientUser, logoutClient } = useAuth();
+  const { showError } = useAlert();
   const navigate = useNavigate();
   const [orders, setOrders] = useState<ReturnType<typeof mapOrder>[]>([]);
   const [loading, setLoading] = useState(true);
@@ -378,6 +402,7 @@ export function OrdersPage() {
         if (res.status === 401) {
           // Token expired or invalid
           logoutClient();
+          showError('Sesión expirada', 'Tu sesión ha expirado. Por favor, iniciá sesión nuevamente.');
           navigate('/', { replace: true });
           return;
         }
@@ -469,6 +494,8 @@ export function OrdersPage() {
         )}
       </main>
       <Footer />
+      <Cart />
+      <Checkout />
     </div>
   );
 }

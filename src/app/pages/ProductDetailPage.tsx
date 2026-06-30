@@ -14,7 +14,7 @@ import { Cart } from "../components/Cart";
 import { Checkout } from "../components/Checkout";
 import { Footer } from "../components/Footer";
 const API_BASE = import.meta.env.VITE_API_BASE;
-const PHONE_NUMBER = import.meta.env.VITE_PHONE_NUMBER;
+const PHONE_NUMBER = "5492236927799";
 const imgUrl = (path: string) =>
   path ? (path.startsWith('/') ? `${API_BASE}${path}` : `${API_BASE}/images/${path}`) : '';
 
@@ -159,10 +159,12 @@ function SmallProductCard({ product }: { product: Product }) {
           </div>
         </div>
 
-        {/* Stock bajo */}
-        {product.stock <= 5 && product.stock > 0 && (
+        {/* Stock */}
+        {product.stock > 0 && (
           <div className="mt-1">
-            <span className="text-[10px] text-amber-600 font-medium">⚡ Solo {product.stock} disponibles</span>
+            <span className="text-[10px] text-muted-foreground font-medium">
+              Stock: {isGramProduct ? (product.stock >= 1000 ? `${(product.stock / 1000).toFixed(2).replace(/\.00$/, '')} kg` : `${product.stock} g`) : `${product.stock} u.`}
+            </span>
           </div>
         )}
       </div>
@@ -194,6 +196,7 @@ export function ProductDetailPage() {
   const [related, setRelated] = useState<Product[]>([]);
   const [recentlyViewed, setRecentlyViewed] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showShareTooltip, setShowShareTooltip] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -489,25 +492,36 @@ export function ProductDetailPage() {
                 )}
               </div>
 
-              {/* Compartir + Favorito */}
-              <div className="flex flex-col items-center gap-3 px-5 pb-6">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Share2 className="w-3.5 h-3.5" /> Compartir:
-                </div>
-                <div className="flex items-center gap-4 flex-wrap justify-center">
-                  {shareLinks.map((link) => (
-                    <a
-                      key={link.label}
-                      href={link.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={link.label}
-                      className={`text-muted-foreground transition-colors ${link.hover}`}
-                    >
-                      {link.icon}
-                    </a>
-                  ))}
-                </div>
+              {/* Compartir */}
+              <div className="px-5 pb-6 flex justify-center relative">
+                <button
+                  onClick={() => setShowShareTooltip(!showShareTooltip)}
+                  onBlur={() => setTimeout(() => setShowShareTooltip(false), 200)}
+                  className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors bg-secondary/50 px-4 py-2 rounded-full border border-border/50 hover:bg-secondary"
+                >
+                  <Share2 className="w-4 h-4" />
+                  Compartir
+                </button>
+                
+                {showShareTooltip && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-card border border-border shadow-xl rounded-2xl p-4 flex items-center gap-5 z-50 animate-in fade-in slide-in-from-bottom-2">
+                    {shareLinks.map((link) => (
+                      <a
+                        key={link.label}
+                        href={link.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={link.label}
+                        className={`text-muted-foreground transition-all hover:scale-110 ${link.hover}`}
+                        onClick={() => setShowShareTooltip(false)}
+                      >
+                        {link.icon}
+                      </a>
+                    ))}
+                    {/* Flechita del tooltip */}
+                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-card border-b border-r border-border rotate-45" />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -580,6 +594,11 @@ export function ProductDetailPage() {
                   ) : (
                     <span className="text-[13px] text-muted-foreground font-medium flex items-center gap-1.5">
                       📦 Se vende por unidad
+                    </span>
+                  )}
+                  {product.stock > 0 && (
+                    <span className="text-[13px] text-primary font-medium mt-1">
+                      ✅ Stock disponible: {isGramProduct ? (product.stock >= 1000 ? `${(product.stock / 1000).toFixed(2).replace(/\.00$/, '')} kg` : `${product.stock} g`) : `${product.stock} unidades`}
                     </span>
                   )}
                 </div>
@@ -663,13 +682,15 @@ export function ProductDetailPage() {
                       <Plus className="w-4 h-4" />
                     </button>
                   </div>
-                  {product.wholesalePrice && totalForWholesale < product.wholesalePrice.quantity && (
-                    <span className="text-xs text-amber-600 ml-1">
-                      (
-                      {isGramProduct
-                        ? `${product.wholesalePrice.quantity - totalForWholesale} g más para precio mayorista`
-                        : `${product.wholesalePrice.quantity - totalForWholesale} más para precio mayorista`}
-                      )
+                  {product.wholesalePrice && (
+                    <span className={`text-xs ml-1 ${totalForWholesale < product.wholesalePrice.quantity ? 'text-amber-600' : 'text-green-600 font-bold'}`}>
+                      {totalForWholesale < product.wholesalePrice.quantity ? (
+                        `(Faltan ${isGramProduct
+                          ? `${product.wholesalePrice.quantity - totalForWholesale} g`
+                          : `${product.wholesalePrice.quantity - totalForWholesale} u.`} para precio mayorista)`
+                      ) : (
+                        "(¡Precio mayorista alcanzado!)"
+                      )}
                     </span>
                   )}
                   {maxQtyAllowed === 0 && (

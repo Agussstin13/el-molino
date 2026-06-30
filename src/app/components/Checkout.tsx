@@ -12,7 +12,7 @@ import {
 import { ClientLoginModal } from "./ClientLoginModal";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
-const PHONE_NUMBER = import.meta.env.VITE_PHONE_NUMBER;
+const PHONE_NUMBER = "5492236927799";
 
 interface FormData {
   nombre: string;
@@ -121,7 +121,7 @@ export function Checkout() {
     clearCart,
     freeShippingThreshold,
   } = useCart();
-  const { clientUser } = useAuth();
+  const { clientUser, logoutClient } = useAuth();
   const { showError } = useAlert();
   const [step, setStep] = useState<"login-prompt" | "datos" | "pago" | "revisar" | "confirmado">(
     "login-prompt",
@@ -325,6 +325,17 @@ export function Checkout() {
       setCalculatingShipping(true);
       setShippingQuoteError(null);
 
+      // OPTIMIZACIÓN: Si el pedido ya supera el umbral de envío gratis, no consultamos distancias.
+      if (freeShippingThreshold > 0 && subtotal >= freeShippingThreshold) {
+        setShippingCost(0);
+        setDistanciaKm(0);
+        // Dejamos las coordenadas nulas para que muestre el mapa por defecto, pero validamos la dirección.
+        setSelectedCoords(null);
+        setIsAddressVerified(true);
+        setCalculatingShipping(false);
+        return;
+      }
+
       try {
         const res = await fetch(`${API_BASE}/api/shipping/quote`, {
           method: "POST",
@@ -448,6 +459,24 @@ export function Checkout() {
 
   const handleConfirm = async () => {
     const userToken = localStorage.getItem("userToken");
+    
+    if (userToken) {
+      try {
+        const payload = JSON.parse(atob(userToken.split('.')[1]));
+        if (payload.exp && payload.exp * 1000 < Date.now()) {
+          logoutClient();
+          showError("Sesión expirada", "Tu sesión ha expirado. Por favor, iniciá sesión nuevamente para completar tu compra.");
+          setStep("login-prompt");
+          return;
+        }
+      } catch (e) {
+        logoutClient();
+        showError("Sesión inválida", "Por favor, iniciá sesión nuevamente.");
+        setStep("login-prompt");
+        return;
+      }
+    }
+
     const orderInformation = form.info_adicional.trim() || undefined;
 
     const backendOrder = {
@@ -612,7 +641,8 @@ export function Checkout() {
 
         {/* Confirmado */}
         {step === "confirmado" ? (
-          <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-start gap-4 p-6 text-center">
+          <div className="flex-1 min-h-0 overflow-y-auto p-6 text-center">
+            <div className="flex flex-col items-center justify-start gap-4 max-w-md mx-auto">
             <div className="w-20 h-20 flex items-center justify-center shrink-0">
               {form.metodo_pago === "mercadopago" ? (
                 <CheckCircle2 className="w-20 h-20 shrink-0 text-primary" />
@@ -695,6 +725,7 @@ export function Checkout() {
               >
                 Volver a la tienda
               </button>
+            </div>
             </div>
           </div>
         ) : (

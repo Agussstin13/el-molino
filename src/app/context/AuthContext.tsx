@@ -72,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string,
   ): Promise<boolean> => {
     try {
+      username = username.trim();
       const res = await fetch(`${API_BASE}/api/Auth/login/admin`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -163,6 +164,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     userData: any,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
+      if (userData.email) {
+        userData.email = userData.email.trim().toLowerCase();
+      }
       const res = await fetch(`${API_BASE}/api/clients/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

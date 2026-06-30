@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
+import { Cart } from '../components/Cart';
+import { Checkout } from '../components/Checkout';
 import { useAlert } from '../context/AlertContext';
 import { formatARS } from '../../lib/price';
 import {
@@ -81,7 +83,7 @@ export function GuestOrderPage() {
           <div>
             <h1 className="text-2xl font-bold text-foreground mb-2">Pedido no encontrado</h1>
             <p className="text-muted-foreground max-w-xs mx-auto">
-              El link que usaste no es válido o ya expiró. Revisá el email de confirmación.
+              El link que usaste no es válido o ya expiró.
             </p>
           </div>
           <Link to="/" className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors">
@@ -93,8 +95,8 @@ export function GuestOrderPage() {
     );
   }
 
-  const orderStatusCfg = ORDER_STATUS_CONFIG[order.orderStatus] ?? ORDER_STATUS_CONFIG.pendiente;
-  const paymentStatusCfg = PAYMENT_STATUS_CONFIG[order.paymentStatus] ?? PAYMENT_STATUS_CONFIG.pendiente;
+  const orderStatusCfg = ORDER_STATUS_CONFIG[order.orderStatus?.toLowerCase()] ?? ORDER_STATUS_CONFIG.pendiente;
+  const paymentStatusCfg = PAYMENT_STATUS_CONFIG[order.paymentStatus?.toLowerCase()] ?? PAYMENT_STATUS_CONFIG.pendiente;
   const StatusIcon = orderStatusCfg.icon;
 
   const canCancel = (order.orderStatus === 'pendiente' || order.orderStatus === 'en_preparacion')
@@ -240,7 +242,7 @@ export function GuestOrderPage() {
           <div className="flex items-center gap-3 pt-1">
             <span className="text-sm text-muted-foreground">Pago:</span>
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${paymentStatusCfg.bg} ${paymentStatusCfg.color}`}>
-              {order.paymentStatus === 'aprobado'
+              {order.paymentStatus?.toLowerCase() === 'aprobado'
                 ? <CheckCircle2 className="w-3.5 h-3.5" />
                 : <AlertCircle className="w-3.5 h-3.5" />
               }
@@ -291,15 +293,35 @@ export function GuestOrderPage() {
         <div className="bg-card border border-border rounded-2xl p-5 mb-5 space-y-3">
           <h2 className="text-base font-semibold text-foreground">Información de entrega</h2>
 
-          <div className="flex items-center gap-2 text-sm">
-            {order.paymentMethod === 'mercado_pago'
-              ? <Smartphone className="w-4 h-4 text-primary flex-shrink-0" />
-              : order.paymentMethod === 'transferencia'
-                ? <CreditCard className="w-4 h-4 text-primary flex-shrink-0" />
-                : <Banknote className="w-4 h-4 text-primary flex-shrink-0" />
-            }
-            <span className="text-muted-foreground">Método de pago:</span>
-            <span className="font-medium">{PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}</span>
+          <div className="flex flex-col gap-2 text-sm">
+            <div className="flex items-center gap-2">
+              {order.paymentMethod === 'mercado_pago'
+                ? <Smartphone className="w-4 h-4 text-primary flex-shrink-0" />
+                : order.paymentMethod === 'transferencia'
+                  ? <CreditCard className="w-4 h-4 text-primary flex-shrink-0" />
+                  : <Banknote className="w-4 h-4 text-primary flex-shrink-0" />
+              }
+              <span className="text-muted-foreground">Método de pago:</span>
+              <span className="font-medium">{PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}</span>
+            </div>
+            
+            {order.paymentMethod === 'transferencia' && (
+              <div className="ml-6 mt-1 bg-secondary/40 rounded-lg p-3 text-sm space-y-1.5 border border-border">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Datos para transferir</p>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Titular</span>
+                  <span className="font-medium text-right">Mateo Agustin Lucero</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Banco</span>
+                  <span className="font-medium text-right">Mercado Pago</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Alias</span>
+                  <span className="font-medium font-mono text-right">elmolinomdp</span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex items-start gap-2 text-sm">
@@ -357,6 +379,8 @@ export function GuestOrderPage() {
         )}
       </main>
       <Footer />
+      <Cart />
+      <Checkout />
     </div>
   );
 }

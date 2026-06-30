@@ -6,7 +6,7 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { ClientLoginModal } from "./ClientLoginModal";
 const API_BASE = import.meta.env.VITE_API_BASE;
-const PHONE_NUMBER = import.meta.env.VITE_PHONE_NUMBER;
+const PHONE_NUMBER = "5492236927799";
 
 interface Category {
   id: number;

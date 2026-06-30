@@ -66,19 +66,19 @@ const EMPTY_CAROUSEL: Omit<CarouselImage, "id"> = {
 };
 
 const STATUS_LABELS: Record<Order["status"], string> = {
-  pendiente:      "Pendiente",
+  pendiente: "Pendiente",
   en_preparacion: "En preparación",
-  enviado:        "Enviado",
-  entregado:      "Entregado",
-  cancelado:      "Cancelado",
+  enviado: "Enviado",
+  entregado: "Entregado",
+  cancelado: "Cancelado",
 };
 
 const STATUS_COLORS: Record<Order["status"], string> = {
-  pendiente:      "bg-amber-100 text-amber-700",
+  pendiente: "bg-amber-100 text-amber-700",
   en_preparacion: "bg-blue-100 text-blue-700",
-  enviado:        "bg-indigo-100 text-indigo-700",
-  entregado:      "bg-green-100 text-green-700",
-  cancelado:      "bg-red-100 text-red-500",
+  enviado: "bg-indigo-100 text-indigo-700",
+  entregado: "bg-green-100 text-green-700",
+  cancelado: "bg-red-100 text-red-500",
 };
 
 const EMPTY_COUPON: Omit<Coupon, "id"> = {
@@ -150,7 +150,12 @@ export function AdminPanel() {
     null,
   );
   const [ordersFilter, setOrdersFilter] = useState<
-    "todos" | "pendientes" | "en_preparacion" | "enviados" | "entregados" | "cancelados"
+    | "todos"
+    | "pendientes"
+    | "en_preparacion"
+    | "enviados"
+    | "entregados"
+    | "cancelados"
   >("pendientes");
 
   // Category state
@@ -532,7 +537,13 @@ export function AdminPanel() {
             fetchShippingRates();
           } else {
             const err = await res.json().catch(() => ({}));
-            showError("Error", err.detail || err.title || err.message || "No se pudo eliminar el tramo.");
+            showError(
+              "Error",
+              err.detail ||
+                err.title ||
+                err.message ||
+                "No se pudo eliminar el tramo.",
+            );
           }
         } catch {
           showError("Error de red", "No se pudo conectar con el servidor.");
@@ -559,7 +570,13 @@ export function AdminPanel() {
         showSuccess("¡Listo!", "Umbral de envío gratis actualizado.");
       } else {
         const err = await res.json().catch(() => ({}));
-        showError("Error", err.detail || err.title || err.message || "No se pudo guardar el umbral.");
+        showError(
+          "Error",
+          err.detail ||
+            err.title ||
+            err.message ||
+            "No se pudo guardar el umbral.",
+        );
       }
     } catch {
       showError("Error de red", "No se pudo conectar con el servidor.");
@@ -1134,37 +1151,70 @@ export function AdminPanel() {
   };
 
   const handleSaveCoupon = async () => {
-    if (tipoDescuento === "porcentaje" && (!couponForm.porcentaje || couponForm.porcentaje <= 0)) {
-      showError("Datos inválidos", "El porcentaje de descuento debe ser mayor a 0.");
+    if (
+      tipoDescuento === "porcentaje" &&
+      (!couponForm.porcentaje || couponForm.porcentaje <= 0)
+    ) {
+      showError(
+        "Datos inválidos",
+        "El porcentaje de descuento debe ser mayor a 0.",
+      );
       return;
     }
-    
+
     if (tipoDescuento === "monto") {
       if (!couponForm.monto || couponForm.monto <= 0) {
-        showError("Datos inválidos", "El monto de descuento debe ser mayor a 0.");
+        showError(
+          "Datos inválidos",
+          "El monto de descuento debe ser mayor a 0.",
+        );
         return;
       }
-      if (couponForm.compra_minima !== null && couponForm.compra_minima !== undefined) {
+      if (
+        couponForm.compra_minima !== null &&
+        couponForm.compra_minima !== undefined
+      ) {
         if (couponForm.monto >= couponForm.compra_minima) {
-          showError("Datos inválidos", "El monto de descuento debe ser estrictamente menor que la compra mínima.");
+          showError(
+            "Datos inválidos",
+            "El monto de descuento debe ser estrictamente menor que la compra mínima.",
+          );
           return;
         }
       }
     }
 
-    if (couponForm.compra_minima !== null && couponForm.compra_minima !== undefined && couponForm.compra_minima <= 0) {
+    if (
+      couponForm.compra_minima !== null &&
+      couponForm.compra_minima !== undefined &&
+      couponForm.compra_minima <= 0
+    ) {
       showError("Datos inválidos", "La compra mínima debe ser mayor a 0.");
       return;
     }
 
-    if (tipoDescuento === "porcentaje" && couponForm.tope !== null && couponForm.tope !== undefined) {
+    if (
+      tipoDescuento === "porcentaje" &&
+      couponForm.tope !== null &&
+      couponForm.tope !== undefined
+    ) {
       if (couponForm.tope <= 0) {
-        showError("Datos inválidos", "El tope máximo de descuento debe ser mayor a 0.");
+        showError(
+          "Datos inválidos",
+          "El tope máximo de descuento debe ser mayor a 0.",
+        );
         return;
       }
-      
-      if (couponForm.compra_minima !== null && couponForm.compra_minima !== undefined && couponForm.tope > couponForm.compra_minima) {
-        showError("Datos inválidos", "El tope máximo de descuento no puede ser mayor que la compra mínima.");
+
+      if (
+        couponForm.compra_minima !== null &&
+        couponForm.compra_minima !== undefined &&
+        couponForm.tope > couponForm.compra_minima
+      ) {
+        showError(
+          "Datos inválidos",
+          "El tope máximo de descuento no puede ser mayor que la compra mínima.",
+        );
         return;
       }
     }
@@ -1188,12 +1238,12 @@ export function AdminPanel() {
     };
 
     try {
-      const url = editingCouponId 
-        ? `${API_BASE}/api/coupons/${editingCouponId}` 
+      const url = editingCouponId
+        ? `${API_BASE}/api/coupons/${editingCouponId}`
         : `${API_BASE}/api/coupons`;
       const method = editingCouponId ? "PUT" : "POST";
-      const payload = editingCouponId 
-        ? { ...backendCoupon, id: parseInt(editingCouponId) } 
+      const payload = editingCouponId
+        ? { ...backendCoupon, id: parseInt(editingCouponId) }
         : backendCoupon;
 
       const res = await fetch(url, {
@@ -1214,7 +1264,9 @@ export function AdminPanel() {
             activo: backendCoupon.activo,
             valido_mayorista: backendCoupon.validoMayorista,
           };
-          setCoupons(coupons.map(c => c.id === editingCouponId ? updatedCoupon : c));
+          setCoupons(
+            coupons.map((c) => (c.id === editingCouponId ? updatedCoupon : c)),
+          );
           showSuccess("¡Listo!", "El cupón se actualizó correctamente.");
         } else {
           const created = await res.json();
@@ -1236,7 +1288,13 @@ export function AdminPanel() {
         setShowCouponForm(false);
       } else {
         const err = await res.json().catch(() => ({}));
-        showError("Error", err.detail || err.title || err.message || "No pudimos guardar el cupón.");
+        showError(
+          "Error",
+          err.detail ||
+            err.title ||
+            err.message ||
+            "No pudimos guardar el cupón.",
+        );
       }
     } catch (e) {
       console.error(e);
@@ -1443,7 +1501,10 @@ export function AdminPanel() {
         const err = await res.json().catch(() => ({}));
         showError(
           "No se pudo guardar",
-          err.detail || err.title || err.message || "Hubo un problema al guardar la imagen.",
+          err.detail ||
+            err.title ||
+            err.message ||
+            "Hubo un problema al guardar la imagen.",
         );
       }
     } catch {
@@ -1559,7 +1620,13 @@ export function AdminPanel() {
         );
       } else {
         const err = await res.json().catch(() => ({}));
-        showError("Error", err.detail || err.title || err.message || "No se pudo cambiar el estado de la imagen.");
+        showError(
+          "Error",
+          err.detail ||
+            err.title ||
+            err.message ||
+            "No se pudo cambiar el estado de la imagen.",
+        );
       }
     } catch {
       showError("Error de red", "No se pudo conectar con el servidor.");
@@ -1672,7 +1739,10 @@ export function AdminPanel() {
         const err = await res.json().catch(() => ({}));
         showError(
           "No se pudo guardar",
-          err.detail || err.title || err.message || "Hubo un problema al guardar la categoría.",
+          err.detail ||
+            err.title ||
+            err.message ||
+            "Hubo un problema al guardar la categoría.",
         );
       }
     } catch {
@@ -2119,74 +2189,71 @@ export function AdminPanel() {
                     </div>
 
                     <div className="col-span-2 pt-2 border-t border-border/40 mt-2">
-                          <label className="flex items-center gap-2 text-sm font-medium cursor-pointer select-none text-foreground">
+                      <label className="flex items-center gap-2 text-sm font-medium cursor-pointer select-none text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={productForm.enableWholesale}
+                          onChange={(e) =>
+                            setProductForm((p) => ({
+                              ...p,
+                              enableWholesale: e.target.checked,
+                            }))
+                          }
+                          className="accent-primary rounded border-border"
+                        />
+                        Habilitar precio mayorista
+                      </label>
+                    </div>
+
+                    {productForm.enableWholesale && (
+                      <>
+                        <div className="col-span-2 sm:col-span-1">
+                          <label className="block text-sm mb-1.5 font-medium">
+                            Precio mayorista *
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">
+                              $
+                            </span>
                             <input
-                              type="checkbox"
-                              checked={productForm.enableWholesale}
+                              type="text"
+                              value={formatInputPrice(
+                                productForm.wholesalePrice,
+                              )}
                               onChange={(e) =>
                                 setProductForm((p) => ({
                                   ...p,
-                                  enableWholesale: e.target.checked,
+                                  wholesalePrice: formatInputPrice(
+                                    e.target.value,
+                                  ),
                                 }))
                               }
-                              className="accent-primary rounded border-border"
+                              placeholder="0,00"
+                              className="w-full pl-7 pr-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
                             />
-                            Habilitar precio mayorista
-                          </label>
+                          </div>
                         </div>
-
-                        {productForm.enableWholesale && (
-                          <>
-                            <div className="col-span-2 sm:col-span-1">
-                              <label className="block text-sm mb-1.5 font-medium">
-                                Precio mayorista *
-                              </label>
-                              <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">
-                                  $
-                                </span>
-                                <input
-                                  type="text"
-                                  value={formatInputPrice(
-                                    productForm.wholesalePrice,
-                                  )}
-                                  onChange={(e) =>
-                                    setProductForm((p) => ({
-                                      ...p,
-                                      wholesalePrice: formatInputPrice(
-                                        e.target.value,
-                                      ),
-                                    }))
-                                  }
-                                  placeholder="0,00"
-                                  className="w-full pl-7 pr-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
-                                />
-                              </div>
-                            </div>
-                            <div className="col-span-2 sm:col-span-1">
-                              <label className="block text-sm mb-1.5 font-medium">
-                                {
-                                  productForm.measurementUnit === "gramo" ? "Cantidad mínima mayorista (gramos) *"
-                                  : "Cantidad mínima mayorista*"
-                                }
-                              </label>
-                              <input
-                                type="number"
-                                value={productForm.minimumWholesaleAmount || ""}
-                                onChange={(e) =>
-                                  setProductForm((p) => ({
-                                    ...p,
-                                    minimumWholesaleAmount: Number(
-                                      e.target.value,
-                                    ),
-                                  }))
-                                }
-                                placeholder="10"
-                                className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
-                              />
-                            </div>
-                          </>
-                        )}
+                        <div className="col-span-2 sm:col-span-1">
+                          <label className="block text-sm mb-1.5 font-medium">
+                            {productForm.measurementUnit === "gramo"
+                              ? "Cantidad mínima mayorista (gramos) *"
+                              : "Cantidad mínima mayorista*"}
+                          </label>
+                          <input
+                            type="number"
+                            value={productForm.minimumWholesaleAmount || ""}
+                            onChange={(e) =>
+                              setProductForm((p) => ({
+                                ...p,
+                                minimumWholesaleAmount: Number(e.target.value),
+                              }))
+                            }
+                            placeholder="10"
+                            className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                          />
+                        </div>
+                      </>
+                    )}
 
                     {/* Gramajes — solo si producto por gramo */}
                     {productForm.measurementUnit === "gramo" && (
@@ -2924,7 +2991,9 @@ export function AdminPanel() {
               {/* Formulario nuevo cupón */}
               {showCouponForm && (
                 <div className="bg-card border-2 border-primary/30 rounded-xl p-6 mb-6 shadow-sm">
-                  <h3 className="mb-5 text-base">{editingCouponId ? "Editar cupón" : "Crear cupón"}</h3>
+                  <h3 className="mb-5 text-base">
+                    {editingCouponId ? "Editar cupón" : "Crear cupón"}
+                  </h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm mb-1.5">Nombre *</label>
@@ -3047,7 +3116,10 @@ export function AdminPanel() {
                           min={0}
                           value={couponForm.monto ?? ""}
                           onChange={(e) =>
-                            setCF("monto", e.target.value ? Number(e.target.value) : null)
+                            setCF(
+                              "monto",
+                              e.target.value ? Number(e.target.value) : null,
+                            )
                           }
                           placeholder="500"
                           className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -3197,14 +3269,16 @@ export function AdminPanel() {
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-6">
                 <h1 className="text-2xl font-bold">Historial de Pedidos</h1>
                 <div className="flex bg-secondary/40 p-1 border border-border rounded-lg self-start sm:self-auto">
-                  {([
-                    ["pendientes", "Pendientes"],
-                    ["en_preparacion", "En preparación"],
-                    ["enviados", "Enviados"],
-                    ["entregados", "Entregados"],
-                    ["cancelados", "Cancelados"],
-                    ["todos", "Todos"],
-                  ] as const).map(([val, label]) => (
+                  {(
+                    [
+                      ["pendientes", "Pendientes"],
+                      ["en_preparacion", "En preparación"],
+                      ["enviados", "Enviados"],
+                      ["entregados", "Entregados"],
+                      ["cancelados", "Cancelados"],
+                      ["todos", "Todos"],
+                    ] as const
+                  ).map(([val, label]) => (
                     <button
                       key={val}
                       onClick={() => setOrdersFilter(val)}
@@ -3249,11 +3323,16 @@ export function AdminPanel() {
                       .filter(
                         (o) =>
                           ordersFilter === "todos" ||
-                          (ordersFilter === "pendientes" && o.status === "pendiente") ||
-                          (ordersFilter === "en_preparacion" && o.status === "en_preparacion") ||
-                          (ordersFilter === "enviados" && o.status === "enviado") ||
-                          (ordersFilter === "entregados" && o.status === "entregado") ||
-                          (ordersFilter === "cancelados" && o.status === "cancelado"),
+                          (ordersFilter === "pendientes" &&
+                            o.status === "pendiente") ||
+                          (ordersFilter === "en_preparacion" &&
+                            o.status === "en_preparacion") ||
+                          (ordersFilter === "enviados" &&
+                            o.status === "enviado") ||
+                          (ordersFilter === "entregados" &&
+                            o.status === "entregado") ||
+                          (ordersFilter === "cancelados" &&
+                            o.status === "cancelado"),
                       )
                       .map((order) => (
                         <React.Fragment key={order.id}>
@@ -3449,12 +3528,20 @@ export function AdminPanel() {
                                               e.stopPropagation();
                                               handleUpdateOrderStatus(
                                                 order.id,
-                                                e.target.value as Order["status"],
+                                                e.target
+                                                  .value as Order["status"],
                                               );
                                             }}
                                           >
-                                            {(Object.entries(STATUS_LABELS) as [Order["status"], string][]).map(([val, label]) => (
-                                              <option key={val} value={val}>{label}</option>
+                                            {(
+                                              Object.entries(STATUS_LABELS) as [
+                                                Order["status"],
+                                                string,
+                                              ][]
+                                            ).map(([val, label]) => (
+                                              <option key={val} value={val}>
+                                                {label}
+                                              </option>
                                             ))}
                                           </select>
                                         </div>
