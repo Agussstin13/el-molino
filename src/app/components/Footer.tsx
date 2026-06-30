@@ -2,7 +2,7 @@ import { MapPin, Phone, Instagram, Send } from "lucide-react";
 import React, { useState } from "react";
 import logo from "../../imports/image.png";
 
-const PHONE_NUMBER = "5492236927799";
+const PHONE_NUMBER = import.meta.env.VITE_PHONE_NUMBER;
 const DISPLAY_PHONE_NUMBER = "+54 9 223 692-7799";
 
 export function Footer() {

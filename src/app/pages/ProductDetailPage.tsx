@@ -14,7 +14,7 @@ import { Cart } from "../components/Cart";
 import { Checkout } from "../components/Checkout";
 import { Footer } from "../components/Footer";
 const API_BASE = import.meta.env.VITE_API_BASE;
-const PHONE_NUMBER = "5492236927799";
+const PHONE_NUMBER = import.meta.env.VITE_PHONE_NUMBER;
 const imgUrl = (path: string) =>
   path ? (path.startsWith('/') ? `${API_BASE}${path}` : `${API_BASE}/images/${path}`) : '';
 
