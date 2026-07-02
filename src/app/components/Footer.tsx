@@ -3,7 +3,6 @@ import React, { useState } from "react";
 import logo from "../../imports/image.png";
 
 const PHONE_NUMBER = import.meta.env.VITE_PHONE_NUMBER;
-const DISPLAY_PHONE_NUMBER = "+54 9 223 692-7799";
 
 export function Footer() {
   const [formData, setFormData] = useState({
@@ -75,7 +74,7 @@ export function Footer() {
               </li>
               <li className="flex items-center gap-3 text-muted-foreground text-sm group">
                 <Phone className="w-5 h-5 text-primary shrink-0 group-hover:scale-110 transition-transform" />
-                <a href={`https://wa.me/${PHONE_NUMBER}`} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">{DISPLAY_PHONE_NUMBER}</a>
+                <a href={`https://wa.me/${PHONE_NUMBER}`} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">+{PHONE_NUMBER}</a>
               </li>
             </ul>
           </div>

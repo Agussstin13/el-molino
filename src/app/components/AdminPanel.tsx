@@ -184,24 +184,30 @@ export function AdminPanel() {
   // Shipping state
   interface ShippingRateAdmin {
     id: number;
-    desdeKm: number;
     hastaKm: number;
     precio: number;
+    montoMinimoEnvioGratis: number | null;
     activo: boolean;
   }
   const [shippingRates, setShippingRates] = useState<ShippingRateAdmin[]>([]);
-  const [umbralEnvioGratis, setUmbralEnvioGratis] = useState<string>("5000");
   const [showShippingForm, setShowShippingForm] = useState(false);
   const [editingShippingId, setEditingShippingId] = useState<number | null>(
     null,
   );
   const [shippingForm, setShippingForm] = useState({
-    desdeKm: "",
     hastaKm: "",
     precio: "",
+    montoMinimoEnvioGratis: "",
     activo: true,
   });
   const [isSavingShipping, setIsSavingShipping] = useState(false);
+
+  const maxActiveShippingKm = shippingRates
+    .filter((rate) => rate.activo)
+    .reduce<number | null>(
+      (max, rate) => (max === null || rate.hastaKm > max ? rate.hastaKm : max),
+      null,
+    );
 
   const { lastProductsUpdate, lastCategoriesUpdate } = useSignalR();
 
@@ -419,9 +425,9 @@ export function AdminPanel() {
           gramages: Array.isArray(p.gramages) ? p.gramages : [],
           wholesalePrice: p.wholesalePrice
             ? {
-                quantity: p.minimumWholesaleAmount ?? 10,
-                price: p.wholesalePrice,
-              }
+              quantity: p.minimumWholesaleAmount ?? 10,
+              price: p.wholesalePrice,
+            }
             : undefined,
         }));
         setProducts(mapped);
@@ -452,35 +458,36 @@ export function AdminPanel() {
   // ── Shipping handlers ──────────────────────────────────────────────────────
   const fetchShippingRates = async () => {
     try {
-      const [ratesRes, configRes] = await Promise.all([
-        fetch(`${API_BASE}/api/shipping`, { headers: getAuthHeaders(null) }),
-        fetch(`${API_BASE}/api/shipping/config`, {
-          headers: getAuthHeaders(null),
-        }),
-      ]);
+      const ratesRes = await fetch(`${API_BASE}/api/shipping`, {
+        headers: getAuthHeaders(null),
+      });
       if (ratesRes.ok) setShippingRates(await ratesRes.json());
-      if (configRes.ok) {
-        const cfg = await configRes.json();
-        setUmbralEnvioGratis(String(cfg.umbralEnvioGratis ?? 5000));
-      }
     } catch (e) {
-      console.error("Error fetching shipping config:", e);
+      console.error("Error fetching shipping rates:", e);
     }
   };
 
   const handleSaveShippingRate = async () => {
-    const desde = 0; // Hardcode since we only use Hasta
     const hasta = parseFloat(shippingForm.hastaKm);
     const precio = parseFloat(
       shippingForm.precio.replace(/\./g, "").replace(",", "."),
     );
+    const montoMinimoEnvioGratis = shippingForm.montoMinimoEnvioGratis.trim()
+      ? parseFloat(
+        shippingForm.montoMinimoEnvioGratis.replace(/\./g, "").replace(",", "."),
+      )
+      : null;
 
     if (isNaN(hasta) || isNaN(precio)) {
-      showError("Datos incompletos", "Completá todos los campos del tramo.");
+      showError("Datos incompletos", "Completá los campos obligatorios del tramo.");
       return;
     }
     if (hasta <= 0) {
       showError("Rango inválido", "El km máximo debe ser mayor a 0.");
+      return;
+    }
+    if (montoMinimoEnvioGratis !== null && (isNaN(montoMinimoEnvioGratis) || montoMinimoEnvioGratis < 0)) {
+      showError("Monto inválido", "El monto mínimo de envío gratis debe ser mayor o igual a 0, o dejarse vacío.");
       return;
     }
 
@@ -488,9 +495,9 @@ export function AdminPanel() {
     try {
       const payload = {
         id: editingShippingId ?? 0,
-        desdeKm: desde,
         hastaKm: hasta,
         precio,
+        montoMinimoEnvioGratis,
         activo: shippingForm.activo,
       };
       const url = editingShippingId
@@ -509,7 +516,7 @@ export function AdminPanel() {
         );
         setShowShippingForm(false);
         setEditingShippingId(null);
-        setShippingForm({ desdeKm: "", hastaKm: "", precio: "", activo: true });
+        setShippingForm({ hastaKm: "", precio: "", montoMinimoEnvioGratis: "", activo: true });
         fetchShippingRates();
       } else {
         const errorData = await res.json().catch(() => null);
@@ -540,9 +547,9 @@ export function AdminPanel() {
             showError(
               "Error",
               err.detail ||
-                err.title ||
-                err.message ||
-                "No se pudo eliminar el tramo.",
+              err.title ||
+              err.message ||
+              "No se pudo eliminar el tramo.",
             );
           }
         } catch {
@@ -550,37 +557,6 @@ export function AdminPanel() {
         }
       },
     );
-  };
-
-  const handleSaveUmbral = async () => {
-    const val = parseFloat(
-      umbralEnvioGratis.replace(/\./g, "").replace(",", "."),
-    );
-    if (isNaN(val) || val < 0) {
-      showError("Valor inválido", "Ingresá un monto válido.");
-      return;
-    }
-    try {
-      const res = await fetch(`${API_BASE}/api/shipping/config/umbral`, {
-        method: "PUT",
-        headers: getAuthHeaders(),
-        body: JSON.stringify(val),
-      });
-      if (res.ok) {
-        showSuccess("¡Listo!", "Umbral de envío gratis actualizado.");
-      } else {
-        const err = await res.json().catch(() => ({}));
-        showError(
-          "Error",
-          err.detail ||
-            err.title ||
-            err.message ||
-            "No se pudo guardar el umbral.",
-        );
-      }
-    } catch {
-      showError("Error de red", "No se pudo conectar con el servidor.");
-    }
   };
 
   const handleSessionExpired = () => {
@@ -697,9 +673,9 @@ export function AdminPanel() {
             gramages: Array.isArray(p.gramages) ? p.gramages : [],
             wholesalePrice: p.wholesalePrice
               ? {
-                  quantity: p.minimumWholesaleAmount ?? 10,
-                  price: p.wholesalePrice,
-                }
+                quantity: p.minimumWholesaleAmount ?? 10,
+                price: p.wholesalePrice,
+              }
               : undefined,
           }));
           setProducts(mappedProducts);
@@ -1052,9 +1028,9 @@ export function AdminPanel() {
             gramages: Array.isArray(p.gramages) ? p.gramages : [],
             wholesalePrice: p.wholesalePrice
               ? {
-                  quantity: p.minimumWholesaleAmount ?? 10,
-                  price: p.wholesalePrice,
-                }
+                quantity: p.minimumWholesaleAmount ?? 10,
+                price: p.wholesalePrice,
+              }
               : undefined,
           }));
           setProducts(mapped);
@@ -1089,8 +1065,8 @@ export function AdminPanel() {
         showError(
           `No se pudo ${editingProductId ? "actualizar" : "guardar"}`,
           err.detail ||
-            err.title ||
-            `Hubo un problema al intentar ${editingProductId ? "actualizar" : "guardar"} el producto.`,
+          err.title ||
+          `Hubo un problema al intentar ${editingProductId ? "actualizar" : "guardar"} el producto.`,
         );
       }
     } catch (e) {
@@ -1139,7 +1115,7 @@ export function AdminPanel() {
               showError(
                 "No se pudo borrar",
                 errorData.title ||
-                  "Hubo un problema al intentar eliminar el producto.",
+                "Hubo un problema al intentar eliminar el producto.",
               );
             }
           }
@@ -1291,9 +1267,9 @@ export function AdminPanel() {
         showError(
           "Error",
           err.detail ||
-            err.title ||
-            err.message ||
-            "No pudimos guardar el cupón.",
+          err.title ||
+          err.message ||
+          "No pudimos guardar el cupón.",
         );
       }
     } catch (e) {
@@ -1502,9 +1478,9 @@ export function AdminPanel() {
         showError(
           "No se pudo guardar",
           err.detail ||
-            err.title ||
-            err.message ||
-            "Hubo un problema al guardar la imagen.",
+          err.title ||
+          err.message ||
+          "Hubo un problema al guardar la imagen.",
         );
       }
     } catch {
@@ -1623,9 +1599,9 @@ export function AdminPanel() {
         showError(
           "Error",
           err.detail ||
-            err.title ||
-            err.message ||
-            "No se pudo cambiar el estado de la imagen.",
+          err.title ||
+          err.message ||
+          "No se pudo cambiar el estado de la imagen.",
         );
       }
     } catch {
@@ -1740,9 +1716,9 @@ export function AdminPanel() {
         showError(
           "No se pudo guardar",
           err.detail ||
-            err.title ||
-            err.message ||
-            "Hubo un problema al guardar la categoría.",
+          err.title ||
+          err.message ||
+          "Hubo un problema al guardar la categoría.",
         );
       }
     } catch {
@@ -1899,7 +1875,7 @@ export function AdminPanel() {
     <div className="h-screen bg-background flex overflow-hidden">
       {/* Sidebar */}
       <aside
-        className={`${isSidebarExpanded ? "w-60" : "w-20"} transition-all duration-300 bg-sidebar border-r border-sidebar-border p-4 flex flex-col flex-shrink-0 relative`}
+        className={`${isSidebarExpanded ? "w-20 md:w-60" : "w-20"} transition-all duration-300 bg-sidebar border-r border-sidebar-border p-4 flex flex-col flex-shrink-0 relative`}
       >
         <button
           onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
@@ -1913,7 +1889,7 @@ export function AdminPanel() {
         </button>
 
         <div
-          className={`flex items-center ${isSidebarExpanded ? "gap-3" : "justify-center"} mb-8 h-12`}
+          className={`flex items-center ${isSidebarExpanded ? "justify-center md:justify-start md:gap-3" : "justify-center"} mb-8 h-12`}
         >
           <img
             src="/logo.svg"
@@ -1921,7 +1897,7 @@ export function AdminPanel() {
             className="h-10 w-10 object-contain flex-shrink-0"
           />
           {isSidebarExpanded && (
-            <div className="whitespace-nowrap overflow-hidden">
+            <div className="hidden md:block whitespace-nowrap overflow-hidden">
               <p
                 className="text-sidebar-foreground font-bold italic tracking-wide text-2xl leading-none"
                 style={{ fontFamily: "'Playfair Display', serif" }}
@@ -1939,16 +1915,15 @@ export function AdminPanel() {
               key={item.id}
               id={`admin-nav-${item.id}`}
               onClick={() => setCurrentView(item.id)}
-              className={`w-full flex items-center ${isSidebarExpanded ? "gap-3 px-3" : "justify-center px-0"} py-2.5 rounded-lg transition-colors text-sm ${
-                currentView === item.id
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent"
-              }`}
+              className={`w-full flex items-center ${isSidebarExpanded ? "justify-center px-0 md:justify-start md:gap-3 md:px-3" : "justify-center px-0"} py-2.5 rounded-lg transition-colors text-sm ${currentView === item.id
+                ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                : "text-sidebar-foreground hover:bg-sidebar-accent"
+                }`}
               title={!isSidebarExpanded ? item.label : undefined}
             >
               <item.icon className="w-5 h-5 flex-shrink-0" />
               {isSidebarExpanded && (
-                <span className="whitespace-nowrap">{item.label}</span>
+                <span className="hidden md:inline whitespace-nowrap">{item.label}</span>
               )}
             </button>
           ))}
@@ -1959,22 +1934,22 @@ export function AdminPanel() {
             href="/"
             target="_blank"
             rel="noopener noreferrer"
-            className={`w-full flex items-center ${isSidebarExpanded ? "gap-3 px-3" : "justify-center px-0"} py-2.5 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition-colors text-sm`}
+            className={`w-full flex items-center ${isSidebarExpanded ? "justify-center px-0 md:justify-start md:gap-3 md:px-3" : "justify-center px-0"} py-2.5 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition-colors text-sm`}
             title={!isSidebarExpanded ? "Ver tienda" : undefined}
           >
             <Package className="w-5 h-5 flex-shrink-0" />
             {isSidebarExpanded && (
-              <span className="whitespace-nowrap">Ver tienda</span>
+              <span className="hidden md:inline whitespace-nowrap">Ver tienda</span>
             )}
           </a>
           <button
             onClick={handleLogout}
-            className={`w-full flex items-center ${isSidebarExpanded ? "gap-3 px-3" : "justify-center px-0"} py-2.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors text-sm`}
+            className={`w-full flex items-center ${isSidebarExpanded ? "justify-center px-0 md:justify-start md:gap-3 md:px-3" : "justify-center px-0"} py-2.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors text-sm`}
             title={!isSidebarExpanded ? "Cerrar sesión" : undefined}
           >
             <LogOut className="w-5 h-5 flex-shrink-0" />
             {isSidebarExpanded && (
-              <span className="whitespace-nowrap">Cerrar sesión</span>
+              <span className="hidden md:inline whitespace-nowrap">Cerrar sesión</span>
             )}
           </button>
         </div>
@@ -2088,11 +2063,10 @@ export function AdminPanel() {
                               newGramageInput: "",
                             }))
                           }
-                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${
-                            productForm.measurementUnit === "unidad"
-                              ? "bg-foreground text-background border-foreground"
-                              : "border-border text-foreground hover:border-foreground/50"
-                          }`}
+                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${productForm.measurementUnit === "unidad"
+                            ? "bg-foreground text-background border-foreground"
+                            : "border-border text-foreground hover:border-foreground/50"
+                            }`}
                         >
                           Por unidad
                         </button>
@@ -2104,11 +2078,10 @@ export function AdminPanel() {
                               measurementUnit: "gramo",
                             }))
                           }
-                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${
-                            productForm.measurementUnit === "gramo"
-                              ? "bg-foreground text-background border-foreground"
-                              : "border-border text-foreground hover:border-foreground/50"
-                          }`}
+                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${productForm.measurementUnit === "gramo"
+                            ? "bg-foreground text-background border-foreground"
+                            : "border-border text-foreground hover:border-foreground/50"
+                            }`}
                         >
                           Por gramo (kg)
                         </button>
@@ -2172,18 +2145,16 @@ export function AdminPanel() {
                         onClick={() =>
                           setProductForm((p) => ({ ...p, active: !p.active }))
                         }
-                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          productForm.active
-                            ? "bg-accent"
-                            : "bg-switch-background"
-                        }`}
+                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${productForm.active
+                          ? "bg-accent"
+                          : "bg-switch-background"
+                          }`}
                       >
                         <span
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                            productForm.active
-                              ? "translate-x-5"
-                              : "translate-x-0"
-                          }`}
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${productForm.active
+                            ? "translate-x-5"
+                            : "translate-x-0"
+                            }`}
                         />
                       </button>
                     </div>
@@ -2611,13 +2582,12 @@ export function AdminPanel() {
                           </td>
                           <td className="p-4">
                             <span
-                              className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                                product.stock > 50
-                                  ? "bg-accent/20 text-accent"
-                                  : product.stock > 20
-                                    ? "bg-chart-4/20 text-chart-4"
-                                    : "bg-destructive/20 text-destructive"
-                              }`}
+                              className={`px-2.5 py-1 rounded-full text-xs font-medium ${product.stock > 50
+                                ? "bg-accent/20 text-accent"
+                                : product.stock > 20
+                                  ? "bg-chart-4/20 text-chart-4"
+                                  : "bg-destructive/20 text-destructive"
+                                }`}
                             >
                               {product.measurementUnit === "gramo"
                                 ? product.stock >= 1000
@@ -2628,11 +2598,10 @@ export function AdminPanel() {
                           </td>
                           <td className="p-4">
                             <span
-                              className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
-                                product.active
-                                  ? "bg-accent/10 text-accent border-accent/20"
-                                  : "bg-secondary/60 text-muted-foreground border-border"
-                              }`}
+                              className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${product.active
+                                ? "bg-accent/10 text-accent border-accent/20"
+                                : "bg-secondary/60 text-muted-foreground border-border"
+                                }`}
                             >
                               {product.active ? "Activo" : "Inactivo"}
                             </span>
@@ -2735,31 +2704,28 @@ export function AdminPanel() {
                 <div className="flex bg-secondary/40 p-1 border border-border rounded-lg self-start sm:self-auto">
                   <button
                     onClick={() => setOffersFilter("all")}
-                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                      offersFilter === "all"
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${offersFilter === "all"
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                      }`}
                   >
                     Todos
                   </button>
                   <button
                     onClick={() => setOffersFilter("active")}
-                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                      offersFilter === "active"
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${offersFilter === "active"
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                      }`}
                   >
                     Con oferta
                   </button>
                   <button
                     onClick={() => setOffersFilter("inactive")}
-                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                      offersFilter === "inactive"
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${offersFilter === "inactive"
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                      }`}
                   >
                     Sin oferta
                   </button>
@@ -2840,11 +2806,10 @@ export function AdminPanel() {
                             <td className="p-4">
                               <div className="relative">
                                 <span
-                                  className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium select-none ${
-                                    draft.active
-                                      ? "text-muted-foreground"
-                                      : "text-muted-foreground/30"
-                                  }`}
+                                  className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium select-none ${draft.active
+                                    ? "text-muted-foreground"
+                                    : "text-muted-foreground/30"
+                                    }`}
                                 >
                                   $
                                 </span>
@@ -2861,11 +2826,10 @@ export function AdminPanel() {
                                   placeholder={
                                     draft.active ? "0,00" : "Desactivado"
                                   }
-                                  className={`w-full pl-7 pr-3 py-1.5 border rounded-lg text-sm transition-all focus:ring-2 focus:ring-primary/20 ${
-                                    draft.active
-                                      ? "bg-input-background border-border text-foreground font-medium"
-                                      : "bg-secondary/30 border-border/40 text-muted-foreground/40 cursor-not-allowed"
-                                  }`}
+                                  className={`w-full pl-7 pr-3 py-1.5 border rounded-lg text-sm transition-all focus:ring-2 focus:ring-primary/20 ${draft.active
+                                    ? "bg-input-background border-border text-foreground font-medium"
+                                    : "bg-secondary/30 border-border/40 text-muted-foreground/40 cursor-not-allowed"
+                                    }`}
                                 />
                               </div>
                             </td>
@@ -2887,18 +2851,16 @@ export function AdminPanel() {
                                   onClick={() =>
                                     handleToggleOfferDraft(product.id)
                                   }
-                                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                    draft.active
-                                      ? "bg-accent"
-                                      : "bg-switch-background"
-                                  }`}
+                                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${draft.active
+                                    ? "bg-accent"
+                                    : "bg-switch-background"
+                                    }`}
                                 >
                                   <span
-                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                      draft.active
-                                        ? "translate-x-5"
-                                        : "translate-x-0"
-                                    }`}
+                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${draft.active
+                                      ? "translate-x-5"
+                                      : "translate-x-0"
+                                      }`}
                                   />
                                 </button>
                               </div>
@@ -2935,11 +2897,10 @@ export function AdminPanel() {
                       "Se descartaron los cambios no guardados.",
                     );
                   }}
-                  className={`px-4 py-2 border border-border rounded-lg transition-colors text-sm text-foreground ${
-                    !hasOffersChanges
-                      ? "opacity-50 cursor-not-allowed"
-                      : "hover:bg-secondary/40"
-                  }`}
+                  className={`px-4 py-2 border border-border rounded-lg transition-colors text-sm text-foreground ${!hasOffersChanges
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:bg-secondary/40"
+                    }`}
                 >
                   Descartar
                 </button>
@@ -2947,11 +2908,10 @@ export function AdminPanel() {
                   type="button"
                   disabled={isSavingOffers || !hasOffersChanges}
                   onClick={handleSaveDailyOffers}
-                  className={`px-6 py-2 bg-primary disabled:opacity-50 text-primary-foreground rounded-lg transition-colors text-sm font-semibold shadow-sm flex items-center gap-2 ${
-                    !hasOffersChanges || isSavingOffers
-                      ? "cursor-not-allowed"
-                      : "hover:bg-primary/90"
-                  }`}
+                  className={`px-6 py-2 bg-primary disabled:opacity-50 text-primary-foreground rounded-lg transition-colors text-sm font-semibold shadow-sm flex items-center gap-2 ${!hasOffersChanges || isSavingOffers
+                    ? "cursor-not-allowed"
+                    : "hover:bg-primary/90"
+                    }`}
                 >
                   {isSavingOffers ? "Guardando cambios..." : "Guardar cambios"}
                 </button>
@@ -3282,11 +3242,10 @@ export function AdminPanel() {
                     <button
                       key={val}
                       onClick={() => setOrdersFilter(val)}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                        ordersFilter === val
-                          ? "bg-card text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${ordersFilter === val
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                        }`}
                     >
                       {label}
                     </button>
@@ -3600,7 +3559,7 @@ export function AdminPanel() {
                                           <span className="text-sm font-medium text-foreground">
                                             {formatARS(
                                               order.total -
-                                                (order.shippingCost || 0),
+                                              (order.shippingCost || 0),
                                             )}
                                           </span>
                                         </div>
@@ -3709,15 +3668,15 @@ export function AdminPanel() {
                       <div className="flex items-center gap-4">
                         {(carouselImagePreview ||
                           (editingCarouselId && carouselForm.imagenNombre)) && (
-                          <img
-                            src={
-                              carouselImagePreview ||
-                              imgUrl(carouselForm.imagenNombre)
-                            }
-                            alt="Preview"
-                            className="w-24 h-16 object-cover rounded-lg border border-border"
-                          />
-                        )}
+                            <img
+                              src={
+                                carouselImagePreview ||
+                                imgUrl(carouselForm.imagenNombre)
+                              }
+                              alt="Preview"
+                              className="w-24 h-16 object-cover rounded-lg border border-border"
+                            />
+                          )}
                         <input
                           type="file"
                           accept="image/*"
@@ -3989,7 +3948,7 @@ export function AdminPanel() {
                       </label>
                       <div className="flex items-start gap-6 p-4 bg-secondary/20 rounded-xl border border-border/50">
                         {categoryImagePreview ||
-                        (editingCategoryId && categoryForm.imagenNombre) ? (
+                          (editingCategoryId && categoryForm.imagenNombre) ? (
                           <div className="relative group">
                             <img
                               src={
@@ -4170,63 +4129,38 @@ export function AdminPanel() {
           {/* ENVÍOS */}
           {currentView === "shipping" && (
             <div>
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
                 <div>
-                  <h1>Tarifas de Envío</h1>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-xl font-semibold text-foreground">
+                      Tarifas de envío
+                    </h2>
+                    <span className="inline-flex items-center rounded-full border border-yellow-300 bg-yellow-100 px-2.5 py-1 text-xs font-medium text-yellow-900">
+                      {maxActiveShippingKm !== null
+                        ? `Límite actual: ${maxActiveShippingKm} km`
+                        : "Sin envíos activos"}
+                    </span>
+                  </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Configurá los costos de envío por tramo de distancia desde
-                    el local.
+                    Configurá los costos de envío por distancia desde el local. El tramo activo con mayor "Hasta (km)" define el límite máximo de entrega.
                   </p>
                 </div>
                 <button
                   onClick={() => {
                     setEditingShippingId(null);
                     setShippingForm({
-                      desdeKm: "",
                       hastaKm: "",
                       precio: "",
+                      montoMinimoEnvioGratis: "",
                       activo: true,
                     });
                     setShowShippingForm(true);
                   }}
-                  className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg transition-colors shadow-sm text-sm"
+                  className="flex h-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap bg-primary hover:bg-primary/90 text-primary-foreground px-4 rounded-lg transition-colors shadow-sm text-sm"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-4 h-4 shrink-0" />
                   Nuevo tramo
                 </button>
-              </div>
-
-              {/* Umbral envío gratis */}
-              <div className="bg-card border border-border rounded-xl p-5 mb-6">
-                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                  <Truck className="w-4 h-4 text-primary" />
-                  Envío gratis a partir de...
-                </h3>
-                <div className="flex items-center gap-3">
-                  <div className="relative flex-1 max-w-xs">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium select-none">
-                      $
-                    </span>
-                    <input
-                      type="text"
-                      value={umbralEnvioGratis}
-                      onChange={(e) => setUmbralEnvioGratis(e.target.value)}
-                      placeholder="5000"
-                      className="w-full pl-7 pr-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
-                    />
-                  </div>
-                  <button
-                    onClick={handleSaveUmbral}
-                    className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-sm transition-colors"
-                  >
-                    <Save className="w-4 h-4" />
-                    Guardar
-                  </button>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Los pedidos que superen este monto no pagarán envío
-                  (actualmente: ${umbralEnvioGratis}).
-                </p>
               </div>
 
               {/* Formulario inline */}
@@ -4235,7 +4169,7 @@ export function AdminPanel() {
                   <h3 className="text-base mb-4">
                     {editingShippingId ? "Editar tramo" : "Nuevo tramo"}
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                       <label className="block text-xs font-medium mb-1.5">
                         Hasta (km)
@@ -4269,6 +4203,23 @@ export function AdminPanel() {
                           }))
                         }
                         placeholder="500"
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1.5">
+                        Gratis desde ($)
+                      </label>
+                      <input
+                        type="text"
+                        value={shippingForm.montoMinimoEnvioGratis}
+                        onChange={(e) =>
+                          setShippingForm((f) => ({
+                            ...f,
+                            montoMinimoEnvioGratis: e.target.value,
+                          }))
+                        }
+                        placeholder="Vacío = nunca gratis"
                         className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20"
                       />
                     </div>
@@ -4322,74 +4273,86 @@ export function AdminPanel() {
                 </div>
               ) : (
                 <div className="bg-card border border-border rounded-xl overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-secondary/40 border-b border-border">
-                      <tr>
-                        <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                          Hasta
-                        </th>
-                        <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                          Precio
-                        </th>
-                        <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                          Estado
-                        </th>
-                        <th className="px-5 py-3"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {shippingRates
-                        .slice()
-                        .sort((a, b) => a.hastaKm - b.hastaKm)
-                        .map((rate) => (
-                          <tr
-                            key={rate.id}
-                            className="hover:bg-secondary/20 transition-colors"
-                          >
-                            <td className="px-5 py-3">{rate.hastaKm} km</td>
-                            <td className="px-5 py-3 font-semibold text-primary">
-                              {formatARS(rate.precio)}
-                            </td>
-                            <td className="px-5 py-3">
-                              <span
-                                className={`text-xs font-semibold px-2.5 py-1 rounded-full ${rate.activo ? "bg-chart-2/20 text-chart-2" : "bg-secondary text-muted-foreground"}`}
-                              >
-                                {rate.activo ? "Activo" : "Inactivo"}
-                              </span>
-                            </td>
-                            <td className="px-5 py-3">
-                              <div className="flex items-center justify-end gap-2">
-                                <button
-                                  onClick={() => {
-                                    setEditingShippingId(rate.id);
-                                    setShippingForm({
-                                      desdeKm: String(rate.desdeKm),
-                                      hastaKm: String(rate.hastaKm),
-                                      precio: String(rate.precio),
-                                      activo: rate.activo,
-                                    });
-                                    setShowShippingForm(true);
-                                  }}
-                                  className="p-2 hover:bg-secondary rounded-lg transition-colors"
-                                  title="Editar"
+                  <div className="w-full overflow-x-auto">
+                    <table className="w-full min-w-[680px] text-sm whitespace-nowrap">
+                      <thead className="bg-secondary/40 border-b border-border">
+                        <tr>
+                          <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                            Hasta
+                          </th>
+                          <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                            Precio
+                          </th>
+                          <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                            Gratis desde
+                          </th>
+                          <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                            Estado
+                          </th>
+                          <th className="px-5 py-3"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {shippingRates
+                          .slice()
+                          .sort((a, b) => a.hastaKm - b.hastaKm)
+                          .map((rate) => (
+                            <tr
+                              key={rate.id}
+                              className="hover:bg-secondary/20 transition-colors"
+                            >
+                              <td className="px-5 py-3">{rate.hastaKm} km</td>
+                              <td className="px-5 py-3 font-semibold text-primary">
+                                {formatARS(rate.precio)}
+                              </td>
+                              <td className="px-5 py-3">
+                                {rate.montoMinimoEnvioGratis != null
+                                  ? formatARS(rate.montoMinimoEnvioGratis)
+                                  : "No aplica"}
+                              </td>
+                              <td className="px-5 py-3">
+                                <span
+                                  className={`text-xs font-semibold px-2.5 py-1 rounded-full ${rate.activo ? "bg-chart-2/20 text-chart-2" : "bg-secondary text-muted-foreground"}`}
                                 >
-                                  <Edit className="w-4 h-4 text-muted-foreground" />
-                                </button>
-                                <button
-                                  onClick={() =>
-                                    handleDeleteShippingRate(rate.id)
-                                  }
-                                  className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors"
-                                  title="Eliminar"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
+                                  {rate.activo ? "Activo" : "Inactivo"}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setEditingShippingId(rate.id);
+                                      setShippingForm({
+                                        hastaKm: String(rate.hastaKm),
+                                        precio: String(rate.precio),
+                                        montoMinimoEnvioGratis: rate.montoMinimoEnvioGratis != null
+                                          ? String(rate.montoMinimoEnvioGratis)
+                                          : "",
+                                        activo: rate.activo,
+                                      });
+                                      setShowShippingForm(true);
+                                    }}
+                                    className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                                    title="Editar"
+                                  >
+                                    <Edit className="w-4 h-4 text-muted-foreground" />
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      handleDeleteShippingRate(rate.id)
+                                    }
+                                    className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors"
+                                    title="Eliminar"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>

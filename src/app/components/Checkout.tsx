@@ -43,7 +43,7 @@ interface ShippingQuoteResponse {
   baseShippingCost: number;
   shippingCost: number;
   freeShippingApplied: boolean;
-  freeShippingThreshold: number;
+  freeShippingThreshold: number | null;
 }
 
 const EMPTY_FORM: FormData = {
@@ -119,7 +119,6 @@ export function Checkout() {
     closeCheckout,
     subtotal,
     clearCart,
-    freeShippingThreshold,
   } = useCart();
   const { clientUser, logoutClient } = useAuth();
   const { showError } = useAlert();
@@ -324,17 +323,6 @@ export function Checkout() {
     const quoteShipping = async () => {
       setCalculatingShipping(true);
       setShippingQuoteError(null);
-
-      // OPTIMIZACIÓN: Si el pedido ya supera el umbral de envío gratis, no consultamos distancias.
-      if (freeShippingThreshold > 0 && subtotal >= freeShippingThreshold) {
-        setShippingCost(0);
-        setDistanciaKm(0);
-        // Dejamos las coordenadas nulas para que muestre el mapa por defecto, pero validamos la dirección.
-        setSelectedCoords(null);
-        setIsAddressVerified(true);
-        setCalculatingShipping(false);
-        return;
-      }
 
       try {
         const res = await fetch(`${API_BASE}/api/shipping/quote`, {
@@ -1236,9 +1224,7 @@ export function Checkout() {
                             ? "¡Gratis!"
                             : shippingCost !== null
                               ? formatARS(shippingCost)
-                              : subtotal >= freeShippingThreshold
-                                ? "¡Gratis!"
-                                : "Ingresá tu dirección"}
+                              : "Ingresá tu dirección"}
                       </span>
                     </div>
                     <div className="flex justify-between pt-2 border-t border-border font-semibold">

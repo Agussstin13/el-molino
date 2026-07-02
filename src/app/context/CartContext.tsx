@@ -4,7 +4,6 @@ import {
   getEffectivePrice,
   getEffectiveGramagePrice,
   isWholesaleActive,
-  SHIPPING_COST,
   type ShippingRate,
 } from '../../lib/price';
 
@@ -19,7 +18,6 @@ interface CartContextType {
   shipping: number;
   total: number;
   shippingRates: ShippingRate[];
-  freeShippingThreshold: number;
   addToCart: (product: Product, quantity: number, selectedGramage?: any) => void;
   updateQuantity: (id: string, quantity: number, selectedGramageId?: number) => void;
   removeItem: (id: string, selectedGramageId?: number) => void;
@@ -47,29 +45,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
   });
 
   const [shippingRates, setShippingRates] = useState<ShippingRate[]>([]);
-  const [freeShippingThreshold, setFreeShippingThreshold] = useState<number>(5000);
 
-  // Cargar tarifas de envío desde el backend al iniciar
+  // Cargar tarifas de envío desde el backend al iniciar.
+  // El envío gratis ahora depende de cada tarifa, no de una configuración global.
   useEffect(() => {
-    const loadShippingConfig = async () => {
+    const loadShippingRates = async () => {
       try {
-        const [ratesRes, configRes] = await Promise.all([
-          fetch(`${API_BASE}/api/shipping`),
-          fetch(`${API_BASE}/api/shipping/config`),
-        ]);
+        const ratesRes = await fetch(`${API_BASE}/api/shipping`);
         if (ratesRes.ok) {
           const data: ShippingRate[] = await ratesRes.json();
           setShippingRates(data);
         }
-        if (configRes.ok) {
-          const config = await configRes.json();
-          setFreeShippingThreshold(config.umbralEnvioGratis ?? 5000);
-        }
       } catch (e) {
-        console.error("Error loading shipping config:", e);
+        console.error("Error loading shipping rates:", e);
       }
     };
-    loadShippingConfig();
+    loadShippingRates();
   }, []);
 
   // Sincronizar carrito con el backend al iniciar para actualizar precios y stock
@@ -247,11 +238,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // El costo base de envío usa el primer tramo (distancia mínima) como fallback en el carrito.
   // El costo real se calcula en el Checkout una vez que el cliente ingresa su dirección.
   const shipping =
-    subtotal === 0 ? 0
-      : subtotal >= freeShippingThreshold ? 0
-        : shippingRates.length > 0
-          ? shippingRates.filter(r => r.activo).sort((a, b) => a.hastaKm - b.hastaKm)[0]?.precio ?? SHIPPING_COST
-          : SHIPPING_COST;
+    subtotal === 0
+      ? 0
+      : shippingRates.filter(r => r.activo).sort((a, b) => a.hastaKm - b.hastaKm)[0]?.precio ?? 0;
 
   const total = subtotal + shipping;
 
@@ -271,7 +260,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
         shipping,
         total,
         shippingRates,
-        freeShippingThreshold,
         addToCart,
         updateQuantity,
         removeItem,

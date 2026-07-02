@@ -229,7 +229,7 @@ export function Header() {
                   <div className="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center flex-shrink-0">
                     <Phone className="w-4 h-4 text-primary" />
                   </div>
-                  +54 9 223 6927799
+                  +{PHONE_NUMBER}
                 </a>
               </div>
             </div>
