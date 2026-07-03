@@ -15,7 +15,11 @@ export interface Product {
   discount?: number;
   wholesalePrice?: { quantity: number; price: number };
   description?: string;
+  /** Lista de categorías (nueva API multi-categoría) */
+  categories?: Category[];
+  /** @deprecated usar categories[0].nombre */
   category?: string;
+  /** @deprecated usar categories[0].id */
   categoryId?: number;
   stock: number;
   active?: boolean;

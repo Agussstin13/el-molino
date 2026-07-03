@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, User as UserIcon, Mail, Lock, Phone, Calendar, Fingerprint } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
@@ -24,6 +24,18 @@ export function ClientLoginModal({ isOpen, onClose }: ClientLoginModalProps) {
   const [telefono, setTelefono] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Bloquear el scroll del fondo cuando el modal está abierto
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

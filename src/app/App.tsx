@@ -41,14 +41,7 @@ export default function App() {
                 <Route path="/productos" element={<ShopPage />} />
                 <Route path="/producto/:id" element={<ProductDetailPage />} />
                 <Route path="/pedido/:token" element={<GuestOrderPage />} />
-                <Route
-                  path="/mis-pedidos"
-                  element={
-                    <ProtectedClientRoute>
-                      <OrdersPage />
-                    </ProtectedClientRoute>
-                  }
-                />
+                <Route path="/mis-pedidos" element={<OrdersPage />} />
                 <Route path="/admin/login" element={<AdminLoginPage />} />
                 <Route
                   path="/admin"

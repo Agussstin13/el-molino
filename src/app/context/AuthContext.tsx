@@ -6,11 +6,20 @@ import {
   type ReactNode,
 } from "react";
 
+export interface SavedAddress {
+  id: string;
+  label: string;        // dirección completa
+  placeId: string;      // Google Places ID
+  infoAdicional?: string;
+  savedAt: string;      // ISO date
+}
+
 interface AuthContextType {
   isAdminAuthenticated: boolean;
   isClientAuthenticated: boolean;
   clientUser: any | null;
   adminToken: string | null;
+  savedAddresses: SavedAddress[];
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
   loginClient: (
@@ -22,6 +31,8 @@ interface AuthContextType {
   ) => Promise<{ success: boolean; error?: string }>;
   logoutClient: () => void;
   updateClientProfile: (updates: any) => void;
+  saveAddress: (addr: Omit<SavedAddress, 'id' | 'savedAt'>) => boolean;
+  removeAddress: (id: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -30,7 +41,45 @@ const API_BASE = import.meta.env.VITE_API_BASE;
 
 /** Strip surrounding quotes if the server returned a JSON-encoded string */
 function cleanToken(raw: string): string {
-  return raw.trim().replace(/^"|"$/g, "");
+  return raw.trim().replace(/^\"|\"$/g, "");
+}
+
+/**
+ * Persist extra profile fields (like fechaNacimiento) that are not included
+ * in the JWT claims. Keyed by email so multiple accounts don't conflict.
+ */
+function saveExtraProfile(email: string, data: Record<string, any>) {
+  try {
+    const key = `clientProfile-${email}`;
+    const existing = JSON.parse(localStorage.getItem(key) || "{}");
+    localStorage.setItem(key, JSON.stringify({ ...existing, ...data }));
+  } catch { /* ignore */ }
+}
+
+function loadExtraProfile(email: string): Record<string, any> {
+  try {
+    return JSON.parse(localStorage.getItem(`clientProfile-${email}`) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+const MAX_ADDRESSES = 10;
+
+function addressesKey(email: string) {
+  return `clientAddresses-${email}`;
+}
+
+function loadAddresses(email: string): SavedAddress[] {
+  try {
+    return JSON.parse(localStorage.getItem(addressesKey(email)) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function persistAddresses(email: string, list: SavedAddress[]) {
+  localStorage.setItem(addressesKey(email), JSON.stringify(list));
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -48,6 +97,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   });
 
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>(() => {
+    try {
+      const stored = localStorage.getItem("clientUser");
+      const user = stored ? JSON.parse(stored) : null;
+      return user?.email ? loadAddresses(user.email) : [];
+    } catch {
+      return [];
+    }
+  });
+
   const isAdminAuthenticated = !!adminToken;
   const isClientAuthenticated = !!clientUser;
 
@@ -62,6 +121,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (clientUser) {
       localStorage.setItem("clientUser", JSON.stringify(clientUser));
+      // Keep extra profile store in sync whenever clientUser changes
+      if (clientUser.email && clientUser.fechaNacimiento) {
+        saveExtraProfile(clientUser.email, {
+          fechaNacimiento: clientUser.fechaNacimiento,
+        });
+      }
     } else {
       localStorage.removeItem("clientUser");
     }
@@ -131,21 +196,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             payload[
               "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
             ] || payload.sub;
-          const nombre = payload.nombre;
-          const apellido = payload.apellido;
-          const dni = payload.dni;
-          const telefono = payload.telefono;
+
+          // Restore extra profile fields (e.g. fechaNacimiento) that are not
+          // included in the JWT — they were saved on the previous session.
+          const extra = loadExtraProfile(email);
+
           setClientUser({
             email,
             token,
             id: userId ? parseInt(userId, 10) : null,
-            nombre,
-            apellido,
-            dni,
-            telefono,
+            nombre: payload.nombre,
+            apellido: payload.apellido,
+            dni: payload.dni,
+            telefono: payload.telefono,
+            ...extra, // merges fechaNacimiento and any other saved fields
           });
+          // Load saved addresses for this account
+          setSavedAddresses(loadAddresses(email));
         } catch {
           setClientUser({ email, token });
+          setSavedAddresses([]);
         }
         return { success: true };
       }
@@ -194,10 +264,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("userToken");
     localStorage.removeItem("el-molino-checkout-form");
     setClientUser(null);
+    setSavedAddresses([]);
+    // Note: clientProfile-<email> and clientAddresses-<email> are intentionally
+    // kept so data is restored on the next login.
   };
 
   const updateClientProfile = (updates: any) => {
-    setClientUser((prev: any) => (prev ? { ...prev, ...updates } : prev));
+    setClientUser((prev: any) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...updates };
+      // Persist extra fields immediately so they survive logout/login
+      if (next.email) {
+        saveExtraProfile(next.email, updates);
+      }
+      return next;
+    });
+  };
+
+  // Returns false if the limit (10) is reached
+  const saveAddress = (addr: Omit<SavedAddress, 'id' | 'savedAt'>): boolean => {
+    const email = clientUser?.email;
+    if (!email) return false;
+    const current = loadAddresses(email);
+    if (current.length >= MAX_ADDRESSES) return false;
+    // Avoid exact duplicates by placeId
+    if (current.some((a) => a.placeId === addr.placeId)) return true;
+    const next: SavedAddress[] = [
+      { ...addr, id: `${Date.now()}`, savedAt: new Date().toISOString() },
+      ...current,
+    ];
+    persistAddresses(email, next);
+    setSavedAddresses(next);
+    return true;
+  };
+
+  const removeAddress = (id: string) => {
+    const email = clientUser?.email;
+    if (!email) return;
+    const next = loadAddresses(email).filter((a) => a.id !== id);
+    persistAddresses(email, next);
+    setSavedAddresses(next);
   };
 
   return (
@@ -207,12 +313,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isClientAuthenticated,
         clientUser,
         adminToken,
+        savedAddresses,
         login,
         logout,
         loginClient,
         registerClient,
         logoutClient,
         updateClientProfile,
+        saveAddress,
+        removeAddress,
       }}
     >
       {children}

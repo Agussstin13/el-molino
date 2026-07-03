@@ -55,9 +55,14 @@ export function ShopPage() {
             name: p.name ?? p.nombre,
             price: p.price ?? p.precio,
             stock: p.stock,
-            category: p.categoryName ?? p.description ?? "",
+            categories: Array.isArray(p.categories) ? p.categories : [],
+            category: Array.isArray(p.categories) && p.categories.length > 0
+              ? p.categories.map((c: any) => c.name ?? c.nombre).join(", ")
+              : (p.categoryName ?? p.description ?? ""),
             image: imgUrl(p.imagePath ?? p.imageUrl ?? ''),
-            categoryId: p.categoryId ?? p.categoriaId,
+            categoryId: Array.isArray(p.categories) && p.categories.length > 0
+              ? p.categories[0].id
+              : (p.categoryId ?? p.categoriaId),
             onOffer: p.offerPrice != null,
             offerPrice: p.offerPrice ?? null,
             discount: p.offerPrice != null && p.price
@@ -80,13 +85,22 @@ export function ShopPage() {
         setTopSellingProducts(mappedTopSelling);
 
         if (categoryId) {
-          setProducts(mappedProducts.filter((p: any) => p.categoryId?.toString() === categoryId));
+          setProducts(mappedProducts.filter((p: any) => {
+            if (Array.isArray(p.categories) && p.categories.length > 0) {
+              return p.categories.some((c: any) => c.id?.toString() === categoryId);
+            }
+            return p.categoryId?.toString() === categoryId;
+          }));
         } else if (searchQuery) {
           const normalize = (t: string) => t ? t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : "";
           const queryWords = normalize(searchQuery).split(/\s+/).map(w => w.endsWith('s') && w.length > 3 ? w.slice(0, -1) : w);
           
           setProducts(mappedProducts.filter((p: any) => {
-            const searchableText = normalize(`${p.name} ${p.description || ""} ${p.category || ""}`);
+            const searchableText = normalize(`${p.name} ${p.description || ""} ${
+              Array.isArray(p.categories) && p.categories.length > 0
+                ? p.categories.map((c: any) => c.name ?? c.nombre ?? "").join(" ")
+                : (p.category || "")
+            }`);
             return queryWords.every(qw => searchableText.includes(qw));
           }));
         } else {

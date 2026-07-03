@@ -1,6 +1,6 @@
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Plus, Minus, ShoppingCart, Home, Share2 } from "lucide-react";
-import { useState, useEffect } from "react";
 import type { Product, ProductGramage } from "../../lib/types";
 import {
   formatARS,
@@ -218,8 +218,13 @@ export function ProductDetailPage() {
           name: p.name ?? p.nombre,
           price: p.price ?? p.precio,
           stock: p.stock,
-          category: p.categoryName ?? p.description ?? "",
-          categoryId: p.categoryId ?? p.categoriaId,
+          categories: Array.isArray(p.categories) ? p.categories : [],
+          category: Array.isArray(p.categories) && p.categories.length > 0
+            ? p.categories.map((c: any) => c.name ?? c.nombre ?? "").join(", ")
+            : (p.categoryName ?? p.description ?? ""),
+          categoryId: Array.isArray(p.categories) && p.categories.length > 0
+            ? p.categories[0].id
+            : (p.categoryId ?? p.categoriaId),
           image: imgUrl(p.imagePath ?? p.imageUrl ?? ''),
           imagePath: p.imagePath ?? "",
           description: p.description ?? "",
@@ -255,8 +260,13 @@ export function ProductDetailPage() {
           name: r.name ?? r.nombre,
           price: r.price ?? r.precio,
           stock: r.stock,
-          category: r.categoryName ?? r.description ?? "",
-          categoryId: r.categoryId ?? r.categoriaId,
+          categories: Array.isArray(r.categories) ? r.categories : [],
+          category: Array.isArray(r.categories) && r.categories.length > 0
+            ? r.categories.map((c: any) => c.name ?? c.nombre ?? "").join(", ")
+            : (r.categoryName ?? r.description ?? ""),
+          categoryId: Array.isArray(r.categories) && r.categories.length > 0
+            ? r.categories[0].id
+            : (r.categoryId ?? r.categoriaId),
           image: imgUrl(r.imagePath ?? r.imageUrl ?? ''),
           onOffer: r.offerPrice != null,
           offerPrice: r.offerPrice ?? null,
@@ -270,9 +280,17 @@ export function ProductDetailPage() {
         setRelated(
           activeDbProducts
             .filter(
-              (r: any) =>
-                r.id.toString() !== id &&
-                r.category === cur.category,
+              (r: any) => {
+                if (r.id.toString() === id) return false;
+                // Relacionados: comparten al menos una categoría
+                if (Array.isArray(r.categories) && r.categories.length > 0 &&
+                  Array.isArray(cur.categories) && cur.categories.length > 0) {
+                  return r.categories.some((rc: any) =>
+                    cur.categories!.some((cc: any) => cc.id === rc.id)
+                  );
+                }
+                return r.category === cur.category;
+              }
             )
             .slice(0, 4)
         );
@@ -449,7 +467,23 @@ export function ProductDetailPage() {
           <Link to="/" className="hover:text-primary transition-colors uppercase font-medium">
             TIENDA
           </Link>
-          {product.category && (
+          {product.categories && product.categories.length > 0 ? (
+            product.categories.map((cat) => {
+              const catName = cat.nombre ?? (cat as any).name ?? "";
+              if (!catName) return null;
+              return (
+                <React.Fragment key={cat.id}>
+                  <span className="text-border">/</span>
+                  <Link
+                    to={`/?categoria=${cat.id}`}
+                    className="hover:text-primary transition-colors font-medium"
+                  >
+                    {catName}
+                  </Link>
+                </React.Fragment>
+              );
+            })
+          ) : product.category ? (
             <>
               <span className="text-border">/</span>
               <Link
@@ -459,7 +493,7 @@ export function ProductDetailPage() {
                 {product.category}
               </Link>
             </>
-          )}
+          ) : null}
           <span className="text-border">/</span>
           <span className="text-[#333d36] font-bold">{product.name}</span>
         </nav>
@@ -538,8 +572,25 @@ export function ProductDetailPage() {
 
               <hr className="border-border" />
 
-              {/* Categoría */}
-              {product.category && (
+              {/* Categorías */}
+              {product.categories && product.categories.length > 0 ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-muted-foreground text-sm">Categoría:</span>
+                  {product.categories.map((cat) => {
+                    const catName = cat.nombre ?? (cat as any).name ?? "";
+                    if (!catName) return null;
+                    return (
+                      <Link
+                        key={cat.id}
+                        to={`/?categoria=${cat.id}`}
+                        className="text-primary font-medium uppercase text-xs tracking-wide bg-primary/10 px-2.5 py-0.5 rounded-full hover:bg-primary/20 transition-colors"
+                      >
+                        {catName}
+                      </Link>
+                    );
+                  })}
+                </div>
+              ) : product.category ? (
                 <div className="flex items-center gap-2 text-sm flex-wrap">
                   <span className="text-muted-foreground">Categoría:</span>
                   <Link
@@ -549,7 +600,7 @@ export function ProductDetailPage() {
                     {product.category}
                   </Link>
                 </div>
-              )}
+              ) : null}
 
               {/* Precio */}
               <div className="flex flex-col gap-1.5">

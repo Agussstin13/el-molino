@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { X, MapPin, ChevronRight, CheckCircle2, Truck, AlertCircle, User } from "lucide-react";
+import { X, MapPin, ChevronRight, CheckCircle2, Truck, AlertCircle, User, BookmarkPlus } from "lucide-react";
+import type { SavedAddress } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useAlert } from "../context/AlertContext";
@@ -120,7 +121,7 @@ export function Checkout() {
     subtotal,
     clearCart,
   } = useCart();
-  const { clientUser, logoutClient } = useAuth();
+  const { clientUser, logoutClient, saveAddress, savedAddresses } = useAuth();
   const { showError } = useAlert();
   const [step, setStep] = useState<"login-prompt" | "datos" | "pago" | "revisar" | "confirmado">(
     "login-prompt",
@@ -129,6 +130,7 @@ export function Checkout() {
   const [confirmedTotal, setConfirmedTotal] = useState<number>(0);
   const [confirmedOrderId, setConfirmedOrderId] = useState<number | null>(null);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+  const [wantToSaveAddress, setWantToSaveAddress] = useState(false);
   const [form, setForm] = useState<FormData>(() => {
     try {
       const stored = localStorage.getItem(FORM_STORAGE_KEY);
@@ -508,6 +510,16 @@ export function Checkout() {
         setStep("confirmado");
         clearCart();
 
+        // Save address to profile if user opted in
+        if (clientUser && wantToSaveAddress && selectedPlaceId && form.calle) {
+          saveAddress({
+            label: form.calle,
+            placeId: selectedPlaceId,
+            infoAdicional: form.info_adicional || undefined,
+          });
+        }
+        setWantToSaveAddress(false);
+
         // Save guest token so the user can check their order later
         if (!userToken && data?.order?.guestToken) {
           const savedTokens = JSON.parse(localStorage.getItem("guestOrderTokens") || "[]");
@@ -872,6 +884,54 @@ export function Checkout() {
                                 </span>
                               )}
                             </div>
+
+                            {/* Selector de direcciones guardadas — combobox */}
+                            {clientUser && savedAddresses.length > 0 && (
+                              <div className="mb-3">
+                                <div className="relative">
+                                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
+                                  <select
+                                    value={savedAddresses.find((a: SavedAddress) => a.label === form.calle)?.id ?? ""}
+                                    onChange={(e) => {
+                                      const addr = savedAddresses.find((a: SavedAddress) => a.id === e.target.value);
+                                      if (!addr) return;
+                                      setForm((f) => {
+                                        const newForm = { ...f, calle: addr.label, info_adicional: addr.infoAdicional || f.info_adicional };
+                                        localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(newForm));
+                                        return newForm;
+                                      });
+                                      setSelectedPlaceId(addr.placeId);
+                                      setShowSuggestions(false);
+                                      setIsAddressVerified(false);
+                                      setShippingQuoteError(null);
+                                      if (errors.calle) setErrors((err) => ({ ...err, calle: "" }));
+                                    }}
+                                    className="w-full pl-9 pr-8 py-2.5 bg-input-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none cursor-pointer"
+                                  >
+                                    <option value="">Elegir dirección guardada...</option>
+                                    {savedAddresses.map((addr: SavedAddress) => (
+                                      <option key={addr.id} value={addr.id}>
+                                        {addr.label}{addr.infoAdicional ? ` (${addr.infoAdicional})` : ""}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                  </div>
+                                </div>
+                                <div className="relative my-3">
+                                  <div className="absolute inset-0 flex items-center">
+                                    <div className="w-full border-t border-border" />
+                                  </div>
+                                  <div className="relative flex justify-center">
+                                    <span className="bg-card px-2 text-xs text-muted-foreground">o escribí otra</span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
                             <div className="relative">
                               <input
                                 type="text"
@@ -948,6 +1008,22 @@ export function Checkout() {
                                   )}
                                 </div>
                               )}
+
+                            {/* Opción guardar dirección (solo para usuarios logueados con dirección validada) */}
+                            {clientUser && isAddressVerified && savedAddresses.length < 10 && (
+                              <label className="flex items-center gap-2 mt-2 cursor-pointer select-none group">
+                                <input
+                                  type="checkbox"
+                                  checked={wantToSaveAddress}
+                                  onChange={(e) => setWantToSaveAddress(e.target.checked)}
+                                  className="accent-primary w-3.5 h-3.5 rounded"
+                                />
+                                <span className="flex items-center gap-1.5 text-xs text-muted-foreground group-hover:text-foreground transition-colors">
+                                  <BookmarkPlus className="w-3.5 h-3.5" />
+                                  Guardar esta dirección en mi perfil
+                                </span>
+                              </label>
+                            )}
                           </div>
 
                           <InputField

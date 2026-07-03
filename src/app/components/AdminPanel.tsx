@@ -121,7 +121,7 @@ export function AdminPanel() {
     description: "",
     price: 0 as string | number,
     stock: 0,
-    category: "",
+    categoryIds: [] as number[], // múltiples categorías
     enableWholesale: false,
     wholesalePrice: 0 as string | number,
     minimumWholesaleAmount: 10,
@@ -414,8 +414,9 @@ export function AdminPanel() {
           price: p.price ?? p.precio,
           stock: p.stock,
           description: p.description ?? "",
-          category: p.categoryName ?? "",
-          categoryId: p.categoryId ?? p.categoriaId,
+          categories: Array.isArray(p.categories) ? p.categories : [],
+          category: Array.isArray(p.categories) && p.categories.length > 0 ? p.categories.map((c: any) => c.name ?? c.nombre).join(", ") : (p.categoryName ?? ""),
+          categoryId: Array.isArray(p.categories) && p.categories.length > 0 ? p.categories[0].id : (p.categoryId ?? p.categoriaId),
           image: imgUrl(p.imagePath ?? p.imageUrl ?? ""),
           imagePath: p.imagePath ?? p.imageUrl ?? "",
           active: p.active ?? true,
@@ -661,8 +662,9 @@ export function AdminPanel() {
             name: p.name ?? p.nombre,
             price: p.price ?? p.precio,
             stock: p.stock,
-            category: p.categoryName ?? "",
-            categoryId: p.categoryId,
+            categories: Array.isArray(p.categories) ? p.categories : [],
+            category: Array.isArray(p.categories) && p.categories.length > 0 ? p.categories.map((c: any) => c.name ?? c.nombre).join(", ") : (p.categoryName ?? ""),
+            categoryId: Array.isArray(p.categories) && p.categories.length > 0 ? p.categories[0].id : (p.categoryId ?? undefined),
             description: p.description ?? "",
             imagePath: p.imagePath ?? p.imageUrl ?? "",
             image: imgUrl(p.imagePath ?? p.imageUrl ?? ""),
@@ -821,7 +823,7 @@ export function AdminPanel() {
       description: "",
       price: 0,
       stock: 0,
-      category: "",
+      categoryIds: [],
       enableWholesale: false,
       wholesalePrice: 0,
       minimumWholesaleAmount: 10,
@@ -839,6 +841,10 @@ export function AdminPanel() {
 
   const handleEditProductClick = (product: any) => {
     setEditingProductId(product.id);
+    // Obtener IDs de categorías: preferir el array categories[], sino categoryId
+    const existingCategoryIds: number[] = Array.isArray(product.categories) && product.categories.length > 0
+      ? product.categories.map((c: any) => c.id)
+      : (product.categoryId ? [product.categoryId] : []);
     setProductForm({
       name: product.name || "",
       description: product.description || "",
@@ -847,7 +853,7 @@ export function AdminPanel() {
         product.measurementUnit === "gramo"
           ? product.stock / 1000
           : product.stock || 0,
-      category: product.category || "",
+      categoryIds: existingCategoryIds,
       enableWholesale: !!product.wholesalePrice,
       wholesalePrice: product.wholesalePrice?.price || 0,
       minimumWholesaleAmount: product.wholesalePrice?.quantity || 10,
@@ -874,14 +880,10 @@ export function AdminPanel() {
       return;
     }
 
-    const selectedCategory = categories.find(
-      (c) => c.nombre === productForm.category,
-    );
-
-    if (!selectedCategory) {
+    if (productForm.categoryIds.length === 0) {
       showError(
         "Categoría requerida",
-        "Por favor selecciona una categoría válida para el producto.",
+        "Por favor seleccioná al menos una categoría para el producto.",
       );
       return;
     }
@@ -946,7 +948,10 @@ export function AdminPanel() {
         : (productForm.stock ?? 0);
     formData.append("Stock", String(finalStock));
 
-    formData.append("CategoryId", String(selectedCategory.id));
+    // Enviar múltiples CategoryIds
+    productForm.categoryIds.forEach((id) =>
+      formData.append("CategoryIds", String(id)),
+    );
     formData.append("Active", String(productForm.active));
     formData.append("MeasurementUnit", productForm.measurementUnit);
 
@@ -1017,8 +1022,9 @@ export function AdminPanel() {
             price: p.price ?? p.precio,
             stock: p.stock,
             description: p.description ?? "",
-            category: p.categoryName ?? "",
-            categoryId: p.categoryId ?? p.categoriaId,
+            categories: Array.isArray(p.categories) ? p.categories : [],
+            category: Array.isArray(p.categories) && p.categories.length > 0 ? p.categories.map((c: any) => c.name ?? c.nombre).join(", ") : (p.categoryName ?? ""),
+            categoryId: Array.isArray(p.categories) && p.categories.length > 0 ? p.categories[0].id : (p.categoryId ?? undefined),
             image: imgUrl(p.imagePath ?? p.imageUrl ?? ""),
             imagePath: p.imagePath ?? p.imageUrl ?? "",
             active: p.active ?? true,
@@ -1043,7 +1049,7 @@ export function AdminPanel() {
           description: "",
           price: 0,
           stock: 0,
-          category: "",
+          categoryIds: [],
           enableWholesale: false,
           wholesalePrice: 0,
           minimumWholesaleAmount: 10,
@@ -1850,7 +1856,10 @@ export function AdminPanel() {
     if (offersSearchQuery) {
       const q = offersSearchQuery.toLowerCase();
       const matchesName = p.name.toLowerCase().includes(q);
-      const matchesCat = (p.category || "").toLowerCase().includes(q);
+      const catNames = Array.isArray(p.categories) && p.categories.length > 0
+        ? p.categories.map((c: any) => (c.nombre ?? c.name ?? "").toLowerCase()).join(" ")
+        : (p.category ?? "").toLowerCase();
+      const matchesCat = catNames.includes(q);
       if (!matchesName && !matchesCat) return false;
     }
     const draft = offersDraft[p.id];
@@ -1990,7 +1999,7 @@ export function AdminPanel() {
                     {editingProductId ? "Editar producto" : "Crear producto"}
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2 sm:col-span-1">
+                    <div className="col-span-2">
                       <label className="block text-sm mb-1.5 font-medium">
                         Nombre *
                       </label>
@@ -2007,29 +2016,44 @@ export function AdminPanel() {
                         className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
                       />
                     </div>
-                    <div className="col-span-2 sm:col-span-1">
+                    <div className="col-span-2">
                       <label className="block text-sm mb-1.5 font-medium">
-                        Categoría *
+                        Categorías *{" "}
+                        <span className="text-muted-foreground font-normal text-xs">
+                          ({productForm.categoryIds.length} seleccionada{productForm.categoryIds.length !== 1 ? "s" : ""})
+                        </span>
                       </label>
-                      <select
-                        value={productForm.category || ""}
-                        onChange={(e) =>
-                          setProductForm((p) => ({
-                            ...p,
-                            category: e.target.value,
-                          }))
-                        }
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer text-foreground"
-                      >
-                        <option value="" disabled>
-                          Seleccionar...
-                        </option>
-                        {categories.map((cat) => (
-                          <option key={cat.id} value={cat.nombre}>
-                            {cat.nombre}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="border border-border rounded-lg bg-input-background p-2 max-h-40 overflow-y-auto flex flex-col gap-1.5">
+                        {categories.length === 0 && (
+                          <p className="text-xs text-muted-foreground px-1 py-2">No hay categorías disponibles.</p>
+                        )}
+                        {categories.map((cat) => {
+                          const checked = productForm.categoryIds.includes(cat.id);
+                          return (
+                            <label
+                              key={cat.id}
+                              className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md cursor-pointer text-sm transition-colors select-none ${
+                                checked ? "bg-primary/10 text-primary font-medium" : "hover:bg-secondary/60"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => {
+                                  setProductForm((p) => ({
+                                    ...p,
+                                    categoryIds: checked
+                                      ? p.categoryIds.filter((id) => id !== cat.id)
+                                      : [...p.categoryIds, cat.id],
+                                  }));
+                                }}
+                                className="w-3.5 h-3.5 accent-primary"
+                              />
+                              {cat.nombre}
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
                     <div className="col-span-2">
                       <label className="block text-sm mb-1.5 font-medium">
@@ -2481,14 +2505,16 @@ export function AdminPanel() {
                   <tbody>
                     {products
                       .filter(
-                        (p) =>
-                          p.name
-                            .toLowerCase()
-                            .includes(productSearchTerm.toLowerCase()) ||
-                          (p.category &&
-                            p.category
-                              .toLowerCase()
-                              .includes(productSearchTerm.toLowerCase())),
+                        (p) => {
+                          const term = productSearchTerm.toLowerCase();
+                          if (p.name.toLowerCase().includes(term)) return true;
+                          if (Array.isArray(p.categories) && p.categories.length > 0) {
+                            return p.categories.some((c: any) =>
+                              (c.nombre ?? c.name ?? "").toLowerCase().includes(term)
+                            );
+                          }
+                          return (p.category ?? "").toLowerCase().includes(term);
+                        }
                       )
                       .map((product) => (
                         <tr
@@ -2519,7 +2545,9 @@ export function AdminPanel() {
                                   )}
                                 </div>
                                 <p className="text-xs text-muted-foreground">
-                                  {product.category}
+                                  {Array.isArray(product.categories) && product.categories.length > 0
+                                    ? product.categories.map((c: any) => c.nombre ?? c.name).join(" · ")
+                                    : (product.category ?? "")}
                                 </p>
                               </div>
                             </div>
@@ -2795,7 +2823,9 @@ export function AdminPanel() {
                                     {product.name}
                                   </p>
                                   <p className="text-xs text-muted-foreground">
-                                    {product.category}
+                                    {Array.isArray(product.categories) && product.categories.length > 0
+                                      ? product.categories.map((c: any) => c.nombre ?? c.name).join(" · ")
+                                      : (product.category ?? "")}
                                   </p>
                                 </div>
                               </div>

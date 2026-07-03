@@ -373,6 +373,117 @@ function OrderCard({ order, userToken, onOrderCancelled, onOrderHidden }: {
   );
 }
 
+// ── Guest order summary card ─────────────────────────────────────────────
+
+function GuestOrderSummaryCard({ guestOrder, onRemove }: {
+  guestOrder: { orderId: number; token: string; date: string; data?: any };
+  onRemove: (orderId: number) => void;
+}) {
+  const { showConfirm, showError, showSuccess } = useAlert();
+  const [cancelling, setCancelling] = useState(false);
+  const order = guestOrder.data;
+
+  const handleRemoveLocal = () => {
+    showConfirm(
+      '¿Eliminar de la lista?',
+      'Se eliminará de tu lista local. No podrás volver a verlo desde acá.',
+      () => {
+        const saved = JSON.parse(localStorage.getItem('guestOrderTokens') || '[]');
+        localStorage.setItem('guestOrderTokens', JSON.stringify(
+          saved.filter((t: any) => t.orderId !== guestOrder.orderId)
+        ));
+        onRemove(guestOrder.orderId);
+      }
+    );
+  };
+
+  const handleCancel = () => {
+    showConfirm(
+      '¿Cancelar pedido?',
+      `¿Estás seguro de que querés cancelar el pedido #${guestOrder.orderId}?`,
+      async () => {
+        setCancelling(true);
+        try {
+          const res = await fetch(`${API_BASE}/api/orders/${guestOrder.orderId}/cancel?token=${guestOrder.token}`, {
+            method: 'PATCH',
+          });
+          if (res.ok) {
+            showSuccess('Pedido cancelado', 'Tu pedido fue cancelado correctamente.');
+            // Reload page to refresh statuses
+            window.location.reload();
+          } else {
+            const err = await res.json().catch(() => null);
+            showError('Error', err?.detail || err?.title || 'No se pudo cancelar el pedido.');
+          }
+        } catch {
+          showError('Error de red', 'No se pudo conectar con el servidor.');
+        } finally {
+          setCancelling(false);
+        }
+      }
+    );
+  };
+
+  const statusCfg = order ? getOrderStatus(order.orderStatus) : getOrderStatus('pendiente');
+  const StatusIcon = statusCfg.icon;
+  const canCancel = order
+    && (order.orderStatus === 'pendiente' || order.orderStatus === 'en_preparacion')
+    && order.paymentStatus !== 'aprobado';
+
+  return (
+    <div className="bg-card border border-border rounded-2xl p-5 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${statusCfg.bg}`}>
+            <StatusIcon className={`w-4.5 h-4.5 ${statusCfg.color}`} />
+          </div>
+          <div>
+            <p className="font-semibold text-sm text-foreground">Pedido #{guestOrder.orderId}</p>
+            <p className="text-xs text-muted-foreground">
+              {new Date(guestOrder.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusCfg.bg} ${statusCfg.color}`}>
+            {statusCfg.label}
+          </span>
+          {order?.total != null && (
+            <span className="text-sm font-bold text-foreground">{formatARS(order.total)}</span>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 pt-1">
+        <Link
+          to={`/pedido/${guestOrder.token}`}
+          className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-primary/10 text-primary border border-primary/20 text-sm font-semibold hover:bg-primary/20 transition-colors"
+        >
+          <Package className="w-4 h-4" />
+          Ver detalle
+        </Link>
+        {canCancel && (
+          <button
+            onClick={handleCancel}
+            disabled={cancelling}
+            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-background text-red-600 border border-red-200 text-sm font-semibold hover:bg-red-50 disabled:opacity-60 transition-colors"
+          >
+            {cancelling ? <RefreshCw className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+            Cancelar
+          </button>
+        )}
+        <button
+          onClick={handleRemoveLocal}
+          className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-background text-muted-foreground border border-border text-sm font-medium hover:bg-secondary transition-colors"
+          title="Quitar de mi lista"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────
 
 export function OrdersPage() {
@@ -380,6 +491,7 @@ export function OrdersPage() {
   const { showError } = useAlert();
   const navigate = useNavigate();
   const [orders, setOrders] = useState<ReturnType<typeof mapOrder>[]>([]);
+  const [guestOrders, setGuestOrders] = useState<{ orderId: number; token: string; date: string; data?: any }[]>([]);
   const [loading, setLoading] = useState(true);
 
   const userToken = clientUser?.token ?? localStorage.getItem('userToken');
@@ -387,39 +499,68 @@ export function OrdersPage() {
   useEffect(() => {
     document.title = 'El Molino - Mis Pedidos';
 
-    if (!isClientAuthenticated) {
-      navigate('/', { replace: true });
-      return;
+    if (isClientAuthenticated) {
+      // ── Usuario logueado: traer pedidos del servidor ──
+      const fetchOrders = async () => {
+        setLoading(true);
+        try {
+          const res = await fetch(`${API_BASE}/api/orders/my`, {
+            headers: { Authorization: `Bearer ${userToken}` },
+          });
+
+          if (res.status === 401) {
+            logoutClient();
+            showError('Sesión expirada', 'Tu sesión ha expirado. Por favor, iniciá sesión nuevamente.');
+            navigate('/', { replace: true });
+            return;
+          }
+
+          if (res.ok) {
+            const data = await res.json();
+            setOrders(Array.isArray(data) ? data.map(mapOrder) : []);
+          }
+        } catch {
+          // silently fail
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchOrders();
+    } else {
+      // ── Invitado: leer tokens guardados en localStorage ──
+      const fetchGuestOrders = async () => {
+        setLoading(true);
+        try {
+          const saved: { orderId: number; token: string; date: string }[] =
+            JSON.parse(localStorage.getItem('guestOrderTokens') || '[]');
+
+          if (saved.length === 0) {
+            setGuestOrders([]);
+            setLoading(false);
+            return;
+          }
+
+          // Fetch cada pedido para obtener el estado actualizado
+          const results = await Promise.all(
+            saved.map(async (entry) => {
+              try {
+                const res = await fetch(`${API_BASE}/api/orders/token/${entry.token}`);
+                if (res.ok) {
+                  const data = await res.json();
+                  return { ...entry, data };
+                }
+              } catch { /* noop */ }
+              return entry;
+            })
+          );
+          setGuestOrders(results);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchGuestOrders();
     }
-
-    const fetchOrders = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`${API_BASE}/api/orders/my`, {
-          headers: { Authorization: `Bearer ${userToken}` },
-        });
-
-        if (res.status === 401) {
-          // Token expired or invalid
-          logoutClient();
-          showError('Sesión expirada', 'Tu sesión ha expirado. Por favor, iniciá sesión nuevamente.');
-          navigate('/', { replace: true });
-          return;
-        }
-
-        if (res.ok) {
-          const data = await res.json();
-          setOrders(Array.isArray(data) ? data.map(mapOrder) : []);
-        }
-      } catch {
-        // silently fail
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchOrders();
-  }, [isClientAuthenticated, navigate, userToken, logoutClient]);
+  }, [isClientAuthenticated, userToken]);
 
   const handleOrderCancelled = (id: string) => {
     setOrders(prev => prev.map(o =>
@@ -429,6 +570,10 @@ export function OrdersPage() {
 
   const handleOrderHidden = (id: string) => {
     setOrders(prev => prev.filter(o => o.id !== id));
+  };
+
+  const handleGuestOrderRemoved = (orderId: number) => {
+    setGuestOrders(prev => prev.filter(o => o.orderId !== orderId));
   };
 
   return (
@@ -446,10 +591,12 @@ export function OrdersPage() {
           </button>
           <div>
             <h1 className="text-2xl font-bold text-foreground">Mis pedidos</h1>
-            {clientUser?.nombre && (
+            {clientUser?.nombre ? (
               <p className="text-sm text-muted-foreground">
                 {clientUser.nombre} {clientUser.apellido}
               </p>
+            ) : !isClientAuthenticated && (
+              <p className="text-sm text-muted-foreground">Pedidos realizados sin cuenta</p>
             )}
           </div>
         </div>
@@ -460,37 +607,73 @@ export function OrdersPage() {
             <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
             <p className="text-sm text-muted-foreground">Cargando tus pedidos...</p>
           </div>
-        ) : orders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
-            <div className="w-16 h-16 bg-secondary rounded-2xl flex items-center justify-center">
-              <Package className="w-8 h-8 text-muted-foreground" />
+        ) : isClientAuthenticated ? (
+          orders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+              <div className="w-16 h-16 bg-secondary rounded-2xl flex items-center justify-center">
+                <Package className="w-8 h-8 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-lg font-semibold text-foreground mb-1">Todavía no tenés pedidos</p>
+                <p className="text-sm text-muted-foreground">Cuando realices una compra, aparecerá acá.</p>
+              </div>
+              <Link
+                to="/"
+                className="mt-2 px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
+              >
+                Ir a la tienda
+              </Link>
             </div>
-            <div>
-              <p className="text-lg font-semibold text-foreground mb-1">Todavía no tenés pedidos</p>
-              <p className="text-sm text-muted-foreground">Cuando realices una compra, aparecerá acá.</p>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground mb-4">
+                {orders.length} {orders.length === 1 ? 'pedido' : 'pedidos'}
+              </p>
+              {orders.map(order => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  userToken={userToken!}
+                  onOrderCancelled={handleOrderCancelled}
+                  onOrderHidden={handleOrderHidden}
+                />
+              ))}
             </div>
-            <Link
-              to="/"
-              className="mt-2 px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
-            >
-              Ir a la tienda
-            </Link>
-          </div>
+          )
         ) : (
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground mb-4">
-              {orders.length} {orders.length === 1 ? 'pedido' : 'pedidos'}
-            </p>
-            {orders.map(order => (
-              <OrderCard
-                key={order.id}
-                order={order}
-                userToken={userToken!}
-                onOrderCancelled={handleOrderCancelled}
-                onOrderHidden={handleOrderHidden}
-              />
-            ))}
-          </div>
+          // ── Vista invitado ──
+          guestOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+              <div className="w-16 h-16 bg-secondary rounded-2xl flex items-center justify-center">
+                <Package className="w-8 h-8 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-lg font-semibold text-foreground mb-1">No hay pedidos guardados</p>
+                <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                  Los pedidos realizados sin cuenta aparecen acá mientras uses este dispositivo.
+                </p>
+              </div>
+              <Link
+                to="/"
+                className="mt-2 px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
+              >
+                Ir a la tienda
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground mb-4">
+                {guestOrders.length} {guestOrders.length === 1 ? 'pedido guardado' : 'pedidos guardados'}
+              </p>
+              {guestOrders.map(go => (
+                <GuestOrderSummaryCard
+                  key={go.orderId}
+                  guestOrder={go}
+                  onRemove={handleGuestOrderRemoved}
+                />
+              ))}
+            </div>
+          )
         )}
       </main>
       <Footer />

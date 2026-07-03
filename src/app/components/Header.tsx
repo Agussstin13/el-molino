@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { ClientLoginModal } from "./ClientLoginModal";
+import { ClientProfileModal } from "./ClientProfileModal";
 const API_BASE = import.meta.env.VITE_API_BASE;
 const PHONE_NUMBER = import.meta.env.VITE_PHONE_NUMBER;
 
@@ -19,6 +20,7 @@ export function Header() {
   const { isClientAuthenticated, clientUser } = useAuth();
   const [search, setSearch] = useState("");
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -41,6 +43,8 @@ export function Header() {
       navigate(`/`);
     }
   };
+
+  const hasOrdersAccess = isClientAuthenticated || JSON.parse(localStorage.getItem('guestOrderTokens') || '[]').length > 0;
 
   return (
     <header className="sticky top-0 z-50 bg-[#f0e0cb]/80 backdrop-blur-md border-b-2 border-border shadow-sm">
@@ -73,7 +77,7 @@ export function Header() {
           {/* Search */}
           <form
             onSubmit={handleSearch}
-            className="flex-1 max-w-2xl"
+            className="flex-1 max-w-md"
           >
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -89,16 +93,29 @@ export function Header() {
           </form>
 
           {/* User and Cart Group */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
+            {/* Mis Pedidos (Desktop prominent) */}
+            {hasOrdersAccess && (
+              <Link
+                to="/mis-pedidos"
+                className="flex items-center gap-2 px-2 sm:px-3 py-2 rounded-lg hover:bg-secondary text-foreground transition-colors flex-shrink-0"
+                aria-label="Mis Pedidos"
+                title="Mis Pedidos"
+              >
+                <ClipboardList className="w-5 h-5" />
+                <span className="hidden md:inline text-sm font-medium">Pedidos</span>
+              </Link>
+            )}
+
             {/* Client Auth */}
             <button
-              onClick={() => setIsLoginModalOpen(true)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors flex-shrink-0 ${isClientAuthenticated ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-foreground'}`}
+              onClick={() => isClientAuthenticated ? setIsProfileModalOpen(true) : setIsLoginModalOpen(true)}
+              className={`flex items-center gap-2 px-2 sm:px-3 py-2 rounded-lg transition-colors flex-shrink-0 ${isClientAuthenticated ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-foreground'}`}
               aria-label="Mi Perfil"
             >
               <User className="w-5 h-5" />
               {isClientAuthenticated && clientUser && (
-                <span className="hidden sm:inline text-sm font-medium">
+                <span className="hidden lg:inline text-sm font-medium">
                   {clientUser.nombre && clientUser.apellido 
                     ? `${clientUser.nombre} ${clientUser.apellido}` 
                     : clientUser.nombre || clientUser.email?.split('@')[0] || 'Mi cuenta'}
@@ -127,6 +144,10 @@ export function Header() {
       <ClientLoginModal 
         isOpen={isLoginModalOpen} 
         onClose={() => setIsLoginModalOpen(false)} 
+      />
+      <ClientProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
       />
 
       {/* Mobile Menu Overlay */}
@@ -167,7 +188,7 @@ export function Header() {
                   Todos los Productos
                 </Link>
 
-                {isClientAuthenticated && (
+                {hasOrdersAccess && (
                   <Link
                     to="/mis-pedidos"
                     onClick={() => setIsMenuOpen(false)}
