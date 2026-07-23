@@ -37,12 +37,18 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useAlert } from "../context/AlertContext";
 import { useSignalR } from "../context/SignalRContext";
+import {
+  getPaymentMethodLabel,
+  isOnlinePaymentMethod,
+  normalizePaymentMethodCode,
+} from "../../lib/paymentMethods";
 import { formatARS, formatInputPrice, parseInputPrice } from "../../lib/price";
 import type {
   CarouselImage,
   Category,
   Coupon,
   Order,
+  PaymentMethod,
   Product,
 } from "../../lib/types";
 const API_BASE = import.meta.env.VITE_API_BASE;
@@ -51,6 +57,7 @@ type AdminView =
   | "products"
   | "promotions"
   | "orders"
+  | "payment-methods"
   | "carousel"
   | "categories"
   | "daily-offers"
@@ -201,6 +208,9 @@ export function AdminPanel() {
     activo: true,
   });
   const [isSavingShipping, setIsSavingShipping] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(false);
+  const [savingPaymentMethodId, setSavingPaymentMethodId] = useState<number | null>(null);
 
   const maxActiveShippingKm = shippingRates
     .filter((rate) => rate.activo)
@@ -726,10 +736,7 @@ export function AdminPanel() {
             total: o.total,
             status: o.orderStatus || o.estadoPedido, // Fallback por las dudas
             date: new Date(o.createdAt || o.fechaCreacion).toLocaleDateString(),
-            metodo_pago:
-              o.paymentMethod === "mercado_pago"
-                ? "mercadopago"
-                : o.paymentMethod || o.metodoPago,
+            metodo_pago: normalizePaymentMethodCode(o.paymentMethod || o.metodoPago),
             informacion: o.orderInformation,
             telefono: o.buyerPhone,
             dni: o.buyerDocument,
@@ -765,6 +772,85 @@ export function AdminPanel() {
     if (contentType) headers["Content-Type"] = contentType;
     return headers;
   };
+
+  const fetchPaymentMethods = async () => {
+    if (!adminToken) {
+      return;
+    }
+
+    setLoadingPaymentMethods(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/payment-methods/admin`, {
+        headers: getAuthHeaders(null),
+      });
+
+      if (res.status === 401) {
+        handleSessionExpired();
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error("No se pudieron cargar los métodos de pago.");
+      }
+
+      const data = await res.json();
+      setPaymentMethods(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error fetching payment methods:", error);
+      showError("Error", "No se pudieron cargar los métodos de pago.");
+    } finally {
+      setLoadingPaymentMethods(false);
+    }
+  };
+
+  const handleUpdatePaymentMethod = async (
+    paymentMethod: PaymentMethod,
+    visibleCliente: boolean,
+  ) => {
+    setSavingPaymentMethodId(paymentMethod.id);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/payment-methods/${paymentMethod.id}`, {
+        method: "PUT",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(visibleCliente),
+      });
+
+      if (res.status === 401) {
+        handleSessionExpired();
+        return;
+      }
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        showError("Error", data?.detail || data?.title || "No se pudo actualizar la visibilidad del método de pago.");
+        return;
+      }
+
+      setPaymentMethods((current) =>
+        current.map((method) =>
+          method.id === paymentMethod.id
+            ? {
+              ...method,
+              ...data,
+            }
+            : method,
+        ),
+      );
+    } catch (error) {
+      console.error("Error updating payment method:", error);
+      showError("Error", "No se pudo actualizar la visibilidad del método de pago.");
+    } finally {
+      setSavingPaymentMethodId(null);
+    }
+  };
+
+  useEffect(() => {
+    if (currentView === "payment-methods") {
+      fetchPaymentMethods();
+    }
+  }, [currentView, adminToken]);
 
   // Construye la URL final de una imagen: el backend puede devolver
   // paths absolutos (/images/carousel/x.jpg) o relativos (carousel/x.jpg)
@@ -1840,6 +1926,7 @@ export function AdminPanel() {
 
   const navItems = [
     { id: "orders" as AdminView, icon: ShoppingBag, label: "Pedidos" },
+    { id: "payment-methods" as AdminView, icon: CreditCard, label: "Pagos" },
     { id: "products" as AdminView, icon: Package, label: "Productos" },
     {
       id: "daily-offers" as AdminView,
@@ -3340,8 +3427,8 @@ export function AdminPanel() {
                             <td className="p-4 text-sm font-medium">
                               {formatARS(order.total)}
                             </td>
-                            <td className="p-4 text-sm text-muted-foreground capitalize">
-                              {order.metodo_pago}
+                            <td className="p-4 text-sm text-muted-foreground">
+                              {getPaymentMethodLabel(order.metodo_pago)}
                               {order.informacion && (
                                 <div className="text-xs text-primary font-medium mt-1 normal-case">
                                   {order.informacion}
@@ -3471,8 +3558,8 @@ export function AdminPanel() {
                                             <p className="text-muted-foreground text-xs">
                                               Método seleccionado
                                             </p>
-                                            <p className="font-medium text-foreground capitalize">
-                                              {order.metodo_pago}
+                                            <p className="font-medium text-foreground">
+                                              {getPaymentMethodLabel(order.metodo_pago)}
                                             </p>
                                           </div>
                                         </div>
@@ -3623,6 +3710,84 @@ export function AdminPanel() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+          {currentView === "payment-methods" && (
+            <div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+                <div>
+                  <h1 className="text-2xl font-bold">Métodos de pago</h1>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Definí qué métodos aparecen en el checkout. El soporte del backend se muestra solo como referencia.
+                  </p>
+                </div>
+              </div>
+
+              {loadingPaymentMethods ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+                </div>
+              ) : paymentMethods.length === 0 ? (
+                <div className="text-center py-16 text-muted-foreground bg-card rounded-xl border border-border">
+                  <CreditCard className="w-12 h-12 mx-auto opacity-20 mb-3" />
+                  <p>No hay métodos de pago configurados.</p>
+                </div>
+              ) : (
+                <div className="bg-card rounded-xl border border-border overflow-hidden">
+                  <div className="w-full overflow-x-auto">
+                    <table className="w-full min-w-[560px] text-sm">
+                      <thead className="bg-secondary/40 border-b border-border">
+                        <tr>
+                          <th className="px-5 py-3 text-left font-medium text-muted-foreground">Método</th>
+                          <th className="px-5 py-3 text-left font-medium text-muted-foreground">Tipo</th>
+                          <th className="px-5 py-3 text-left font-medium text-muted-foreground">Visible para clientes</th>
+                          <th className="px-5 py-3 text-right font-medium text-muted-foreground">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {paymentMethods.map((method) => {
+                          const normalizedCode = normalizePaymentMethodCode(method.codigo);
+                          const isSaving = savingPaymentMethodId === method.id;
+
+                          return (
+                            <tr key={method.id} className="hover:bg-secondary/20 transition-colors">
+                              <td className="px-5 py-3 font-medium text-foreground">
+                                {getPaymentMethodLabel(method.codigo)}
+                              </td>
+                              <td className="px-5 py-3">
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${isOnlinePaymentMethod(normalizedCode) ? "bg-primary/10 text-primary" : "bg-secondary text-secondary-foreground"}`}>
+                                  {isOnlinePaymentMethod(normalizedCode) ? "Online" : "Manual"}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3">
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${method.visibleCliente ? "bg-blue-100 text-blue-700" : "bg-secondary text-muted-foreground"}`}>
+                                  {method.visibleCliente ? "Sí" : "No"}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdatePaymentMethod(method, !method.visibleCliente)}
+                                    disabled={isSaving}
+                                    className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium hover:bg-secondary disabled:opacity-60"
+                                  >
+                                    {method.visibleCliente ? <ToggleRight className="w-4 h-4 text-primary" /> : <ToggleLeft className="w-4 h-4 text-muted-foreground" />}
+                                    {method.visibleCliente ? "Ocultar del checkout" : "Mostrar en checkout"}
+                                  </button>
+                                  {isSaving && (
+                                    <span className="text-xs text-muted-foreground">Guardando...</span>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           {/* CAROUSEL */}

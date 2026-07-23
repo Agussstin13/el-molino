@@ -7,6 +7,11 @@ import { Checkout } from '../components/Checkout';
 import { useAlert } from '../context/AlertContext';
 import { formatARS } from '../../lib/price';
 import {
+  getPaymentMethodLabel,
+  isOnlinePaymentMethod,
+  normalizePaymentMethodCode,
+} from '../../lib/paymentMethods';
+import {
   Package, Clock, CheckCircle2, Truck, XCircle, AlertCircle,
   RefreshCw, X, MapPin, Smartphone, CreditCard, Banknote,
   ShoppingBag, ArrowLeft, Trash2,
@@ -15,23 +20,17 @@ import {
 const API_BASE = import.meta.env.VITE_API_BASE;
 
 const ORDER_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: typeof Clock }> = {
-  pendiente:      { label: 'Pendiente',       color: 'text-amber-600',  bg: 'bg-amber-100',  icon: Clock },
-  en_preparacion: { label: 'En preparación',  color: 'text-blue-600',   bg: 'bg-blue-100',   icon: RefreshCw },
-  enviado:        { label: 'Enviado',          color: 'text-indigo-600', bg: 'bg-indigo-100', icon: Truck },
-  entregado:      { label: 'Entregado',        color: 'text-green-600',  bg: 'bg-green-100',  icon: CheckCircle2 },
-  cancelado:      { label: 'Cancelado',        color: 'text-red-500',    bg: 'bg-red-100',    icon: XCircle },
+  pendiente: { label: 'Pendiente', color: 'text-amber-600', bg: 'bg-amber-100', icon: Clock },
+  en_preparacion: { label: 'En preparación', color: 'text-blue-600', bg: 'bg-blue-100', icon: RefreshCw },
+  enviado: { label: 'Enviado', color: 'text-indigo-600', bg: 'bg-indigo-100', icon: Truck },
+  entregado: { label: 'Entregado', color: 'text-green-600', bg: 'bg-green-100', icon: CheckCircle2 },
+  cancelado: { label: 'Cancelado', color: 'text-red-500', bg: 'bg-red-100', icon: XCircle },
 };
 
 const PAYMENT_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  aprobado:   { label: 'Pagado',     color: 'text-green-700', bg: 'bg-green-100' },
-  pendiente:  { label: 'No pagado',  color: 'text-amber-700', bg: 'bg-amber-100' },
-  rechazado:  { label: 'Rechazado',  color: 'text-red-600',   bg: 'bg-red-100' },
-};
-
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  mercado_pago:  'Mercado Pago',
-  efectivo:      'Efectivo',
-  transferencia: 'Transferencia',
+  aprobado: { label: 'Pagado', color: 'text-green-700', bg: 'bg-green-100' },
+  pendiente: { label: 'No pagado', color: 'text-amber-700', bg: 'bg-amber-100' },
+  rechazado: { label: 'Rechazado', color: 'text-red-600', bg: 'bg-red-100' },
 };
 
 export function GuestOrderPage() {
@@ -48,14 +47,27 @@ export function GuestOrderPage() {
 
   useEffect(() => {
     document.title = 'El Molino - Mi Pedido';
-    if (!token) { setNotFound(true); setLoading(false); return; }
+
+    if (!token) {
+      setNotFound(true);
+      setLoading(false);
+      return;
+    }
 
     fetch(`${API_BASE}/api/orders/token/${token}`)
-      .then(res => {
-        if (res.status === 404) { setNotFound(true); return null; }
+      .then((res) => {
+        if (res.status === 404) {
+          setNotFound(true);
+          return null;
+        }
+
         return res.json();
       })
-      .then(data => { if (data) setOrder(data); })
+      .then((data) => {
+        if (data) {
+          setOrder(data);
+        }
+      })
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
   }, [token]);
@@ -86,7 +98,10 @@ export function GuestOrderPage() {
               El link que usaste no es válido o ya expiró.
             </p>
           </div>
-          <Link to="/" className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors">
+          <Link
+            to="/"
+            className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
+          >
             Volver a la tienda
           </Link>
         </main>
@@ -98,17 +113,18 @@ export function GuestOrderPage() {
   const orderStatusCfg = ORDER_STATUS_CONFIG[order.orderStatus?.toLowerCase()] ?? ORDER_STATUS_CONFIG.pendiente;
   const paymentStatusCfg = PAYMENT_STATUS_CONFIG[order.paymentStatus?.toLowerCase()] ?? PAYMENT_STATUS_CONFIG.pendiente;
   const StatusIcon = orderStatusCfg.icon;
+  const paymentMethodCode = normalizePaymentMethodCode(order.paymentMethod);
 
   const canCancel = (order.orderStatus === 'pendiente' || order.orderStatus === 'en_preparacion')
     && order.paymentStatus !== 'aprobado';
 
-  const canGeneratePaymentLink = order.paymentMethod === 'mercado_pago'
+  const canGeneratePaymentLink = isOnlinePaymentMethod(paymentMethodCode)
     && order.paymentStatus !== 'aprobado'
     && order.orderStatus !== 'cancelado';
 
   const handleCancel = () => {
     showConfirm(
-      '¿Cancelar pedido?',
+      'Cancelar pedido',
       `¿Estás seguro de que querés cancelar el pedido #${order.id}? Esta acción no se puede deshacer.`,
       async () => {
         setCancelling(true);
@@ -116,6 +132,7 @@ export function GuestOrderPage() {
           const res = await fetch(`${API_BASE}/api/orders/${order.id}/cancel?token=${token}`, {
             method: 'PATCH',
           });
+
           if (res.ok) {
             showSuccess('Pedido cancelado', 'Tu pedido fue cancelado correctamente.');
             setOrder({ ...order, orderStatus: 'cancelado', cancelledAt: new Date().toISOString() });
@@ -128,7 +145,7 @@ export function GuestOrderPage() {
         } finally {
           setCancelling(false);
         }
-      }
+      },
     );
   };
 
@@ -138,6 +155,7 @@ export function GuestOrderPage() {
       const res = await fetch(`${API_BASE}/api/orders/${order.id}/payment-link?token=${token}`, {
         method: 'POST',
       });
+
       if (res.ok) {
         const data = await res.json();
         window.open(data.paymentUrl, '_blank');
@@ -153,12 +171,16 @@ export function GuestOrderPage() {
   };
 
   const handleHide = async () => {
-    if (!window.confirm('¿Seguro que deseas borrar este pedido? Ya no podrás acceder a él mediante este link.')) return;
+    if (!window.confirm('¿Seguro que deseás borrar este pedido? Ya no podrás acceder a él mediante este link.')) {
+      return;
+    }
+
     setHiding(true);
     try {
       const res = await fetch(`${API_BASE}/api/orders/${order.id}/hide?token=${token}`, {
         method: 'PATCH',
       });
+
       if (res.ok) {
         showSuccess('Eliminado', 'El pedido fue borrado exitosamente.');
         navigate('/', { replace: true });
@@ -179,7 +201,6 @@ export function GuestOrderPage() {
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-8">
-        {/* Back */}
         <button
           onClick={() => navigate('/')}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors"
@@ -188,7 +209,6 @@ export function GuestOrderPage() {
           Volver a la tienda
         </button>
 
-        {/* Title */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-foreground">Tu pedido</h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -196,11 +216,9 @@ export function GuestOrderPage() {
           </p>
         </div>
 
-        {/* Status card */}
         <div className="bg-card border border-border rounded-2xl p-5 mb-5 space-y-4">
           <h2 className="text-base font-semibold text-foreground">Estado del pedido</h2>
 
-          {/* Status timeline */}
           <div className="flex items-center gap-2 flex-wrap">
             {['pendiente', 'en_preparacion', 'enviado', 'entregado'].map((step, idx) => {
               const stepCfg = ORDER_STATUS_CONFIG[step];
@@ -213,13 +231,15 @@ export function GuestOrderPage() {
 
               return (
                 <div key={step} className="flex items-center gap-2">
-                  <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all ${
-                    isCurrent
-                      ? `${stepCfg.bg} ${stepCfg.color} ring-2 ring-current ring-offset-1`
-                      : isActive
-                        ? `${stepCfg.bg} ${stepCfg.color} opacity-80`
-                        : 'bg-secondary text-muted-foreground'
-                  }`}>
+                  <div
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all ${
+                      isCurrent
+                        ? `${stepCfg.bg} ${stepCfg.color} ring-2 ring-current ring-offset-1`
+                        : isActive
+                          ? `${stepCfg.bg} ${stepCfg.color} opacity-80`
+                          : 'bg-secondary text-muted-foreground'
+                    }`}
+                  >
                     <StepIcon className="w-3.5 h-3.5" />
                     {stepCfg.label}
                   </div>
@@ -231,27 +251,28 @@ export function GuestOrderPage() {
             })}
 
             {order.orderStatus === 'cancelado' && (
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold ${ORDER_STATUS_CONFIG.cancelado.bg} ${ORDER_STATUS_CONFIG.cancelado.color}`}>
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold ${ORDER_STATUS_CONFIG.cancelado.bg} ${ORDER_STATUS_CONFIG.cancelado.color}`}
+              >
                 <XCircle className="w-3.5 h-3.5" />
                 Cancelado
               </span>
             )}
           </div>
 
-          {/* Payment status */}
           <div className="flex items-center gap-3 pt-1">
             <span className="text-sm text-muted-foreground">Pago:</span>
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${paymentStatusCfg.bg} ${paymentStatusCfg.color}`}>
+            <span
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${paymentStatusCfg.bg} ${paymentStatusCfg.color}`}
+            >
               {order.paymentStatus?.toLowerCase() === 'aprobado'
                 ? <CheckCircle2 className="w-3.5 h-3.5" />
-                : <AlertCircle className="w-3.5 h-3.5" />
-              }
+                : <AlertCircle className="w-3.5 h-3.5" />}
               {paymentStatusCfg.label}
             </span>
           </div>
         </div>
 
-        {/* Products */}
         <div className="bg-card border border-border rounded-2xl p-5 mb-5">
           <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
             <ShoppingBag className="w-4 h-4 text-primary" />
@@ -274,7 +295,6 @@ export function GuestOrderPage() {
             ))}
           </div>
 
-          {/* Totals */}
           <div className="pt-3 space-y-1">
             {order.shippingCost > 0 && (
               <div className="flex justify-between text-sm text-muted-foreground">
@@ -289,23 +309,21 @@ export function GuestOrderPage() {
           </div>
         </div>
 
-        {/* Delivery info */}
         <div className="bg-card border border-border rounded-2xl p-5 mb-5 space-y-3">
-          <h2 className="text-base font-semibold text-foreground">Información de entrega</h2>
+          <h2 className="text-base font-semibold text-foreground">Informacion de entrega</h2>
 
           <div className="flex flex-col gap-2 text-sm">
             <div className="flex items-center gap-2">
-              {order.paymentMethod === 'mercado_pago'
+              {isOnlinePaymentMethod(paymentMethodCode)
                 ? <Smartphone className="w-4 h-4 text-primary flex-shrink-0" />
-                : order.paymentMethod === 'transferencia'
+                : paymentMethodCode === 'transferencia'
                   ? <CreditCard className="w-4 h-4 text-primary flex-shrink-0" />
-                  : <Banknote className="w-4 h-4 text-primary flex-shrink-0" />
-              }
+                  : <Banknote className="w-4 h-4 text-primary flex-shrink-0" />}
               <span className="text-muted-foreground">Método de pago:</span>
-              <span className="font-medium">{PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}</span>
+              <span className="font-medium">{getPaymentMethodLabel(paymentMethodCode)}</span>
             </div>
-            
-            {order.paymentMethod === 'transferencia' && (
+
+            {paymentMethodCode === 'transferencia' && (
               <div className="ml-6 mt-1 bg-secondary/40 rounded-lg p-3 text-sm space-y-1.5 border border-border">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Datos para transferir</p>
                 <div className="flex justify-between">
@@ -342,7 +360,6 @@ export function GuestOrderPage() {
           )}
         </div>
 
-        {/* Action buttons */}
         {(canGeneratePaymentLink || canCancel || order.orderStatus === 'cancelado') && (
           <div className="flex flex-col sm:flex-row gap-3">
             {canGeneratePaymentLink && (
@@ -351,7 +368,9 @@ export function GuestOrderPage() {
                 disabled={generatingLink}
                 className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 disabled:opacity-60 transition-colors shadow-sm"
               >
-                {generatingLink ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4" />}
+                {generatingLink
+                  ? <RefreshCw className="w-4 h-4 animate-spin" />
+                  : <Smartphone className="w-4 h-4" />}
                 Generar nuevo link de pago
               </button>
             )}

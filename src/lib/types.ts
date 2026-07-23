@@ -47,6 +47,21 @@ export interface Coupon {
   valido_mayorista: boolean;
 }
 
+export type PaymentMethodCode =
+  | "mercado_pago"
+  | "payway"
+  | "payway_qr"
+  | "transferencia"
+  | "efectivo"
+  | "";
+
+export interface PaymentMethod {
+  id: number;
+  codigo: PaymentMethodCode | string;
+  activo: boolean;
+  visibleCliente: boolean;
+}
+
 export interface OrderItem {
   productId: number;
   productName: string;
@@ -73,7 +88,8 @@ export interface Order {
   items?: OrderItem[];
   guestToken?: string;
   cancelledAt?: string;
-  mercadoPagoPreferenceId?: string;
+  providerPreferenceId?: string;
+  providerPaymentId?: string;
   userId?: number;
 }
 

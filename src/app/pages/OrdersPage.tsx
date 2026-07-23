@@ -8,6 +8,11 @@ import { useAuth } from '../context/AuthContext';
 import { useAlert } from '../context/AlertContext';
 import { formatARS } from '../../lib/price';
 import {
+  getPaymentMethodLabel,
+  isOnlinePaymentMethod,
+  normalizePaymentMethodCode,
+} from '../../lib/paymentMethods';
+import {
   Package, ChevronDown, ChevronUp, Clock, CheckCircle2, Truck,
   XCircle, AlertCircle, CreditCard, Banknote, Smartphone,
   MapPin, ShoppingBag, ArrowLeft, RefreshCw, X, Trash2,
@@ -33,12 +38,6 @@ const PAYMENT_STATUS_CONFIG: Record<string, { label: string; color: string; bg: 
   reembolsado: { label: 'Reembolsado',  color: 'text-purple-600', bg: 'bg-purple-100' },
 };
 
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  mercado_pago:  'Mercado Pago',
-  efectivo:      'Efectivo',
-  transferencia: 'Transferencia',
-};
-
 function getPaymentStatus(status?: string) {
   const normalized = (status || 'pendiente').toLowerCase();
   return PAYMENT_STATUS_CONFIG[normalized] ?? { label: 'No pagado', color: 'text-amber-700', bg: 'bg-amber-100' };
@@ -58,7 +57,7 @@ function mapOrder(o: any) {
     shippingCost: o.shippingCost ?? 0,
     orderStatus: o.orderStatus ?? 'pendiente',
     paymentStatus: o.paymentStatus ?? 'pendiente',
-    paymentMethod: o.paymentMethod ?? '',
+    paymentMethod: normalizePaymentMethodCode(o.paymentMethod ?? ''),
     createdAt: o.createdAt,
     shippingAddress: o.shippingAddress,
     orderInformation: o.orderInformation,
@@ -89,7 +88,7 @@ function OrderCard({ order, userToken, onOrderCancelled, onOrderHidden }: {
   const canCancel = (order.orderStatus === 'pendiente' || order.orderStatus === 'en_preparacion')
     && order.paymentStatus !== 'aprobado';
 
-  const canGeneratePaymentLink = order.paymentMethod === 'mercado_pago'
+  const canGeneratePaymentLink = isOnlinePaymentMethod(order.paymentMethod)
     && order.paymentStatus !== 'aprobado'
     && order.orderStatus !== 'cancelado';
 
@@ -248,7 +247,7 @@ function OrderCard({ order, userToken, onOrderCancelled, onOrderHidden }: {
             {/* Payment method */}
             <div className="bg-background rounded-xl border border-border/60 p-4 shadow-sm flex items-start gap-3">
               <div className="mt-0.5 p-2 bg-primary/10 rounded-lg text-primary flex-shrink-0">
-                {order.paymentMethod === 'mercado_pago'
+                {isOnlinePaymentMethod(order.paymentMethod)
                   ? <Smartphone className="w-4 h-4" />
                   : order.paymentMethod === 'transferencia'
                     ? <CreditCard className="w-4 h-4" />
@@ -258,7 +257,7 @@ function OrderCard({ order, userToken, onOrderCancelled, onOrderHidden }: {
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Método de pago</p>
                 <p className="text-sm font-medium text-foreground">
-                  {PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}
+                  {getPaymentMethodLabel(order.paymentMethod)}
                 </p>
               </div>
             </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { X, MapPin, ChevronRight, CheckCircle2, Truck, AlertCircle, User, BookmarkPlus } from "lucide-react";
 import type { SavedAddress } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
@@ -10,6 +10,14 @@ import {
   getEffectiveGramagePrice,
   isWholesaleActive,
 } from "../../lib/price";
+import type { PaymentMethod, PaymentMethodCode } from "../../lib/types";
+import {
+  getCheckoutPaymentDescription,
+  getDefaultPaymentMethodCode,
+  getPaymentMethodLabel,
+  isOnlinePaymentMethod,
+  normalizePaymentMethodCode,
+} from "../../lib/paymentMethods";
 import { ClientLoginModal } from "./ClientLoginModal";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
@@ -25,10 +33,9 @@ interface FormData {
   ciudad: string;
   codigo_postal: string;
   metodo_entrega: "envio" | "retiro";
-  metodo_pago: "mercadopago" | "transferencia" | "efectivo";
+  metodo_pago: PaymentMethodCode | string;
   monto_efectivo?: string;
 }
-
 interface AddressSuggestion {
   placeId: string;
   text: string;
@@ -57,7 +64,7 @@ const EMPTY_FORM: FormData = {
   ciudad: "",
   codigo_postal: "",
   metodo_entrega: "envio",
-  metodo_pago: "mercadopago",
+  metodo_pago: "",
 };
 
 const FORM_STORAGE_KEY = "el-molino-checkout-form";
@@ -130,7 +137,12 @@ export function Checkout() {
   const [confirmedTotal, setConfirmedTotal] = useState<number>(0);
   const [confirmedOrderId, setConfirmedOrderId] = useState<number | null>(null);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+  const [paymentInitializationError, setPaymentInitializationError] = useState<string | null>(null);
+  const [confirmedOrderPath, setConfirmedOrderPath] = useState<string | null>(null);
   const [wantToSaveAddress, setWantToSaveAddress] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(false);
+  const [paymentMethodsError, setPaymentMethodsError] = useState<string | null>(null);
   const [form, setForm] = useState<FormData>(() => {
     try {
       const stored = localStorage.getItem(FORM_STORAGE_KEY);
@@ -202,10 +214,87 @@ export function Checkout() {
       setSelectedCoords(null);
       setShowAddressConfirm(false);
       setShippingQuoteError(null);
+      setPaymentUrl(null);
+      setPaymentInitializationError(null);
+      setConfirmedOrderPath(null);
       // reset step
       setStep(clientUser ? "datos" : "login-prompt");
     }
   }, [isCheckoutOpen, clientUser]);
+
+  useEffect(() => {
+    if (!isCheckoutOpen) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchPaymentMethods = async () => {
+      setLoadingPaymentMethods(true);
+      setPaymentMethodsError(null);
+
+      try {
+        const res = await fetch(`${API_BASE}/api/payment-methods`);
+
+        if (!res.ok) {
+          throw new Error("No se pudieron cargar los métodos de pago.");
+        }
+
+        const data = await res.json();
+
+        if (!cancelled) {
+          setPaymentMethods(Array.isArray(data) ? data : []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPaymentMethods([]);
+          setPaymentMethodsError(
+            error instanceof Error
+              ? error.message
+              : "No se pudieron cargar los métodos de pago.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingPaymentMethods(false);
+        }
+      }
+    };
+
+    fetchPaymentMethods();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isCheckoutOpen]);
+
+  useEffect(() => {
+    if (paymentMethods.length === 0) {
+      return;
+    }
+
+    const normalizedCurrent = normalizePaymentMethodCode(form.metodo_pago);
+    const hasCurrentMethod = paymentMethods.some(
+      (method) => normalizePaymentMethodCode(method.codigo) === normalizedCurrent,
+    );
+
+    const nextPaymentMethod = hasCurrentMethod
+      ? normalizedCurrent
+      : getDefaultPaymentMethodCode(paymentMethods);
+
+    if (!nextPaymentMethod || nextPaymentMethod === form.metodo_pago) {
+      return;
+    }
+
+    setForm((prev) => {
+      const newForm = {
+        ...prev,
+        metodo_pago: nextPaymentMethod,
+      };
+      localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(newForm));
+      return newForm;
+    });
+  }, [paymentMethods, form.metodo_pago]);
 
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>(
     {},
@@ -333,8 +422,8 @@ export function Checkout() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            destinationPlaceId: selectedPlaceId,
-            orderSubtotal: subtotal,
+            DestinationPlaceId: selectedPlaceId,
+            OrderSubtotal: subtotal,
           }),
         });
 
@@ -414,7 +503,10 @@ export function Checkout() {
         >,
       ) => {
         setForm((f) => {
-          const newForm = { ...f, [field]: e.target.value };
+          const value = field === "metodo_pago"
+            ? normalizePaymentMethodCode(e.target.value)
+            : e.target.value;
+          const newForm = { ...f, [field]: value };
           localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(newForm));
           return newForm;
         });
@@ -449,6 +541,13 @@ export function Checkout() {
 
   const handleConfirm = async () => {
     const userToken = localStorage.getItem("userToken");
+    const selectedPaymentMethodCode = normalizePaymentMethodCode(form.metodo_pago);
+
+    if (!selectedPaymentMethodCode) {
+      showError("Método de pago requerido", "Seleccioná un método de pago para continuar.");
+      setStep("pago");
+      return;
+    }
     
     if (userToken) {
       try {
@@ -470,22 +569,17 @@ export function Checkout() {
     const orderInformation = form.info_adicional.trim() || undefined;
 
     const backendOrder = {
-      buyerFirstName: form.nombre,
-      buyerLastName: form.apellido,
-      buyerPhone: form.telefono,
-      buyerDocument: form.dni,
-      destinationPlaceId: form.metodo_entrega === "envio" ? (selectedPlaceId ?? "") : "",
-      paymentMethod:
-        form.metodo_pago === "mercadopago"
-          ? 0
-          : form.metodo_pago === "efectivo"
-            ? 1
-            : 2,
-      orderInformation,
-      items: items.map((i) => ({
-        productId: parseInt(i.id, 10),
-        quantity: i.quantity,
-        productGramageId: i.selectedGramage?.id,
+      BuyerFirstName: form.nombre,
+      BuyerLastName: form.apellido,
+      BuyerPhone: form.telefono,
+      BuyerDocument: form.dni,
+      DestinationPlaceId: form.metodo_entrega === "envio" ? (selectedPlaceId ?? "") : "",
+      PaymentMethod: selectedPaymentMethodCode,
+      OrderInformation: orderInformation,
+      Items: items.map((i) => ({
+        ProductId: parseInt(i.id, 10),
+        Quantity: i.quantity,
+        ProductGramageId: i.selectedGramage?.id,
       })),
     };
 
@@ -507,6 +601,14 @@ export function Checkout() {
         setConfirmedTotal(data?.order?.total ?? finalTotal);
         setConfirmedOrderId(data?.order?.id ?? null);
         setPaymentUrl(data?.paymentUrl ?? null);
+        setPaymentInitializationError(
+          data?.paymentError?.detail ?? data?.paymentError?.title ?? null,
+        );
+        setConfirmedOrderPath(
+          data?.order?.guestToken
+            ? `/pedido/${data.order.guestToken}`
+            : "/mis-pedidos",
+        );
         setStep("confirmado");
         clearCart();
 
@@ -532,7 +634,7 @@ export function Checkout() {
           localStorage.setItem("guestOrderTokens", JSON.stringify(savedTokens.slice(0, 10)));
         }
 
-        if (form.metodo_pago === "mercadopago" && data?.paymentUrl) {
+        if (isOnlinePaymentMethod(selectedPaymentMethodCode) && data?.paymentUrl) {
           window.open(data.paymentUrl, '_blank');
         }
       } else {
@@ -565,6 +667,11 @@ export function Checkout() {
         : shippingCost !== null
           ? subtotal + shippingCost
           : subtotal;
+  const selectedPaymentMethodCode = normalizePaymentMethodCode(form.metodo_pago);
+  const selectedPaymentMethodLabel = getPaymentMethodLabel(selectedPaymentMethodCode);
+  const paymentInitializationFailed = isOnlinePaymentMethod(selectedPaymentMethodCode)
+    && paymentInitializationError !== null;
+  const hasAvailablePaymentMethods = paymentMethods.length > 0;
 
   return (
     <>
@@ -615,7 +722,7 @@ export function Checkout() {
                 }}
                 className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-2.5 rounded-xl transition-colors font-medium text-sm"
               >
-                Sí, es aquí — continuar al pago
+                Sí, es aquí - continuar al pago
               </button>
               <button
                 onClick={() => setShowAddressConfirm(false)}
@@ -644,7 +751,7 @@ export function Checkout() {
           <div className="flex-1 min-h-0 overflow-y-auto p-6 text-center">
             <div className="flex flex-col items-center justify-start gap-4 max-w-md mx-auto">
             <div className="w-20 h-20 flex items-center justify-center shrink-0">
-              {form.metodo_pago === "mercadopago" ? (
+              {isOnlinePaymentMethod(selectedPaymentMethodCode) && !paymentInitializationFailed ? (
                 <CheckCircle2 className="w-20 h-20 shrink-0 text-primary" />
               ) : (
                 <AlertCircle className="w-20 h-20 shrink-0 text-amber-500" />
@@ -652,25 +759,37 @@ export function Checkout() {
             </div>
 
             <h3 className="text-2xl text-primary">
-              {form.metodo_pago === "mercadopago"
-                ? "¡Pedido confirmado!"
-                : "¡Casi listo!"}
+              {isOnlinePaymentMethod(selectedPaymentMethodCode)
+                ? paymentInitializationFailed
+                  ? "Pedido guardado"
+                  : "Pedido confirmado"
+                : "Casi listo"}
             </h3>
 
-            {form.metodo_pago !== "mercadopago" && (
+            {paymentInitializationFailed && (
               <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg max-w-md text-amber-900 text-sm font-medium">
-                ATENCIÓN: Tu pedido está guardado, pero <strong>NO ESTÁ FINALIZADO</strong> hasta que {form.metodo_pago === "transferencia" ? "envíes el comprobante de pago" : "confirmes"} por WhatsApp.
+                No pudimos abrir el checkout. El pedido quedó pendiente y no tenés que volver a crearlo.
+              </div>
+            )}
+
+            {!isOnlinePaymentMethod(selectedPaymentMethodCode) && (
+              <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg max-w-md text-amber-900 text-sm font-medium">
+                ATENCIÓN: Tu pedido está guardado, pero <strong>NO ESTÁ FINALIZADO</strong> hasta que {selectedPaymentMethodCode === "transferencia"
+                  ? "envíes el comprobante de pago"
+                  : "confirmes"} por WhatsApp.
               </div>
             )}
 
             <p className="text-muted-foreground max-w-sm mt-2">
-              {form.metodo_pago === "mercadopago"
-                ? "Se ha abierto una nueva pestaña para completar el pago con Mercado Pago. Si no la ves, hacé clic en el botón de abajo."
-                : form.metodo_pago === "transferencia"
+              {isOnlinePaymentMethod(selectedPaymentMethodCode)
+                ? paymentInitializationFailed
+                  ? paymentInitializationError
+                  : `Se ha abierto una nueva pestaña para completar el pago con ${selectedPaymentMethodLabel}. Si no la ves, hacé clic en el botón de abajo.`
+                : selectedPaymentMethodCode === "transferencia"
                   ? "Realizá la transferencia con los datos a continuación y enviá el comprobante haciendo clic en el botón verde de abajo."
                   : "Por favor, comunicate por WhatsApp haciendo clic en el botón de abajo para coordinar tu pedido."}
             </p>
-            {form.metodo_pago === "transferencia" && (
+            {selectedPaymentMethodCode === "transferencia" && (
               <div className="mt-2 w-full max-w-sm bg-secondary/40 border border-border rounded-xl p-4 text-left space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Datos para transferir
@@ -692,11 +811,11 @@ export function Checkout() {
               </div>
             )}
             <div className="flex flex-col gap-3 w-full max-w-sm mt-6">
-              {(form.metodo_pago === "transferencia" ||
-                form.metodo_pago === "efectivo") && (
+              {(selectedPaymentMethodCode === "transferencia" ||
+                selectedPaymentMethodCode === "efectivo") && (
                   <a
                     href={`https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent(
-                      form.metodo_pago === "transferencia"
+                      selectedPaymentMethodCode === "transferencia"
                         ? `¡Hola! Acabo de hacer un pedido (#${confirmedOrderId ?? "N/A"}) con pago por transferencia. Mi nombre es ${form.nombre} ${form.apellido} y el total es de $${confirmedTotal}. Adjunto el comprobante.`
                         : `¡Hola! Acabo de hacer un pedido (#${confirmedOrderId ?? "N/A"}) con pago en efectivo. Mi nombre es ${form.nombre} ${form.apellido} y el total es de $${confirmedTotal}.`,
                     )}`}
@@ -704,19 +823,27 @@ export function Checkout() {
                     rel="noopener noreferrer"
                     className="bg-[#25D366] hover:bg-[#1ebd5a] text-white px-6 py-3.5 rounded-xl transition-all font-medium flex items-center justify-center gap-2 shadow-lg shadow-[#25D366]/20 active:scale-[0.98]"
                   >
-                    {form.metodo_pago === "transferencia"
+                    {selectedPaymentMethodCode === "transferencia"
                       ? "Enviar comprobante por WhatsApp"
                       : "Coordinar entrega por WhatsApp"}
                   </a>
                 )}
-              {form.metodo_pago === "mercadopago" && paymentUrl && (
+              {isOnlinePaymentMethod(selectedPaymentMethodCode) && paymentUrl && (
                 <a
                   href={paymentUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="bg-[#009EE3] hover:bg-[#008ACB] text-white px-6 py-3.5 rounded-xl transition-all font-medium flex items-center justify-center gap-2 shadow-lg shadow-[#009EE3]/20 active:scale-[0.98]"
                 >
-                  Pagar en Mercado Pago
+                  Pagar con {selectedPaymentMethodLabel}
+                </a>
+              )}
+              {paymentInitializationFailed && confirmedOrderPath && (
+                <a
+                  href={confirmedOrderPath}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3.5 rounded-xl transition-colors font-medium"
+                >
+                  Ir al pedido y reintentar el pago
                 </a>
               )}
               <button
@@ -776,7 +903,7 @@ export function Checkout() {
                         onClick={() => setShowLoginModal(true)}
                         className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3.5 rounded-xl font-semibold transition-all shadow-md hover:shadow-lg"
                       >
-                        Iniciar Sesión
+                        Iniciar sesión
                       </button>
                       <button
                         onClick={() => setStep("datos")}
@@ -796,7 +923,7 @@ export function Checkout() {
                       Mar del Plata.
                     </div>
 
-                    {/* Método de Entrega */}
+                    {/* Método de entrega */}
                     <div className="mb-6">
                       <p className="text-sm font-medium mb-3">
                         Método de entrega
@@ -885,7 +1012,7 @@ export function Checkout() {
                               )}
                             </div>
 
-                            {/* Selector de direcciones guardadas — combobox */}
+                            {/* Selector de direcciones guardadas â€” combobox */}
                             {clientUser && savedAddresses.length > 0 && (
                               <div className="mb-3">
                                 <div className="relative">
@@ -1038,7 +1165,7 @@ export function Checkout() {
                       )}
                     </div>
 
-                    {/* Calculadora envío removida ya que es solo para Mar del Plata */}
+                    {/* Calculadora de envío removida ya que es solo para Mar del Plata */}
 
                     <button
                       onClick={() => {
@@ -1060,114 +1187,101 @@ export function Checkout() {
                 {step === "pago" && (
                   <div className="space-y-4">
                     <p className="text-sm font-medium">Método de pago</p>
-
-                    {/* Mercado Pago */}
-                    <label
-                      className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${form.metodo_pago === "mercadopago" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
-                    >
-                      <input
-                        type="radio"
-                        name="pago"
-                        value="mercadopago"
-                        checked={form.metodo_pago === "mercadopago"}
-                        onChange={set("metodo_pago")}
-                        className="accent-primary"
-                      />
-                      <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm flex-shrink-0">
-                        <span className="text-2xl">💳</span>
+                    {loadingPaymentMethods && (
+                      <div className="flex items-center justify-center rounded-xl border border-border bg-secondary/20 px-4 py-8">
+                        <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
                       </div>
-                      <div>
-                        <p className="font-medium">Mercado Pago</p>
-                        <p className="text-sm text-muted-foreground">
-                          Tarjetas de crédito, débito y efectivo
-                        </p>
+                    )}
+
+                    {!loadingPaymentMethods && paymentMethodsError && (
+                      <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                        {paymentMethodsError}
                       </div>
-                    </label>
+                    )}
 
-                    {/* Transferencia */}
-                    <div
-                      className={`rounded-xl border-2 transition-colors ${form.metodo_pago === "transferencia" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
-                    >
-                      <label className="flex items-center gap-4 p-4 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="pago"
-                          value="transferencia"
-                          checked={form.metodo_pago === "transferencia"}
-                          onChange={set("metodo_pago")}
-                          className="accent-primary"
-                        />
-                        <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm flex-shrink-0">
-                          <span className="text-2xl">🏦</span>
-                        </div>
-                        <div>
-                          <p className="font-medium">Transferencia Bancaria</p>
-                          <p className="text-sm text-muted-foreground">
-                            Enviá el comprobante por WhatsApp
-                          </p>
-                        </div>
-                      </label>
-                      {form.metodo_pago === "transferencia" && (
-                        <div className="px-4 pb-4 pl-20">
-                          <div className="bg-white/50 p-3 rounded-lg border border-border/50 space-y-1.5">
-                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                              Datos para transferir
-                            </p>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">
-                                Titular
-                              </span>
-                              <span className="font-medium">
-                                Mateo Agustin Lucero
-                              </span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">
-                                Banco
-                              </span>
-                              <span className="font-medium">Mercado Pago</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">
-                                Alias
-                              </span>
-                              <span className="font-medium font-mono tracking-wide">
-                                elmolinomdp
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    {!loadingPaymentMethods && !paymentMethodsError && !hasAvailablePaymentMethods && (
+                      <div className="rounded-xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+                        No hay métodos de pago disponibles en este momento.
+                      </div>
+                    )}
 
-                    {/* Efectivo */}
-                    <div
-                      className={`rounded-xl border-2 transition-colors ${form.metodo_pago === "efectivo" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
-                    >
-                      <label className="flex items-center gap-4 p-4 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="pago"
-                          value="efectivo"
-                          checked={form.metodo_pago === "efectivo"}
-                          onChange={set("metodo_pago")}
-                          className="accent-primary"
-                        />
-                        <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm flex-shrink-0">
-                          <span className="text-2xl">💵</span>
+                    {!loadingPaymentMethods && paymentMethods.map((method) => {
+                      const methodCode = normalizePaymentMethodCode(method.codigo);
+                      const isSelected = selectedPaymentMethodCode === methodCode;
+                      const methodIcon = methodCode === "mercado_pago"
+                        ? "💳"
+                        : methodCode === "payway_qr"
+                          ? "📱"
+                        : methodCode === "transferencia"
+                          ? "🏦"
+                          : methodCode === "efectivo"
+                            ? "💵"
+                            : "🔒";
+
+                      return (
+                        <div
+                          key={method.id}
+                          className={`rounded-xl border-2 transition-colors ${isSelected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
+                        >
+                          <label className="flex items-center gap-4 p-4 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="pago"
+                              value={methodCode}
+                              checked={isSelected}
+                              onChange={set("metodo_pago")}
+                              className="accent-primary"
+                            />
+                            <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm flex-shrink-0">
+                              <span className="text-2xl">{methodIcon}</span>
+                            </div>
+                            <div>
+                              <p className="font-medium">{getPaymentMethodLabel(methodCode)}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {getCheckoutPaymentDescription(methodCode)}
+                              </p>
+                            </div>
+                          </label>
+
+                          {isSelected && methodCode === "transferencia" && (
+                            <div className="px-4 pb-4 pl-20">
+                              <div className="bg-white/50 p-3 rounded-lg border border-border/50 space-y-1.5">
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                                  Datos para transferir
+                                </p>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">
+                                    Titular
+                                  </span>
+                                  <span className="font-medium">
+                                    Mateo Agustin Lucero
+                                  </span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">
+                                    Banco
+                                  </span>
+                                  <span className="font-medium">Mercado Pago</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">
+                                    Alias
+                                  </span>
+                                  <span className="font-medium font-mono tracking-wide">
+                                    elmolinomdp
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <div>
-                          <p className="font-medium">Efectivo</p>
-                          <p className="text-sm text-muted-foreground">
-                            Pagás al momento de la entrega o retiro
-                          </p>
-                        </div>
-                      </label>
-                    </div>
+                      );
+                    })}
 
                     <button
                       onClick={() => setStep("revisar")}
-                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 rounded-xl transition-colors font-medium mt-2"
+                      disabled={!selectedPaymentMethodCode || loadingPaymentMethods || !hasAvailablePaymentMethods}
+                      className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground py-3 rounded-xl transition-colors font-medium mt-2"
                     >
                       Revisar pedido
                     </button>
@@ -1193,11 +1307,11 @@ export function Checkout() {
                       </div>
                       <div className="pt-2 border-t border-border/50">
                         <span className="text-muted-foreground block text-xs">
-                          Método de Entrega
+                          Método de entrega
                         </span>
                         <span className="font-medium">
                           {form.metodo_entrega === "envio"
-                            ? "Envío a Domicilio"
+                            ? "Envío a domicilio"
                             : "Retiro por Sucursal"}
                         </span>
                         {form.metodo_entrega === "envio" && (
@@ -1209,16 +1323,12 @@ export function Checkout() {
                       </div>
                       <div className="pt-2 border-t border-border/50">
                         <span className="text-muted-foreground block text-xs">
-                          Método de Pago
+                          Método de pago
                         </span>
                         <span className="font-medium">
-                          {form.metodo_pago === "mercadopago"
-                            ? "Mercado Pago"
-                            : form.metodo_pago === "transferencia"
-                              ? "Transferencia Bancaria"
-                              : "Efectivo"}
+                          {selectedPaymentMethodLabel}
                         </span>
-                        {form.metodo_pago === "efectivo" &&
+                        {selectedPaymentMethodCode === "efectivo" &&
                           form.monto_efectivo && (
                             <span className="block text-muted-foreground">
                               Paga con: ${form.monto_efectivo}
@@ -1312,7 +1422,7 @@ export function Checkout() {
                   </div>
                 </div>
 
-                {/* Mapa de dirección — Google Maps */}
+                {/* Mapa de dirección - Google Maps */}
                 {form.metodo_entrega === "envio" && (() => {
                   const mapLat = isAddressVerified && selectedCoords ? selectedCoords.lat : STORE_LAT;
                   const mapLng = isAddressVerified && selectedCoords ? selectedCoords.lng : STORE_LNG;
