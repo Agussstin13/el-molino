@@ -9,6 +9,7 @@ interface AlertOptions {
   cancelText?: string;
   onConfirm?: () => void;
   onCancel?: () => void;
+  acceptOnEnter?: boolean;
 }
 
 interface AlertContextType {
@@ -16,6 +17,7 @@ interface AlertContextType {
   showSuccess: (title: string, message: string) => void;
   showError: (title: string, message: string) => void;
   showConfirm: (title: string, message: string, onConfirm: () => void) => void;
+  setAcceptOnEnter: (enabled: boolean) => void;
 }
 
 const AlertContext = createContext<AlertContextType | undefined>(undefined);
@@ -23,11 +25,12 @@ const AlertContext = createContext<AlertContextType | undefined>(undefined);
 export function AlertProvider({ children }: { children: React.ReactNode }) {
   const [alert, setAlert] = useState<AlertOptions | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [acceptOnEnter, setAcceptOnEnter] = useState(false);
 
   const showAlert = useCallback((options: AlertOptions) => {
-    setAlert(options);
+    setAlert({ ...options, acceptOnEnter: options.acceptOnEnter ?? acceptOnEnter });
     setIsOpen(true);
-  }, []);
+  }, [acceptOnEnter]);
 
   const showSuccess = useCallback((title: string, message: string) => {
     showAlert({ type: 'success', title, message });
@@ -47,7 +50,7 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AlertContext.Provider value={{ showAlert, showSuccess, showError, showConfirm }}>
+    <AlertContext.Provider value={{ showAlert, showSuccess, showError, showConfirm, setAcceptOnEnter }}>
       {children}
       {alert && (
         <CustomAlert
@@ -57,6 +60,7 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
           message={alert.message}
           confirmText={alert.confirmText}
           cancelText={alert.cancelText}
+          acceptOnEnter={alert.acceptOnEnter}
           onConfirm={() => {
             alert.onConfirm?.();
             handleClose();

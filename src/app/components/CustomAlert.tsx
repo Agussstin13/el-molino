@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { X, AlertCircle, CheckCircle2, Info, HelpCircle } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import { useEffect } from 'react';
 
 export type AlertType = 'success' | 'error' | 'warning' | 'info' | 'confirm';
 
@@ -14,6 +15,7 @@ interface CustomAlertProps {
   onConfirm: () => void;
   onCancel?: () => void;
   onClose: () => void;
+  acceptOnEnter?: boolean;
 }
 
 export function CustomAlert({
@@ -26,7 +28,22 @@ export function CustomAlert({
   onConfirm,
   onCancel,
   onClose,
+  acceptOnEnter = false,
 }: CustomAlertProps) {
+  useEffect(() => {
+    if (!isOpen || !acceptOnEnter) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' || event.isComposing || event.repeat) return;
+
+      event.preventDefault();
+      onConfirm();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [acceptOnEnter, isOpen, onConfirm]);
+
   if (typeof document === 'undefined') return null;
 
   const icons = {

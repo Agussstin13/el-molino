@@ -167,7 +167,7 @@ export function AdminPanel() {
 
   // Category state
   const [categories, setCategories] = useState<Category[]>([]);
-  const { showError, showSuccess, showConfirm } = useAlert();
+  const { showError, showSuccess, showConfirm, setAcceptOnEnter } = useAlert();
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [categoryForm, setCategoryForm] =
     useState<Omit<Category, "id">>(EMPTY_CATEGORY);
@@ -215,6 +215,11 @@ export function AdminPanel() {
   const [qrImageFile, setQrImageFile] = useState<File | null>(null);
   const [qrImagePreview, setQrImagePreview] = useState<string | null>(null);
   const [uploadingQrImageId, setUploadingQrImageId] = useState<number | null>(null);
+
+  useEffect(() => {
+    setAcceptOnEnter(true);
+    return () => setAcceptOnEnter(false);
+  }, [setAcceptOnEnter]);
 
   const maxActiveShippingKm = shippingRates
     .filter((rate) => rate.activo)
