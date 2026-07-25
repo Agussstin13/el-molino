@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from "react";
-import { X, MapPin, ChevronRight, CheckCircle2, Truck, AlertCircle, User, BookmarkPlus } from "lucide-react";
+import { X, MapPin, ChevronRight, CheckCircle2, Truck, AlertCircle, User, BookmarkPlus, Loader2 } from "lucide-react";
 import type { SavedAddress } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
@@ -149,6 +149,7 @@ export function Checkout() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(false);
   const [paymentMethodsError, setPaymentMethodsError] = useState<string | null>(null);
+  const [isConfirmingOrder, setIsConfirmingOrder] = useState(false);
   const [form, setForm] = useState<FormData>(() => {
     try {
       const stored = localStorage.getItem(FORM_STORAGE_KEY);
@@ -546,6 +547,8 @@ export function Checkout() {
   };
 
   const handleConfirm = async () => {
+    if (isConfirmingOrder) return;
+
     const userToken = localStorage.getItem("userToken");
     const selectedPaymentMethodCode = normalizePaymentMethodCode(form.metodo_pago);
 
@@ -571,6 +574,8 @@ export function Checkout() {
         return;
       }
     }
+
+    setIsConfirmingOrder(true);
 
     const orderInformation = form.info_adicional.trim() || undefined;
 
@@ -654,6 +659,8 @@ export function Checkout() {
     } catch (e) {
       console.error(e);
       showError("Error de red", "Error de red al confirmar el pedido.");
+    } finally {
+      setIsConfirmingOrder(false);
     }
   };
 
@@ -1385,9 +1392,15 @@ export function Checkout() {
                     <button
                       id="confirm-order-btn"
                       onClick={handleConfirm}
-                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 rounded-xl transition-colors font-medium mt-4 shadow-lg shadow-primary/20"
+                      disabled={isConfirmingOrder}
+                      className="w-full bg-primary hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70 text-primary-foreground py-3 rounded-xl transition-colors font-medium mt-4 shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
                     >
-                      Confirmar Compra
+                      {isConfirmingOrder ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Procesando compra...
+                        </>
+                      ) : "Confirmar Compra"}
                     </button>
                   </div>
                 )}
