@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Package,
   Tag,
@@ -109,6 +109,7 @@ const EMPTY_CATEGORY: Omit<Category, "id"> = {
 export function AdminPanel() {
   const { logout, adminToken } = useAuth();
   const navigate = useNavigate();
+  const sessionExpiredRef = useRef(false);
   const [currentView, setCurrentView] = useState<AdminView>("products");
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -167,7 +168,11 @@ export function AdminPanel() {
 
   // Category state
   const [categories, setCategories] = useState<Category[]>([]);
-  const { showError, showSuccess, showConfirm, setAcceptOnEnter } = useAlert();
+  const { showError: showAlertError, showSuccess, showConfirm, setAcceptOnEnter } = useAlert();
+  const showError = (title: string, message: string) => {
+    if (sessionExpiredRef.current) return;
+    showAlertError(title, message);
+  };
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [categoryForm, setCategoryForm] =
     useState<Omit<Category, "id">>(EMPTY_CATEGORY);
@@ -363,6 +368,7 @@ export function AdminPanel() {
     setIsSavingOffers(true);
     let successCount = 0;
     let failCount = 0;
+    let failureMessage: string | null = null;
 
     for (const p of dirtyProducts) {
       const draft = offersDraft[p.id];
@@ -414,6 +420,10 @@ export function AdminPanel() {
           successCount++;
         } else {
           failCount++;
+          failureMessage ??= await getApiErrorMessage(
+            res,
+            "No se pudo actualizar la oferta del producto.",
+          );
         }
       } catch {
         failCount++;
@@ -470,7 +480,7 @@ export function AdminPanel() {
     } else {
       showError(
         "Error",
-        "No se pudo actualizar ninguna de las ofertas modificadas.",
+        failureMessage || "No se pudo actualizar ninguna de las ofertas modificadas.",
       );
     }
   };
@@ -481,7 +491,11 @@ export function AdminPanel() {
       const ratesRes = await fetch(`${API_BASE}/api/shipping`, {
         headers: getAuthHeaders(null),
       });
-      if (ratesRes.ok) setShippingRates(await ratesRes.json());
+      if (ratesRes.ok) {
+        setShippingRates(await ratesRes.json());
+      } else {
+        showError("Error", await getApiErrorMessage(ratesRes, "No se pudieron cargar las tarifas de envío."));
+      }
     } catch (e) {
       console.error("Error fetching shipping rates:", e);
     }
@@ -580,12 +594,30 @@ export function AdminPanel() {
   };
 
   const handleSessionExpired = () => {
+    if (sessionExpiredRef.current) return;
+
+    sessionExpiredRef.current = true;
     logout();
-    showError(
+    showAlertError(
       "Sesión expirada",
       "Tu sesión ha vencido. Por favor, inicia sesión nuevamente.",
     );
     navigate("/admin/login");
+  };
+
+  const fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const response = await globalThis.fetch(input, init);
+
+    if (response.status === 401) {
+      handleSessionExpired();
+    }
+
+    return response;
+  };
+
+  const getApiErrorMessage = async (response: Response, fallback: string): Promise<string> => {
+    const error = await response.json().catch(() => null);
+    return error?.detail || error?.title || error?.message || fallback;
   };
 
   React.useEffect(() => {
@@ -623,22 +655,10 @@ export function AdminPanel() {
 
           // Sincronizar el orden corregido con el backend (arregla datos viejos en la DB)
           if (mapped.length > 0) {
-            const backendPayload = mapped.map((img) => ({
-              id: img.id,
-              imageUrl: img.imagenNombre,
-              title: img.titulo ?? null,
-              description: img.subtitulo ?? null,
-              displayOrder: img.orden,
-              active: img.activo,
-              redirectUrl: img.redirectUrl ?? null,
-              creationDate: new Date().toISOString(),
-            }));
-            fetch(`${API_BASE}/api/carousel/reorder`, {
-              method: "PATCH",
-              headers: { ...authHeader, "Content-Type": "application/json" },
-              body: JSON.stringify(backendPayload),
-            });
+            void saveCarouselOrder(mapped);
           }
+        } else {
+          showError("Error", await getApiErrorMessage(carouselRes, "No se pudieron cargar las imágenes del carrusel."));
         }
 
         // Categories
@@ -666,6 +686,7 @@ export function AdminPanel() {
           }
         } else {
           setCategories([]);
+          showError("Error", await getApiErrorMessage(categoriesRes, "No se pudieron cargar las categorías."));
         }
 
         // Products
@@ -700,6 +721,8 @@ export function AdminPanel() {
               : undefined,
           }));
           setProducts(mappedProducts);
+        } else {
+          showError("Error", await getApiErrorMessage(productsRes, "No se pudieron cargar los productos."));
         }
 
         // Coupons
@@ -717,9 +740,12 @@ export function AdminPanel() {
             valido_mayorista: c.validoMayorista,
           }));
           setCoupons(mappedCoupons);
+        } else {
+          showError("Error", await getApiErrorMessage(couponsRes, "No se pudieron cargar los cupones."));
         }
       } catch (err) {
         console.error("Critical error fetching admin data:", err);
+        showError("Error de red", "No se pudieron cargar los datos del panel administrativo.");
       }
     };
 
@@ -764,9 +790,12 @@ export function AdminPanel() {
           );
 
           setOrders(mappedOrders);
+        } else {
+          showError("Error", await getApiErrorMessage(ordersRes, "No se pudieron cargar los pedidos."));
         }
       } catch (err) {
         console.error("Error fetching orders:", err);
+        showError("Error de red", "No se pudieron cargar los pedidos.");
       }
     };
 
@@ -799,7 +828,8 @@ export function AdminPanel() {
       }
 
       if (!res.ok) {
-        throw new Error("No se pudieron cargar los métodos de pago.");
+        showError("Error", await getApiErrorMessage(res, "No se pudieron cargar los métodos de pago."));
+        return;
       }
 
       const data = await res.json();
@@ -955,7 +985,7 @@ export function AdminPanel() {
         const errorData = await res.json().catch(() => null);
         showError(
           "Error",
-          errorData?.detail || "No se pudo actualizar el estado.",
+          errorData?.detail || errorData?.title || "No se pudo actualizar el estado.",
         );
       }
     } catch (e) {
@@ -1274,6 +1304,7 @@ export function AdminPanel() {
               })();
               showError(
                 "No se pudo borrar",
+                errorData.detail ||
                 errorData.title ||
                 "Hubo un problema al intentar eliminar el producto.",
               );
@@ -1475,7 +1506,7 @@ export function AdminPanel() {
             const errorData = await res.json().catch(() => ({}));
             showError(
               "No se pudo borrar",
-              errorData.title || "Hubo un problema al borrar el cupón.",
+              errorData.detail || errorData.title || "Hubo un problema al borrar el cupón.",
             );
           }
         } catch (e) {
@@ -1512,6 +1543,38 @@ export function AdminPanel() {
       redirectUrl: img.redirectUrl ?? null,
       creationDate: new Date().toISOString(),
     }));
+
+  const saveCarouselOrder = async (items: CarouselImage[]) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/carousel/reorder`, {
+        method: "PATCH",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(toCarouselBackend(items)),
+      });
+
+      if (!response.ok) {
+        showError("Error", await getApiErrorMessage(response, "No se pudo guardar el nuevo orden del carrusel."));
+      }
+    } catch {
+      showError("Error de red", "No se pudo conectar con el servidor para guardar el orden del carrusel.");
+    }
+  };
+
+  const saveCategoryOrder = async (items: Category[]) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/categories/reorder`, {
+        method: "PATCH",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(items.map((item) => ({ id: item.id, displayOrder: item.orden }))),
+      });
+
+      if (!response.ok) {
+        showError("Error", await getApiErrorMessage(response, "No se pudo guardar el nuevo orden de las categorías."));
+      }
+    } catch {
+      showError("Error de red", "No se pudo conectar con el servidor para guardar el orden de las categorías.");
+    }
+  };
 
   const handleSaveCarouselImage = async () => {
     try {
@@ -1560,10 +1623,16 @@ export function AdminPanel() {
         if (editingCarouselId) {
           if (carouselImageFile) {
             // Hubo cambio de imagen — re-fetch para obtener la nueva URL del servidor
-            const updated = await fetch(
+            const updatedResponse = await fetch(
               `${API_BASE}/api/carousel/${editingCarouselId}`,
               { headers: getAuthHeaders(null) },
-            ).then((r) => r.json());
+            );
+            if (!updatedResponse.ok) {
+              showError("No se pudo guardar", await getApiErrorMessage(updatedResponse, "No se pudo obtener la imagen actualizada del carrusel."));
+              return;
+            }
+
+            const updated = await updatedResponse.json();
             saved = {
               id: updated.id,
               imagenNombre: updated.imageUrl ?? "",
@@ -1617,11 +1686,7 @@ export function AdminPanel() {
           !editingCarouselId ||
           normalized.some((img, i) => updatedCarousel[i]?.orden !== img.orden)
         ) {
-          fetch(`${API_BASE}/api/carousel/reorder`, {
-            method: "PATCH",
-            headers: getAuthHeaders(),
-            body: JSON.stringify(toCarouselBackend(normalized)),
-          });
+          void saveCarouselOrder(normalized);
         }
 
         setCarouselForm(EMPTY_CAROUSEL);
@@ -1655,18 +1720,7 @@ export function AdminPanel() {
     }));
     setCarouselImages(updatedWithOrder);
 
-    try {
-      const res = await fetch(`${API_BASE}/api/carousel/reorder`, {
-        method: "PATCH",
-        headers: getAuthHeaders(),
-        body: JSON.stringify(toCarouselBackend(updatedWithOrder)),
-      });
-      if (!res.ok) {
-        showError("Error", "No se pudo guardar el nuevo orden del carousel.");
-      }
-    } catch {
-      showError("Error de red", "No se pudo conectar con el servidor.");
-    }
+    await saveCarouselOrder(updatedWithOrder);
   };
 
   const handleEditCarousel = (img: CarouselImage) => {
@@ -1709,11 +1763,7 @@ export function AdminPanel() {
                 .map((img, i) => ({ ...img, orden: i + 1 }));
 
               // Sincronizar
-              fetch(`${API_BASE}/api/carousel/reorder`, {
-                method: "PATCH",
-                headers: getAuthHeaders(),
-                body: JSON.stringify(toCarouselBackend(normalized)),
-              });
+              void saveCarouselOrder(normalized);
 
               return normalized;
             });
@@ -1722,7 +1772,7 @@ export function AdminPanel() {
             const errorData = await res.json().catch(() => ({}));
             showError(
               "No se pudo borrar",
-              errorData.title || "Hubo un problema al eliminar la imagen.",
+              errorData.detail || errorData.title || "Hubo un problema al eliminar la imagen.",
             );
           }
         } catch {
@@ -1808,10 +1858,16 @@ export function AdminPanel() {
 
         if (editingCategoryId && categoryImageFile) {
           // Hubo nueva imagen — re-fetch para obtener la nueva URL
-          const updated = await fetch(
+          const updatedResponse = await fetch(
             `${API_BASE}/api/categories/${editingCategoryId}`,
             { headers: getAuthHeaders(null) },
-          ).then((r) => r.json());
+          );
+          if (!updatedResponse.ok) {
+            showError("No se pudo guardar", await getApiErrorMessage(updatedResponse, "No se pudo obtener la imagen actualizada de la categoría."));
+            return;
+          }
+
+          const updated = await updatedResponse.json();
           saved = {
             id: updated.id,
             nombre: updated.name ?? "",
@@ -1856,13 +1912,7 @@ export function AdminPanel() {
           !editingCategoryId ||
           normalized.some((c, i) => updatedCategories[i]?.orden !== c.orden)
         ) {
-          fetch(`${API_BASE}/api/categories/reorder`, {
-            method: "PATCH",
-            headers: getAuthHeaders(),
-            body: JSON.stringify(
-              normalized.map((c) => ({ id: c.id, displayOrder: c.orden })),
-            ),
-          });
+          void saveCategoryOrder(normalized);
         }
 
         setCategoryForm(EMPTY_CATEGORY);
@@ -1924,13 +1974,7 @@ export function AdminPanel() {
                 .map((c, i) => ({ ...c, orden: i + 1 }));
 
               // Sincronizamos el nuevo orden con el servidor
-              fetch(`${API_BASE}/api/categories/reorder`, {
-                method: "PATCH",
-                headers: getAuthHeaders(),
-                body: JSON.stringify(
-                  normalized.map((c) => ({ id: c.id, displayOrder: c.orden })),
-                ),
-              });
+              void saveCategoryOrder(normalized);
 
               return normalized;
             });
@@ -1973,23 +2017,7 @@ export function AdminPanel() {
     }));
     setCategories(updatedWithOrder);
 
-    try {
-      const res = await fetch(`${API_BASE}/api/categories/reorder`, {
-        method: "PATCH",
-        headers: getAuthHeaders(),
-        body: JSON.stringify(
-          updatedWithOrder.map((c) => ({ id: c.id, displayOrder: c.orden })),
-        ),
-      });
-      if (!res.ok) {
-        showError("Error", "No se pudo guardar el nuevo orden en el servidor.");
-      }
-    } catch {
-      showError(
-        "Error de red",
-        "No se pudo conectar con el servidor para guardar el orden.",
-      );
-    }
+    await saveCategoryOrder(updatedWithOrder);
   };
 
   const navItems = [
