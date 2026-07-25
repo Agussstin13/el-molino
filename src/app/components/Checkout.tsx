@@ -1210,8 +1210,6 @@ export function Checkout() {
                       const isSelected = selectedPaymentMethodCode === methodCode;
                       const methodIcon = methodCode === "mercado_pago"
                         ? "💳"
-                        : methodCode === "payway_qr"
-                          ? "📱"
                         : methodCode === "transferencia"
                           ? "🏦"
                           : methodCode === "efectivo"

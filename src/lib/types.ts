@@ -50,7 +50,6 @@ export interface Coupon {
 export type PaymentMethodCode =
   | "mercado_pago"
   | "payway"
-  | "payway_qr"
   | "transferencia"
   | "efectivo"
   | "";
