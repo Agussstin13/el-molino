@@ -23,6 +23,12 @@ import { ClientLoginModal } from "./ClientLoginModal";
 const API_BASE = import.meta.env.VITE_API_BASE;
 const PHONE_NUMBER = import.meta.env.VITE_PHONE_NUMBER;
 
+function getPaymentMethodImageUrl(imagePath?: string | null) {
+  if (!imagePath) return null;
+
+  return imagePath.startsWith("/") ? `${API_BASE}${imagePath}` : `${API_BASE}/${imagePath}`;
+}
+
 interface FormData {
   nombre: string;
   apellido: string;
@@ -669,6 +675,11 @@ export function Checkout() {
           : subtotal;
   const selectedPaymentMethodCode = normalizePaymentMethodCode(form.metodo_pago);
   const selectedPaymentMethodLabel = getPaymentMethodLabel(selectedPaymentMethodCode);
+  const selectedQrImageUrl = selectedPaymentMethodCode === "qr"
+    ? getPaymentMethodImageUrl(
+      paymentMethods.find((method) => normalizePaymentMethodCode(method.codigo) === "qr")?.imagePath,
+    )
+    : null;
   const paymentInitializationFailed = isOnlinePaymentMethod(selectedPaymentMethodCode)
     && paymentInitializationError !== null;
   const hasAvailablePaymentMethods = paymentMethods.length > 0;
@@ -776,6 +787,8 @@ export function Checkout() {
               <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg max-w-md text-amber-900 text-sm font-medium">
                 ATENCIÓN: Tu pedido está guardado, pero <strong>NO ESTÁ FINALIZADO</strong> hasta que {selectedPaymentMethodCode === "transferencia"
                   ? "envíes el comprobante de pago"
+                  : selectedPaymentMethodCode === "qr"
+                    ? "escanees el QR y envíes el comprobante de pago"
                   : "confirmes"} por WhatsApp.
               </div>
             )}
@@ -787,6 +800,8 @@ export function Checkout() {
                   : `Se ha abierto una nueva pestaña para completar el pago con ${selectedPaymentMethodLabel}. Si no la ves, hacé clic en el botón de abajo.`
                 : selectedPaymentMethodCode === "transferencia"
                   ? "Realizá la transferencia con los datos a continuación y enviá el comprobante haciendo clic en el botón verde de abajo."
+                  : selectedPaymentMethodCode === "qr"
+                    ? "Escaneá el código QR a continuación y enviá el comprobante por WhatsApp."
                   : "Por favor, comunicate por WhatsApp haciendo clic en el botón de abajo para coordinar tu pedido."}
             </p>
             {selectedPaymentMethodCode === "transferencia" && (
@@ -810,14 +825,29 @@ export function Checkout() {
                 </div>
               </div>
             )}
+            {selectedPaymentMethodCode === "qr" && selectedQrImageUrl && (
+              <div className="mt-2 w-full max-w-sm bg-secondary/40 border border-border rounded-xl p-4 text-left space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Escaneá el código QR para pagar
+                </p>
+                <img
+                  src={selectedQrImageUrl}
+                  alt="Código QR para pagar el pedido"
+                  className="mx-auto max-h-72 w-full max-w-72 rounded-lg bg-white object-contain p-2"
+                />
+              </div>
+            )}
             <div className="flex flex-col gap-3 w-full max-w-sm mt-6">
               {(selectedPaymentMethodCode === "transferencia" ||
-                selectedPaymentMethodCode === "efectivo") && (
+                selectedPaymentMethodCode === "efectivo" ||
+                selectedPaymentMethodCode === "qr") && (
                   <a
                     href={`https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent(
                       selectedPaymentMethodCode === "transferencia"
                         ? `¡Hola! Acabo de hacer un pedido (#${confirmedOrderId ?? "N/A"}) con pago por transferencia. Mi nombre es ${form.nombre} ${form.apellido} y el total es de $${confirmedTotal}. Adjunto el comprobante.`
-                        : `¡Hola! Acabo de hacer un pedido (#${confirmedOrderId ?? "N/A"}) con pago en efectivo. Mi nombre es ${form.nombre} ${form.apellido} y el total es de $${confirmedTotal}.`,
+                        : selectedPaymentMethodCode === "qr"
+                          ? `¡Hola! Acabo de hacer un pedido (#${confirmedOrderId ?? "N/A"}) con pago por QR. Mi nombre es ${form.nombre} ${form.apellido} y el total es de $${confirmedTotal}. Adjunto el comprobante.`
+                          : `¡Hola! Acabo de hacer un pedido (#${confirmedOrderId ?? "N/A"}) con pago en efectivo. Mi nombre es ${form.nombre} ${form.apellido} y el total es de $${confirmedTotal}.`,
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -825,6 +855,8 @@ export function Checkout() {
                   >
                     {selectedPaymentMethodCode === "transferencia"
                       ? "Enviar comprobante por WhatsApp"
+                      : selectedPaymentMethodCode === "qr"
+                        ? "Enviar comprobante por WhatsApp"
                       : "Coordinar entrega por WhatsApp"}
                   </a>
                 )}
@@ -1210,6 +1242,8 @@ export function Checkout() {
                       const isSelected = selectedPaymentMethodCode === methodCode;
                       const methodIcon = methodCode === "mercado_pago"
                         ? "💳"
+                        : methodCode === "qr"
+                          ? "📱"
                         : methodCode === "transferencia"
                           ? "🏦"
                           : methodCode === "efectivo"
@@ -1269,6 +1303,20 @@ export function Checkout() {
                                     elmolinomdp
                                   </span>
                                 </div>
+                              </div>
+                            </div>
+                          )}
+                          {isSelected && methodCode === "qr" && method.imagePath && (
+                            <div className="px-4 pb-4 pl-20">
+                              <div className="bg-white/50 p-3 rounded-lg border border-border/50 space-y-3">
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                  Escaneá el código QR para pagar
+                                </p>
+                                <img
+                                  src={getPaymentMethodImageUrl(method.imagePath) ?? undefined}
+                                  alt="Código QR para pagar"
+                                  className="mx-auto max-h-72 w-full max-w-72 rounded-lg bg-white object-contain p-2"
+                                />
                               </div>
                             </div>
                           )}

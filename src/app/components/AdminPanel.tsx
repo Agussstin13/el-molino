@@ -211,6 +211,10 @@ export function AdminPanel() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(false);
   const [savingPaymentMethodId, setSavingPaymentMethodId] = useState<number | null>(null);
+  const [expandedPaymentMethodId, setExpandedPaymentMethodId] = useState<number | null>(null);
+  const [qrImageFile, setQrImageFile] = useState<File | null>(null);
+  const [qrImagePreview, setQrImagePreview] = useState<string | null>(null);
+  const [uploadingQrImageId, setUploadingQrImageId] = useState<number | null>(null);
 
   const maxActiveShippingKm = shippingRates
     .filter((rate) => rate.activo)
@@ -843,6 +847,65 @@ export function AdminPanel() {
       showError("Error", "No se pudo actualizar la visibilidad del método de pago.");
     } finally {
       setSavingPaymentMethodId(null);
+    }
+  };
+
+  const handleQrImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const image = event.target.files?.[0];
+
+    if (!image) return;
+
+    if (!image.type.startsWith("image/")) {
+      showError("Archivo inválido", "Seleccioná una imagen JPG, PNG o WEBP.");
+      return;
+    }
+
+    setQrImageFile(image);
+    setQrImagePreview(URL.createObjectURL(image));
+  };
+
+  const handleUploadQrImage = async (paymentMethod: PaymentMethod) => {
+    if (!qrImageFile) {
+      showError("Imagen requerida", "Seleccioná la imagen del código QR para continuar.");
+      return;
+    }
+
+    setUploadingQrImageId(paymentMethod.id);
+
+    try {
+      const formData = new FormData();
+      formData.append("image", qrImageFile);
+
+      const res = await fetch(`${API_BASE}/api/payment-methods/${paymentMethod.id}/qr-image`, {
+        method: "PUT",
+        headers: getAuthHeaders(null),
+        body: formData,
+      });
+
+      if (res.status === 401) {
+        handleSessionExpired();
+        return;
+      }
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        showError("Error", data?.detail || data?.title || "No se pudo cargar la imagen del QR.");
+        return;
+      }
+
+      setPaymentMethods((current) =>
+        current.map((method) => method.id === paymentMethod.id ? { ...method, ...data } : method),
+      );
+      setExpandedPaymentMethodId(null);
+      setQrImageFile(null);
+      setQrImagePreview(null);
+      showSuccess("QR cargado", "El pago con QR ya está visible en el checkout.");
+    } catch (error) {
+      console.error("Error uploading QR image:", error);
+      showError("Error", "No se pudo cargar la imagen del QR.");
+    } finally {
+      setUploadingQrImageId(null);
     }
   };
 
@@ -3748,11 +3811,20 @@ export function AdminPanel() {
                         {paymentMethods.map((method) => {
                           const normalizedCode = normalizePaymentMethodCode(method.codigo);
                           const isSaving = savingPaymentMethodId === method.id;
+                          const isQrPayment = normalizedCode === "qr";
+                          const isQrSetupExpanded = expandedPaymentMethodId === method.id;
+                          const isUploadingQrImage = uploadingQrImageId === method.id;
 
                           return (
-                            <tr key={method.id} className="hover:bg-secondary/20 transition-colors">
+                            <React.Fragment key={method.id}>
+                            <tr className="hover:bg-secondary/20 transition-colors">
                               <td className="px-5 py-3 font-medium text-foreground">
-                                {getPaymentMethodLabel(method.codigo)}
+                                <div className="flex items-center gap-2">
+                                  {getPaymentMethodLabel(method.codigo)}
+                                  {isQrPayment && method.imagePath && (
+                                    <span className="text-xs font-normal text-muted-foreground">QR cargado</span>
+                                  )}
+                                </div>
                               </td>
                               <td className="px-5 py-3">
                                 <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${isOnlinePaymentMethod(normalizedCode) ? "bg-primary/10 text-primary" : "bg-secondary text-secondary-foreground"}`}>
@@ -3768,12 +3840,21 @@ export function AdminPanel() {
                                 <div className="flex items-center justify-end gap-2">
                                   <button
                                     type="button"
-                                    onClick={() => handleUpdatePaymentMethod(method, !method.visibleCliente)}
-                                    disabled={isSaving}
+                                    onClick={() => {
+                                      if (isQrPayment && !method.imagePath) {
+                                        setExpandedPaymentMethodId(isQrSetupExpanded ? null : method.id);
+                                        return;
+                                      }
+
+                                      handleUpdatePaymentMethod(method, !method.visibleCliente);
+                                    }}
+                                    disabled={isSaving || isUploadingQrImage}
                                     className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium hover:bg-secondary disabled:opacity-60"
                                   >
                                     {method.visibleCliente ? <ToggleRight className="w-4 h-4 text-primary" /> : <ToggleLeft className="w-4 h-4 text-muted-foreground" />}
-                                    {method.visibleCliente ? "Ocultar del checkout" : "Mostrar en checkout"}
+                                    {isQrPayment && !method.imagePath
+                                      ? "Cargar QR para mostrar"
+                                      : method.visibleCliente ? "Ocultar del checkout" : "Mostrar en checkout"}
                                   </button>
                                   {isSaving && (
                                     <span className="text-xs text-muted-foreground">Guardando...</span>
@@ -3781,6 +3862,70 @@ export function AdminPanel() {
                                 </div>
                               </td>
                             </tr>
+                            {isQrPayment && isQrSetupExpanded && (
+                              <tr className="bg-secondary/10">
+                                <td colSpan={4} className="p-0">
+                                  <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: "auto" }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    className="overflow-hidden"
+                                  >
+                                    <div className="m-4 rounded-xl border border-border bg-card p-4">
+                                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                                        {qrImagePreview ? (
+                                          <img
+                                            src={qrImagePreview}
+                                            alt="Vista previa del código QR"
+                                            className="h-40 w-40 rounded-lg border border-border bg-white object-contain"
+                                          />
+                                        ) : (
+                                          <label className="flex h-40 w-40 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-secondary/20 text-center hover:border-primary/50">
+                                            <Upload className="mb-2 h-6 w-6 text-muted-foreground" />
+                                            <span className="text-xs font-medium text-muted-foreground">Seleccionar imagen</span>
+                                            <input
+                                              type="file"
+                                              accept="image/jpeg,image/png,image/webp"
+                                              onChange={handleQrImageSelect}
+                                              className="hidden"
+                                            />
+                                          </label>
+                                        )}
+                                        <div className="flex-1 space-y-2 text-sm text-muted-foreground">
+                                          <p className="font-semibold text-foreground">Configurá el pago con QR</p>
+                                          <p>Recomendamos subir una imagen cuadrada para que se vea correctamente.</p>
+                                          <p>Antes de subirla, verificá que el QR sea válido y corresponda a la cuenta de cobro correcta.</p>
+                                          <p>Formatos admitidos: JPG, PNG o WEBP. Tamaño máximo: 5 MB.</p>
+                                        </div>
+                                      </div>
+                                      <div className="mt-4 flex justify-end gap-3 border-t border-border pt-4">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setExpandedPaymentMethodId(null);
+                                            setQrImageFile(null);
+                                            setQrImagePreview(null);
+                                          }}
+                                          disabled={isUploadingQrImage}
+                                          className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-secondary disabled:opacity-60"
+                                        >
+                                          Cancelar
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleUploadQrImage(method)}
+                                          disabled={!qrImageFile || isUploadingQrImage}
+                                          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                                        >
+                                          {isUploadingQrImage ? "Cargando..." : "Guardar QR y mostrar en checkout"}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </motion.div>
+                                </td>
+                              </tr>
+                            )}
+                            </React.Fragment>
                           );
                         })}
                       </tbody>

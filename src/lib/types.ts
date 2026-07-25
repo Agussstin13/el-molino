@@ -52,6 +52,7 @@ export type PaymentMethodCode =
   | "payway"
   | "transferencia"
   | "efectivo"
+  | "qr"
   | "";
 
 export interface PaymentMethod {
@@ -59,6 +60,7 @@ export interface PaymentMethod {
   codigo: PaymentMethodCode | string;
   activo: boolean;
   visibleCliente: boolean;
+  imagePath?: string | null;
 }
 
 export interface OrderItem {

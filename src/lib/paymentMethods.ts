@@ -5,6 +5,7 @@ export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   payway: "Payway",
   transferencia: "Transferencia",
   efectivo: "Efectivo",
+  qr: "Pago con QR",
 };
 
 export const ONLINE_PAYMENT_METHOD_CODES = new Set<string>([
@@ -27,7 +28,8 @@ export function normalizePaymentMethodCode(code?: string | null): PaymentMethodC
     normalized === "mercado_pago" ||
     normalized === "payway" ||
     normalized === "transferencia" ||
-    normalized === "efectivo"
+    normalized === "efectivo" ||
+    normalized === "qr"
   ) {
     return normalized;
   }
@@ -49,11 +51,13 @@ export function getCheckoutPaymentDescription(code?: string | null): string {
     case "mercado_pago":
       return "Tarjetas de crédito, débito y efectivo";
     case "payway":
-      return "Checkout seguro alojado por Payway";
+      return "Paga con tarjeta de débito/crédito seguro en Payway.";
     case "transferencia":
       return "Enviá el comprobante por WhatsApp";
     case "efectivo":
       return "Pagás al momento de la entrega o retiro";
+    case "qr":
+      return "Escaneá el QR y enviá el comprobante por WhatsApp";
     default:
       return "Método de pago disponible";
   }
