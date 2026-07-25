@@ -44,9 +44,9 @@ export function Footer() {
   };
 
   return (
-    <footer className="bg-secondary/50 border-t border-border mt-16 pt-16 pb-8">
+    <footer className="bg-secondary/50 border-t border-border mt-16 pt-10 pb-6">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-8">
           {/* Brand Info */}
           <div className="space-y-6">
             <div className="flex items-center gap-3">
@@ -77,21 +77,24 @@ export function Footer() {
             >
               Contacto
             </h3>
-            <ul className="space-y-4">
+            <ul className="space-y-4 sm:flex sm:flex-row sm:flex-wrap sm:gap-x-6 sm:gap-y-4 sm:space-y-0 md:block md:space-y-4">
               <li className="flex items-start gap-3 text-muted-foreground text-sm group">
-                <MapPin className="w-5 h-5 text-primary shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
-                <span>
-                  Bolívar 2342, <br />
-                  Mar del Plata, <br />
-                  Argentina
-                </span>
+                <MapPin className="w-5 h-5 text-red-500 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                <a
+                  href="https://maps.app.goo.gl/7PYu5S649M96pi5WA"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-primary transition-colors"
+                >
+                  Bolívar 2342, Mar del Plata, Argentina
+                </a>
               </li>
               <li className="flex items-center gap-3 text-muted-foreground text-sm group">
-                <Instagram className="w-5 h-5 text-primary shrink-0 group-hover:scale-110 transition-transform" />
+                <Instagram className="w-5 h-5 text-[#D62976] shrink-0 group-hover:scale-110 transition-transform" />
                 <a href="https://instagram.com/elmolinomdp" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">@elmolinomdp</a>
               </li>
               <li className="flex items-center gap-3 text-muted-foreground text-sm group">
-                <Phone className="w-5 h-5 text-primary shrink-0 group-hover:scale-110 transition-transform" />
+                <Phone className="w-5 h-5 text-[#25D366] shrink-0 group-hover:scale-110 transition-transform" />
                 <a href={`https://wa.me/${PHONE_NUMBER}`} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">+{PHONE_NUMBER}</a>
               </li>
             </ul>
@@ -170,13 +173,19 @@ export function Footer() {
             )}
           </div>
         </div>
-        <div className="pt-8 border-t border-border flex flex-col md:flex-row items-center justify-end gap-4">
+        <div className="pt-6 border-t border-border flex flex-col md:flex-row items-center justify-end gap-4">
           <a 
-            href="#" 
+            href="https://zenithium.com.ar"
             target="_blank" 
             rel="noopener noreferrer"
-            className="text-xs text-muted-foreground hover:text-primary transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
           >
+            <img
+              src="/zenithium.png"
+              alt=""
+              aria-hidden="true"
+              className="h-5 w-5 object-contain"
+            />
             Desarrollado por Zenithium
           </a>
         </div>
