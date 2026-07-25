@@ -19,6 +19,12 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
+function getPaymentMethodImageUrl(imagePath?: string | null) {
+  if (!imagePath) return null;
+
+  return imagePath.startsWith('/') ? `${API_BASE}${imagePath}` : `${API_BASE}/${imagePath}`;
+}
+
 const ORDER_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: typeof Clock }> = {
   pendiente: { label: 'Pendiente', color: 'text-amber-600', bg: 'bg-amber-100', icon: Clock },
   en_preparacion: { label: 'En preparación', color: 'text-blue-600', bg: 'bg-blue-100', icon: RefreshCw },
@@ -120,6 +126,10 @@ export function GuestOrderPage() {
 
   const canGeneratePaymentLink = isOnlinePaymentMethod(paymentMethodCode)
     && order.paymentStatus !== 'aprobado'
+    && order.orderStatus !== 'cancelado';
+  const canShowQr = paymentMethodCode === 'qr'
+    && !!order.paymentMethodImagePath
+    && !['aprobado', 'reembolsado', 'contracargo'].includes(order.paymentStatus?.toLowerCase())
     && order.orderStatus !== 'cancelado';
 
   const handleCancel = () => {
@@ -338,6 +348,18 @@ export function GuestOrderPage() {
                   <span className="text-muted-foreground">Alias</span>
                   <span className="font-medium font-mono text-right">elmolinomdp</span>
                 </div>
+              </div>
+            )}
+
+            {canShowQr && (
+              <div className="ml-6 mt-1 bg-secondary/40 rounded-lg p-3 text-sm space-y-3 border border-border">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Escaneá el código QR para pagar</p>
+                <img
+                  src={getPaymentMethodImageUrl(order.paymentMethodImagePath) ?? undefined}
+                  alt="Código QR para pagar el pedido"
+                  className="mx-auto max-h-80 w-full max-w-80 rounded-lg bg-white object-contain p-2"
+                />
+                <p className="text-center text-muted-foreground">Cuando completes el pago, enviá el comprobante por WhatsApp.</p>
               </div>
             )}
           </div>

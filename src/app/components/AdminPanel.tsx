@@ -580,7 +580,7 @@ export function AdminPanel() {
       "Sesión expirada",
       "Tu sesión ha vencido. Por favor, inicia sesión nuevamente.",
     );
-    navigate("/login");
+    navigate("/admin/login");
   };
 
   React.useEffect(() => {
@@ -900,7 +900,7 @@ export function AdminPanel() {
       setExpandedPaymentMethodId(null);
       setQrImageFile(null);
       setQrImagePreview(null);
-      showSuccess("QR cargado", "El pago con QR ya está visible en el checkout.");
+      showSuccess("QR actualizado", "El pago con QR ya está visible en el checkout.");
     } catch (error) {
       console.error("Error uploading QR image:", error);
       showError("Error", "No se pudo cargar la imagen del QR.");
@@ -3856,6 +3856,20 @@ export function AdminPanel() {
                                       ? "Cargar QR para mostrar"
                                       : method.visibleCliente ? "Ocultar del checkout" : "Mostrar en checkout"}
                                   </button>
+                                  {isQrPayment && method.imagePath && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setQrImageFile(null);
+                                        setQrImagePreview(null);
+                                        setExpandedPaymentMethodId(isQrSetupExpanded ? null : method.id);
+                                      }}
+                                      disabled={isUploadingQrImage}
+                                      className="rounded-lg border border-border px-3 py-2 text-xs font-medium hover:bg-secondary disabled:opacity-60"
+                                    >
+                                      Cambiar QR
+                                    </button>
+                                  )}
                                   {isSaving && (
                                     <span className="text-xs text-muted-foreground">Guardando...</span>
                                   )}
@@ -3892,7 +3906,9 @@ export function AdminPanel() {
                                           </label>
                                         )}
                                         <div className="flex-1 space-y-2 text-sm text-muted-foreground">
-                                          <p className="font-semibold text-foreground">Configurá el pago con QR</p>
+                                          <p className="font-semibold text-foreground">
+                                            {method.imagePath ? "Cambiá el código QR" : "Configurá el pago con QR"}
+                                          </p>
                                           <p>Recomendamos subir una imagen cuadrada para que se vea correctamente.</p>
                                           <p>Antes de subirla, verificá que el QR sea válido y corresponda a la cuenta de cobro correcta.</p>
                                           <p>Formatos admitidos: JPG, PNG o WEBP. Tamaño máximo: 5 MB.</p>
@@ -3917,7 +3933,9 @@ export function AdminPanel() {
                                           disabled={!qrImageFile || isUploadingQrImage}
                                           className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
                                         >
-                                          {isUploadingQrImage ? "Cargando..." : "Guardar QR y mostrar en checkout"}
+                                          {isUploadingQrImage
+                                            ? "Cargando..."
+                                            : method.imagePath ? "Guardar nuevo QR" : "Guardar QR y mostrar en checkout"}
                                         </button>
                                       </div>
                                     </div>
