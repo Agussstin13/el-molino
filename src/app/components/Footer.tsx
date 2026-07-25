@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import logo from "../../imports/image.png";
 
 const PHONE_NUMBER = import.meta.env.VITE_PHONE_NUMBER;
+const FORMSPREE_ENDPOINT = "https://formspree.io/f/xgogppqw";
 
 export function Footer() {
   const [formData, setFormData] = useState({
@@ -12,17 +13,34 @@ export function Footer() {
   });
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
-    // Simulate sending message
-    setTimeout(() => {
+    setSubmitError(null);
+
+    try {
+      const response = await fetch(FORMSPREE_ENDPOINT, {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        body: new FormData(e.currentTarget),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        setSubmitError(error?.errors?.[0]?.message || "No pudimos enviar tu mensaje. Intentá nuevamente.");
+        return;
+      }
+
       setSubmitted(true);
-      setIsSubmitting(false);
       setFormData({ name: "", email: "", message: "" });
       setTimeout(() => setSubmitted(false), 4000);
-    }, 1000);
+    } catch {
+      setSubmitError("No pudimos conectar para enviar tu mensaje. Revisá tu conexión e intentá nuevamente.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -99,6 +117,7 @@ export function Footer() {
               <form onSubmit={handleSubmit} className="space-y-3 relative">
                 <input
                   type="text"
+                  name="name"
                   placeholder="Tu nombre"
                   required
                   disabled={isSubmitting}
@@ -110,6 +129,7 @@ export function Footer() {
                 />
                 <input
                   type="email"
+                  name="email"
                   placeholder="Tu email"
                   required
                   disabled={isSubmitting}
@@ -120,6 +140,7 @@ export function Footer() {
                   className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all disabled:opacity-50"
                 />
                 <textarea
+                  name="message"
                   placeholder="Tu mensaje"
                   rows={3}
                   required
@@ -130,6 +151,11 @@ export function Footer() {
                   }
                   className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all resize-none disabled:opacity-50"
                 />
+                {submitError && (
+                  <p className="text-sm text-destructive" role="alert">
+                    {submitError}
+                  </p>
+                )}
                 <button
                   type="submit"
                   disabled={isSubmitting}
