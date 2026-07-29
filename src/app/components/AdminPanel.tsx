@@ -168,7 +168,12 @@ export function AdminPanel() {
 
   // Category state
   const [categories, setCategories] = useState<Category[]>([]);
-  const { showError: showAlertError, showSuccess, showConfirm, setAcceptOnEnter } = useAlert();
+  const {
+    showError: showAlertError,
+    showSuccess,
+    showConfirm,
+    setAcceptOnEnter,
+  } = useAlert();
   const showError = (title: string, message: string) => {
     if (sessionExpiredRef.current) return;
     showAlertError(title, message);
@@ -215,11 +220,17 @@ export function AdminPanel() {
   const [isSavingShipping, setIsSavingShipping] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(false);
-  const [savingPaymentMethodId, setSavingPaymentMethodId] = useState<number | null>(null);
-  const [expandedPaymentMethodId, setExpandedPaymentMethodId] = useState<number | null>(null);
+  const [savingPaymentMethodId, setSavingPaymentMethodId] = useState<
+    number | null
+  >(null);
+  const [expandedPaymentMethodId, setExpandedPaymentMethodId] = useState<
+    number | null
+  >(null);
   const [qrImageFile, setQrImageFile] = useState<File | null>(null);
   const [qrImagePreview, setQrImagePreview] = useState<string | null>(null);
-  const [uploadingQrImageId, setUploadingQrImageId] = useState<number | null>(null);
+  const [uploadingQrImageId, setUploadingQrImageId] = useState<number | null>(
+    null,
+  );
 
   useEffect(() => {
     setAcceptOnEnter(true);
@@ -228,10 +239,9 @@ export function AdminPanel() {
 
   const maxActiveShippingKm = shippingRates
     .filter((rate) => rate.activo)
-    .reduce<number | null>(
-      (max, rate) => (max === null || rate.hastaKm > max ? rate.hastaKm : max),
-      null,
-    );
+    .reduce<
+      number | null
+    >((max, rate) => (max === null || rate.hastaKm > max ? rate.hastaKm : max), null);
 
   const { lastProductsUpdate, lastCategoriesUpdate } = useSignalR();
 
@@ -444,8 +454,14 @@ export function AdminPanel() {
           stock: p.stock,
           description: p.description ?? "",
           categories: Array.isArray(p.categories) ? p.categories : [],
-          category: Array.isArray(p.categories) && p.categories.length > 0 ? p.categories.map((c: any) => c.name ?? c.nombre).join(", ") : (p.categoryName ?? ""),
-          categoryId: Array.isArray(p.categories) && p.categories.length > 0 ? p.categories[0].id : (p.categoryId ?? p.categoriaId),
+          category:
+            Array.isArray(p.categories) && p.categories.length > 0
+              ? p.categories.map((c: any) => c.name ?? c.nombre).join(", ")
+              : (p.categoryName ?? ""),
+          categoryId:
+            Array.isArray(p.categories) && p.categories.length > 0
+              ? p.categories[0].id
+              : (p.categoryId ?? p.categoriaId),
           image: imgUrl(p.imagePath ?? p.imageUrl ?? ""),
           imagePath: p.imagePath ?? p.imageUrl ?? "",
           active: p.active ?? true,
@@ -455,9 +471,9 @@ export function AdminPanel() {
           gramages: Array.isArray(p.gramages) ? p.gramages : [],
           wholesalePrice: p.wholesalePrice
             ? {
-              quantity: p.minimumWholesaleAmount ?? 10,
-              price: p.wholesalePrice,
-            }
+                quantity: p.minimumWholesaleAmount ?? 10,
+                price: p.wholesalePrice,
+              }
             : undefined,
         }));
         setProducts(mapped);
@@ -480,7 +496,8 @@ export function AdminPanel() {
     } else {
       showError(
         "Error",
-        failureMessage || "No se pudo actualizar ninguna de las ofertas modificadas.",
+        failureMessage ||
+          "No se pudo actualizar ninguna de las ofertas modificadas.",
       );
     }
   };
@@ -494,7 +511,13 @@ export function AdminPanel() {
       if (ratesRes.ok) {
         setShippingRates(await ratesRes.json());
       } else {
-        showError("Error", await getApiErrorMessage(ratesRes, "No se pudieron cargar las tarifas de envío."));
+        showError(
+          "Error",
+          await getApiErrorMessage(
+            ratesRes,
+            "No se pudieron cargar las tarifas de envío.",
+          ),
+        );
       }
     } catch (e) {
       console.error("Error fetching shipping rates:", e);
@@ -508,20 +531,31 @@ export function AdminPanel() {
     );
     const montoMinimoEnvioGratis = shippingForm.montoMinimoEnvioGratis.trim()
       ? parseFloat(
-        shippingForm.montoMinimoEnvioGratis.replace(/\./g, "").replace(",", "."),
-      )
+          shippingForm.montoMinimoEnvioGratis
+            .replace(/\./g, "")
+            .replace(",", "."),
+        )
       : null;
 
     if (isNaN(hasta) || isNaN(precio)) {
-      showError("Datos incompletos", "Completá los campos obligatorios del tramo.");
+      showError(
+        "Datos incompletos",
+        "Completá los campos obligatorios del tramo.",
+      );
       return;
     }
     if (hasta <= 0) {
       showError("Rango inválido", "El km máximo debe ser mayor a 0.");
       return;
     }
-    if (montoMinimoEnvioGratis !== null && (isNaN(montoMinimoEnvioGratis) || montoMinimoEnvioGratis < 0)) {
-      showError("Monto inválido", "El monto mínimo de envío gratis debe ser mayor o igual a 0, o dejarse vacío.");
+    if (
+      montoMinimoEnvioGratis !== null &&
+      (isNaN(montoMinimoEnvioGratis) || montoMinimoEnvioGratis < 0)
+    ) {
+      showError(
+        "Monto inválido",
+        "El monto mínimo de envío gratis debe ser mayor o igual a 0, o dejarse vacío.",
+      );
       return;
     }
 
@@ -550,7 +584,12 @@ export function AdminPanel() {
         );
         setShowShippingForm(false);
         setEditingShippingId(null);
-        setShippingForm({ hastaKm: "", precio: "", montoMinimoEnvioGratis: "", activo: true });
+        setShippingForm({
+          hastaKm: "",
+          precio: "",
+          montoMinimoEnvioGratis: "",
+          activo: true,
+        });
         fetchShippingRates();
       } else {
         const errorData = await res.json().catch(() => null);
@@ -581,9 +620,9 @@ export function AdminPanel() {
             showError(
               "Error",
               err.detail ||
-              err.title ||
-              err.message ||
-              "No se pudo eliminar el tramo.",
+                err.title ||
+                err.message ||
+                "No se pudo eliminar el tramo.",
             );
           }
         } catch {
@@ -605,7 +644,10 @@ export function AdminPanel() {
     navigate("/admin/login");
   };
 
-  const fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const fetch = async (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ): Promise<Response> => {
     const response = await globalThis.fetch(input, init);
 
     if (response.status === 401) {
@@ -615,7 +657,10 @@ export function AdminPanel() {
     return response;
   };
 
-  const getApiErrorMessage = async (response: Response, fallback: string): Promise<string> => {
+  const getApiErrorMessage = async (
+    response: Response,
+    fallback: string,
+  ): Promise<string> => {
     const error = await response.json().catch(() => null);
     return error?.detail || error?.title || error?.message || fallback;
   };
@@ -658,7 +703,13 @@ export function AdminPanel() {
             void saveCarouselOrder(mapped);
           }
         } else {
-          showError("Error", await getApiErrorMessage(carouselRes, "No se pudieron cargar las imágenes del carrusel."));
+          showError(
+            "Error",
+            await getApiErrorMessage(
+              carouselRes,
+              "No se pudieron cargar las imágenes del carrusel.",
+            ),
+          );
         }
 
         // Categories
@@ -686,7 +737,13 @@ export function AdminPanel() {
           }
         } else {
           setCategories([]);
-          showError("Error", await getApiErrorMessage(categoriesRes, "No se pudieron cargar las categorías."));
+          showError(
+            "Error",
+            await getApiErrorMessage(
+              categoriesRes,
+              "No se pudieron cargar las categorías.",
+            ),
+          );
         }
 
         // Products
@@ -703,8 +760,14 @@ export function AdminPanel() {
             price: p.price ?? p.precio,
             stock: p.stock,
             categories: Array.isArray(p.categories) ? p.categories : [],
-            category: Array.isArray(p.categories) && p.categories.length > 0 ? p.categories.map((c: any) => c.name ?? c.nombre).join(", ") : (p.categoryName ?? ""),
-            categoryId: Array.isArray(p.categories) && p.categories.length > 0 ? p.categories[0].id : (p.categoryId ?? undefined),
+            category:
+              Array.isArray(p.categories) && p.categories.length > 0
+                ? p.categories.map((c: any) => c.name ?? c.nombre).join(", ")
+                : (p.categoryName ?? ""),
+            categoryId:
+              Array.isArray(p.categories) && p.categories.length > 0
+                ? p.categories[0].id
+                : (p.categoryId ?? undefined),
             description: p.description ?? "",
             imagePath: p.imagePath ?? p.imageUrl ?? "",
             image: imgUrl(p.imagePath ?? p.imageUrl ?? ""),
@@ -715,14 +778,20 @@ export function AdminPanel() {
             gramages: Array.isArray(p.gramages) ? p.gramages : [],
             wholesalePrice: p.wholesalePrice
               ? {
-                quantity: p.minimumWholesaleAmount ?? 10,
-                price: p.wholesalePrice,
-              }
+                  quantity: p.minimumWholesaleAmount ?? 10,
+                  price: p.wholesalePrice,
+                }
               : undefined,
           }));
           setProducts(mappedProducts);
         } else {
-          showError("Error", await getApiErrorMessage(productsRes, "No se pudieron cargar los productos."));
+          showError(
+            "Error",
+            await getApiErrorMessage(
+              productsRes,
+              "No se pudieron cargar los productos.",
+            ),
+          );
         }
 
         // Coupons
@@ -741,11 +810,20 @@ export function AdminPanel() {
           }));
           setCoupons(mappedCoupons);
         } else {
-          showError("Error", await getApiErrorMessage(couponsRes, "No se pudieron cargar los cupones."));
+          showError(
+            "Error",
+            await getApiErrorMessage(
+              couponsRes,
+              "No se pudieron cargar los cupones.",
+            ),
+          );
         }
       } catch (err) {
         console.error("Critical error fetching admin data:", err);
-        showError("Error de red", "No se pudieron cargar los datos del panel administrativo.");
+        showError(
+          "Error de red",
+          "No se pudieron cargar los datos del panel administrativo.",
+        );
       }
     };
 
@@ -771,7 +849,9 @@ export function AdminPanel() {
             total: o.total,
             status: o.orderStatus || o.estadoPedido, // Fallback por las dudas
             date: new Date(o.createdAt || o.fechaCreacion).toLocaleDateString(),
-            metodo_pago: normalizePaymentMethodCode(o.paymentMethod || o.metodoPago),
+            metodo_pago: normalizePaymentMethodCode(
+              o.paymentMethod || o.metodoPago,
+            ),
             informacion: o.orderInformation,
             telefono: o.buyerPhone,
             dni: o.buyerDocument,
@@ -791,7 +871,13 @@ export function AdminPanel() {
 
           setOrders(mappedOrders);
         } else {
-          showError("Error", await getApiErrorMessage(ordersRes, "No se pudieron cargar los pedidos."));
+          showError(
+            "Error",
+            await getApiErrorMessage(
+              ordersRes,
+              "No se pudieron cargar los pedidos.",
+            ),
+          );
         }
       } catch (err) {
         console.error("Error fetching orders:", err);
@@ -828,7 +914,13 @@ export function AdminPanel() {
       }
 
       if (!res.ok) {
-        showError("Error", await getApiErrorMessage(res, "No se pudieron cargar los métodos de pago."));
+        showError(
+          "Error",
+          await getApiErrorMessage(
+            res,
+            "No se pudieron cargar los métodos de pago.",
+          ),
+        );
         return;
       }
 
@@ -849,11 +941,14 @@ export function AdminPanel() {
     setSavingPaymentMethodId(paymentMethod.id);
 
     try {
-      const res = await fetch(`${API_BASE}/api/payment-methods/${paymentMethod.id}`, {
-        method: "PUT",
-        headers: getAuthHeaders(),
-        body: JSON.stringify(visibleCliente),
-      });
+      const res = await fetch(
+        `${API_BASE}/api/payment-methods/${paymentMethod.id}`,
+        {
+          method: "PUT",
+          headers: getAuthHeaders(),
+          body: JSON.stringify(visibleCliente),
+        },
+      );
 
       if (res.status === 401) {
         handleSessionExpired();
@@ -863,7 +958,12 @@ export function AdminPanel() {
       const data = await res.json().catch(() => null);
 
       if (!res.ok) {
-        showError("Error", data?.detail || data?.title || "No se pudo actualizar la visibilidad del método de pago.");
+        showError(
+          "Error",
+          data?.detail ||
+            data?.title ||
+            "No se pudo actualizar la visibilidad del método de pago.",
+        );
         return;
       }
 
@@ -871,15 +971,18 @@ export function AdminPanel() {
         current.map((method) =>
           method.id === paymentMethod.id
             ? {
-              ...method,
-              ...data,
-            }
+                ...method,
+                ...data,
+              }
             : method,
         ),
       );
     } catch (error) {
       console.error("Error updating payment method:", error);
-      showError("Error", "No se pudo actualizar la visibilidad del método de pago.");
+      showError(
+        "Error",
+        "No se pudo actualizar la visibilidad del método de pago.",
+      );
     } finally {
       setSavingPaymentMethodId(null);
     }
@@ -901,7 +1004,10 @@ export function AdminPanel() {
 
   const handleUploadQrImage = async (paymentMethod: PaymentMethod) => {
     if (!qrImageFile) {
-      showError("Imagen requerida", "Seleccioná la imagen del código QR para continuar.");
+      showError(
+        "Imagen requerida",
+        "Seleccioná la imagen del código QR para continuar.",
+      );
       return;
     }
 
@@ -911,11 +1017,14 @@ export function AdminPanel() {
       const formData = new FormData();
       formData.append("image", qrImageFile);
 
-      const res = await fetch(`${API_BASE}/api/payment-methods/${paymentMethod.id}/qr-image`, {
-        method: "PUT",
-        headers: getAuthHeaders(null),
-        body: formData,
-      });
+      const res = await fetch(
+        `${API_BASE}/api/payment-methods/${paymentMethod.id}/qr-image`,
+        {
+          method: "PUT",
+          headers: getAuthHeaders(null),
+          body: formData,
+        },
+      );
 
       if (res.status === 401) {
         handleSessionExpired();
@@ -925,17 +1034,25 @@ export function AdminPanel() {
       const data = await res.json().catch(() => null);
 
       if (!res.ok) {
-        showError("Error", data?.detail || data?.title || "No se pudo cargar la imagen del QR.");
+        showError(
+          "Error",
+          data?.detail || data?.title || "No se pudo cargar la imagen del QR.",
+        );
         return;
       }
 
       setPaymentMethods((current) =>
-        current.map((method) => method.id === paymentMethod.id ? { ...method, ...data } : method),
+        current.map((method) =>
+          method.id === paymentMethod.id ? { ...method, ...data } : method,
+        ),
       );
       setExpandedPaymentMethodId(null);
       setQrImageFile(null);
       setQrImagePreview(null);
-      showSuccess("QR actualizado", "El pago con QR ya está visible en el checkout.");
+      showSuccess(
+        "QR actualizado",
+        "El pago con QR ya está visible en el checkout.",
+      );
     } catch (error) {
       console.error("Error uploading QR image:", error);
       showError("Error", "No se pudo cargar la imagen del QR.");
@@ -985,7 +1102,9 @@ export function AdminPanel() {
         const errorData = await res.json().catch(() => null);
         showError(
           "Error",
-          errorData?.detail || errorData?.title || "No se pudo actualizar el estado.",
+          errorData?.detail ||
+            errorData?.title ||
+            "No se pudo actualizar el estado.",
         );
       }
     } catch (e) {
@@ -1026,9 +1145,12 @@ export function AdminPanel() {
   const handleEditProductClick = (product: any) => {
     setEditingProductId(product.id);
     // Obtener IDs de categorías: preferir el array categories[], sino categoryId
-    const existingCategoryIds: number[] = Array.isArray(product.categories) && product.categories.length > 0
-      ? product.categories.map((c: any) => c.id)
-      : (product.categoryId ? [product.categoryId] : []);
+    const existingCategoryIds: number[] =
+      Array.isArray(product.categories) && product.categories.length > 0
+        ? product.categories.map((c: any) => c.id)
+        : product.categoryId
+          ? [product.categoryId]
+          : [];
     setProductForm({
       name: product.name || "",
       description: product.description || "",
@@ -1207,8 +1329,14 @@ export function AdminPanel() {
             stock: p.stock,
             description: p.description ?? "",
             categories: Array.isArray(p.categories) ? p.categories : [],
-            category: Array.isArray(p.categories) && p.categories.length > 0 ? p.categories.map((c: any) => c.name ?? c.nombre).join(", ") : (p.categoryName ?? ""),
-            categoryId: Array.isArray(p.categories) && p.categories.length > 0 ? p.categories[0].id : (p.categoryId ?? undefined),
+            category:
+              Array.isArray(p.categories) && p.categories.length > 0
+                ? p.categories.map((c: any) => c.name ?? c.nombre).join(", ")
+                : (p.categoryName ?? ""),
+            categoryId:
+              Array.isArray(p.categories) && p.categories.length > 0
+                ? p.categories[0].id
+                : (p.categoryId ?? undefined),
             image: imgUrl(p.imagePath ?? p.imageUrl ?? ""),
             imagePath: p.imagePath ?? p.imageUrl ?? "",
             active: p.active ?? true,
@@ -1218,9 +1346,9 @@ export function AdminPanel() {
             gramages: Array.isArray(p.gramages) ? p.gramages : [],
             wholesalePrice: p.wholesalePrice
               ? {
-                quantity: p.minimumWholesaleAmount ?? 10,
-                price: p.wholesalePrice,
-              }
+                  quantity: p.minimumWholesaleAmount ?? 10,
+                  price: p.wholesalePrice,
+                }
               : undefined,
           }));
           setProducts(mapped);
@@ -1255,8 +1383,8 @@ export function AdminPanel() {
         showError(
           `No se pudo ${editingProductId ? "actualizar" : "guardar"}`,
           err.detail ||
-          err.title ||
-          `Hubo un problema al intentar ${editingProductId ? "actualizar" : "guardar"} el producto.`,
+            err.title ||
+            `Hubo un problema al intentar ${editingProductId ? "actualizar" : "guardar"} el producto.`,
         );
       }
     } catch (e) {
@@ -1305,8 +1433,8 @@ export function AdminPanel() {
               showError(
                 "No se pudo borrar",
                 errorData.detail ||
-                errorData.title ||
-                "Hubo un problema al intentar eliminar el producto.",
+                  errorData.title ||
+                  "Hubo un problema al intentar eliminar el producto.",
               );
             }
           }
@@ -1458,9 +1586,9 @@ export function AdminPanel() {
         showError(
           "Error",
           err.detail ||
-          err.title ||
-          err.message ||
-          "No pudimos guardar el cupón.",
+            err.title ||
+            err.message ||
+            "No pudimos guardar el cupón.",
         );
       }
     } catch (e) {
@@ -1506,7 +1634,9 @@ export function AdminPanel() {
             const errorData = await res.json().catch(() => ({}));
             showError(
               "No se pudo borrar",
-              errorData.detail || errorData.title || "Hubo un problema al borrar el cupón.",
+              errorData.detail ||
+                errorData.title ||
+                "Hubo un problema al borrar el cupón.",
             );
           }
         } catch (e) {
@@ -1553,10 +1683,19 @@ export function AdminPanel() {
       });
 
       if (!response.ok) {
-        showError("Error", await getApiErrorMessage(response, "No se pudo guardar el nuevo orden del carrusel."));
+        showError(
+          "Error",
+          await getApiErrorMessage(
+            response,
+            "No se pudo guardar el nuevo orden del carrusel.",
+          ),
+        );
       }
     } catch {
-      showError("Error de red", "No se pudo conectar con el servidor para guardar el orden del carrusel.");
+      showError(
+        "Error de red",
+        "No se pudo conectar con el servidor para guardar el orden del carrusel.",
+      );
     }
   };
 
@@ -1565,14 +1704,25 @@ export function AdminPanel() {
       const response = await fetch(`${API_BASE}/api/categories/reorder`, {
         method: "PATCH",
         headers: getAuthHeaders(),
-        body: JSON.stringify(items.map((item) => ({ id: item.id, displayOrder: item.orden }))),
+        body: JSON.stringify(
+          items.map((item) => ({ id: item.id, displayOrder: item.orden })),
+        ),
       });
 
       if (!response.ok) {
-        showError("Error", await getApiErrorMessage(response, "No se pudo guardar el nuevo orden de las categorías."));
+        showError(
+          "Error",
+          await getApiErrorMessage(
+            response,
+            "No se pudo guardar el nuevo orden de las categorías.",
+          ),
+        );
       }
     } catch {
-      showError("Error de red", "No se pudo conectar con el servidor para guardar el orden de las categorías.");
+      showError(
+        "Error de red",
+        "No se pudo conectar con el servidor para guardar el orden de las categorías.",
+      );
     }
   };
 
@@ -1628,7 +1778,13 @@ export function AdminPanel() {
               { headers: getAuthHeaders(null) },
             );
             if (!updatedResponse.ok) {
-              showError("No se pudo guardar", await getApiErrorMessage(updatedResponse, "No se pudo obtener la imagen actualizada del carrusel."));
+              showError(
+                "No se pudo guardar",
+                await getApiErrorMessage(
+                  updatedResponse,
+                  "No se pudo obtener la imagen actualizada del carrusel.",
+                ),
+              );
               return;
             }
 
@@ -1703,9 +1859,9 @@ export function AdminPanel() {
         showError(
           "No se pudo guardar",
           err.detail ||
-          err.title ||
-          err.message ||
-          "Hubo un problema al guardar la imagen.",
+            err.title ||
+            err.message ||
+            "Hubo un problema al guardar la imagen.",
         );
       }
     } catch {
@@ -1772,7 +1928,9 @@ export function AdminPanel() {
             const errorData = await res.json().catch(() => ({}));
             showError(
               "No se pudo borrar",
-              errorData.detail || errorData.title || "Hubo un problema al eliminar la imagen.",
+              errorData.detail ||
+                errorData.title ||
+                "Hubo un problema al eliminar la imagen.",
             );
           }
         } catch {
@@ -1809,9 +1967,9 @@ export function AdminPanel() {
         showError(
           "Error",
           err.detail ||
-          err.title ||
-          err.message ||
-          "No se pudo cambiar el estado de la imagen.",
+            err.title ||
+            err.message ||
+            "No se pudo cambiar el estado de la imagen.",
         );
       }
     } catch {
@@ -1863,7 +2021,13 @@ export function AdminPanel() {
             { headers: getAuthHeaders(null) },
           );
           if (!updatedResponse.ok) {
-            showError("No se pudo guardar", await getApiErrorMessage(updatedResponse, "No se pudo obtener la imagen actualizada de la categoría."));
+            showError(
+              "No se pudo guardar",
+              await getApiErrorMessage(
+                updatedResponse,
+                "No se pudo obtener la imagen actualizada de la categoría.",
+              ),
+            );
             return;
           }
 
@@ -1926,9 +2090,9 @@ export function AdminPanel() {
         showError(
           "No se pudo guardar",
           err.detail ||
-          err.title ||
-          err.message ||
-          "Hubo un problema al guardar la categoría.",
+            err.title ||
+            err.message ||
+            "Hubo un problema al guardar la categoría.",
         );
       }
     } catch {
@@ -2039,9 +2203,12 @@ export function AdminPanel() {
     if (offersSearchQuery) {
       const q = offersSearchQuery.toLowerCase();
       const matchesName = p.name.toLowerCase().includes(q);
-      const catNames = Array.isArray(p.categories) && p.categories.length > 0
-        ? p.categories.map((c: any) => (c.nombre ?? c.name ?? "").toLowerCase()).join(" ")
-        : (p.category ?? "").toLowerCase();
+      const catNames =
+        Array.isArray(p.categories) && p.categories.length > 0
+          ? p.categories
+              .map((c: any) => (c.nombre ?? c.name ?? "").toLowerCase())
+              .join(" ")
+          : (p.category ?? "").toLowerCase();
       const matchesCat = catNames.includes(q);
       if (!matchesName && !matchesCat) return false;
     }
@@ -2086,12 +2253,12 @@ export function AdminPanel() {
           <img
             src="/logo.svg"
             alt="El Molino"
-            className="h-10 w-10 object-contain flex-shrink-0"
+            className="h-12 w-12 object-contain flex-shrink-0"
           />
           {isSidebarExpanded && (
             <div className="hidden md:block whitespace-nowrap overflow-hidden">
               <p
-                className="text-sidebar-foreground font-bold italic tracking-wide text-2xl leading-none"
+                className="text-primary font-bold italic tracking-wide text-2xl leading-none"
                 style={{ fontFamily: "'Playfair Display', serif" }}
               >
                 El Molino
@@ -2107,15 +2274,18 @@ export function AdminPanel() {
               key={item.id}
               id={`admin-nav-${item.id}`}
               onClick={() => setCurrentView(item.id)}
-              className={`w-full flex items-center ${isSidebarExpanded ? "justify-center px-0 md:justify-start md:gap-3 md:px-3" : "justify-center px-0"} py-2.5 rounded-lg transition-colors text-sm ${currentView === item.id
-                ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                : "text-sidebar-foreground hover:bg-sidebar-accent"
-                }`}
+              className={`w-full flex items-center ${isSidebarExpanded ? "justify-center px-0 md:justify-start md:gap-3 md:px-3" : "justify-center px-0"} py-2.5 rounded-lg transition-colors text-sm ${
+                currentView === item.id
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent"
+              }`}
               title={!isSidebarExpanded ? item.label : undefined}
             >
               <item.icon className="w-5 h-5 flex-shrink-0" />
               {isSidebarExpanded && (
-                <span className="hidden md:inline whitespace-nowrap">{item.label}</span>
+                <span className="hidden md:inline whitespace-nowrap">
+                  {item.label}
+                </span>
               )}
             </button>
           ))}
@@ -2131,7 +2301,9 @@ export function AdminPanel() {
           >
             <Package className="w-5 h-5 flex-shrink-0" />
             {isSidebarExpanded && (
-              <span className="hidden md:inline whitespace-nowrap">Ver tienda</span>
+              <span className="hidden md:inline whitespace-nowrap">
+                Ver tienda
+              </span>
             )}
           </a>
           <button
@@ -2141,7 +2313,9 @@ export function AdminPanel() {
           >
             <LogOut className="w-5 h-5 flex-shrink-0" />
             {isSidebarExpanded && (
-              <span className="hidden md:inline whitespace-nowrap">Cerrar sesión</span>
+              <span className="hidden md:inline whitespace-nowrap">
+                Cerrar sesión
+              </span>
             )}
           </button>
         </div>
@@ -2203,20 +2377,27 @@ export function AdminPanel() {
                       <label className="block text-sm mb-1.5 font-medium">
                         Categorías *{" "}
                         <span className="text-muted-foreground font-normal text-xs">
-                          ({productForm.categoryIds.length} seleccionada{productForm.categoryIds.length !== 1 ? "s" : ""})
+                          ({productForm.categoryIds.length} seleccionada
+                          {productForm.categoryIds.length !== 1 ? "s" : ""})
                         </span>
                       </label>
                       <div className="border border-border rounded-lg bg-input-background p-2 max-h-40 overflow-y-auto flex flex-col gap-1.5">
                         {categories.length === 0 && (
-                          <p className="text-xs text-muted-foreground px-1 py-2">No hay categorías disponibles.</p>
+                          <p className="text-xs text-muted-foreground px-1 py-2">
+                            No hay categorías disponibles.
+                          </p>
                         )}
                         {categories.map((cat) => {
-                          const checked = productForm.categoryIds.includes(cat.id);
+                          const checked = productForm.categoryIds.includes(
+                            cat.id,
+                          );
                           return (
                             <label
                               key={cat.id}
                               className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md cursor-pointer text-sm transition-colors select-none ${
-                                checked ? "bg-primary/10 text-primary font-medium" : "hover:bg-secondary/60"
+                                checked
+                                  ? "bg-primary/10 text-primary font-medium"
+                                  : "hover:bg-secondary/60"
                               }`}
                             >
                               <input
@@ -2226,7 +2407,9 @@ export function AdminPanel() {
                                   setProductForm((p) => ({
                                     ...p,
                                     categoryIds: checked
-                                      ? p.categoryIds.filter((id) => id !== cat.id)
+                                      ? p.categoryIds.filter(
+                                          (id) => id !== cat.id,
+                                        )
                                       : [...p.categoryIds, cat.id],
                                   }));
                                 }}
@@ -2270,10 +2453,11 @@ export function AdminPanel() {
                               newGramageInput: "",
                             }))
                           }
-                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${productForm.measurementUnit === "unidad"
-                            ? "bg-foreground text-background border-foreground"
-                            : "border-border text-foreground hover:border-foreground/50"
-                            }`}
+                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${
+                            productForm.measurementUnit === "unidad"
+                              ? "bg-foreground text-background border-foreground"
+                              : "border-border text-foreground hover:border-foreground/50"
+                          }`}
                         >
                           Por unidad
                         </button>
@@ -2285,10 +2469,11 @@ export function AdminPanel() {
                               measurementUnit: "gramo",
                             }))
                           }
-                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${productForm.measurementUnit === "gramo"
-                            ? "bg-foreground text-background border-foreground"
-                            : "border-border text-foreground hover:border-foreground/50"
-                            }`}
+                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${
+                            productForm.measurementUnit === "gramo"
+                              ? "bg-foreground text-background border-foreground"
+                              : "border-border text-foreground hover:border-foreground/50"
+                          }`}
                         >
                           Por gramo (kg)
                         </button>
@@ -2352,16 +2537,18 @@ export function AdminPanel() {
                         onClick={() =>
                           setProductForm((p) => ({ ...p, active: !p.active }))
                         }
-                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${productForm.active
-                          ? "bg-accent"
-                          : "bg-switch-background"
-                          }`}
+                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          productForm.active
+                            ? "bg-accent"
+                            : "bg-switch-background"
+                        }`}
                       >
                         <span
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${productForm.active
-                            ? "translate-x-5"
-                            : "translate-x-0"
-                            }`}
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            productForm.active
+                              ? "translate-x-5"
+                              : "translate-x-0"
+                          }`}
                         />
                       </button>
                     </div>
@@ -2664,8 +2851,8 @@ export function AdminPanel() {
                 />
               </div>
 
-              <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
-                <table className="w-full">
+              <div className="bg-card rounded-xl border border-border overflow-x-auto shadow-sm">
+                <table className="w-full min-w-[800px]">
                   <thead className="bg-secondary/50">
                     <tr>
                       <th className="text-left p-4 text-sm font-medium">
@@ -2687,18 +2874,21 @@ export function AdminPanel() {
                   </thead>
                   <tbody>
                     {products
-                      .filter(
-                        (p) => {
-                          const term = productSearchTerm.toLowerCase();
-                          if (p.name.toLowerCase().includes(term)) return true;
-                          if (Array.isArray(p.categories) && p.categories.length > 0) {
-                            return p.categories.some((c: any) =>
-                              (c.nombre ?? c.name ?? "").toLowerCase().includes(term)
-                            );
-                          }
-                          return (p.category ?? "").toLowerCase().includes(term);
+                      .filter((p) => {
+                        const term = productSearchTerm.toLowerCase();
+                        if (p.name.toLowerCase().includes(term)) return true;
+                        if (
+                          Array.isArray(p.categories) &&
+                          p.categories.length > 0
+                        ) {
+                          return p.categories.some((c: any) =>
+                            (c.nombre ?? c.name ?? "")
+                              .toLowerCase()
+                              .includes(term),
+                          );
                         }
-                      )
+                        return (p.category ?? "").toLowerCase().includes(term);
+                      })
                       .map((product) => (
                         <tr
                           key={product.id}
@@ -2728,8 +2918,11 @@ export function AdminPanel() {
                                   )}
                                 </div>
                                 <p className="text-xs text-muted-foreground">
-                                  {Array.isArray(product.categories) && product.categories.length > 0
-                                    ? product.categories.map((c: any) => c.nombre ?? c.name).join(" · ")
+                                  {Array.isArray(product.categories) &&
+                                  product.categories.length > 0
+                                    ? product.categories
+                                        .map((c: any) => c.nombre ?? c.name)
+                                        .join(" · ")
                                     : (product.category ?? "")}
                                 </p>
                               </div>
@@ -2793,12 +2986,13 @@ export function AdminPanel() {
                           </td>
                           <td className="p-4">
                             <span
-                              className={`px-2.5 py-1 rounded-full text-xs font-medium ${product.stock > 50
-                                ? "bg-accent/20 text-accent"
-                                : product.stock > 20
-                                  ? "bg-chart-4/20 text-chart-4"
-                                  : "bg-destructive/20 text-destructive"
-                                }`}
+                              className={`whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-medium ${
+                                product.stock > 50
+                                  ? "bg-accent/20 text-accent"
+                                  : product.stock > 20
+                                    ? "bg-chart-4/20 text-chart-4"
+                                    : "bg-destructive/20 text-destructive"
+                              }`}
                             >
                               {product.measurementUnit === "gramo"
                                 ? product.stock >= 1000
@@ -2809,10 +3003,11 @@ export function AdminPanel() {
                           </td>
                           <td className="p-4">
                             <span
-                              className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${product.active
-                                ? "bg-accent/10 text-accent border-accent/20"
-                                : "bg-secondary/60 text-muted-foreground border-border"
-                                }`}
+                              className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+                                product.active
+                                  ? "bg-accent/10 text-accent border-accent/20"
+                                  : "bg-secondary/60 text-muted-foreground border-border"
+                              }`}
                             >
                               {product.active ? "Activo" : "Inactivo"}
                             </span>
@@ -2915,28 +3110,31 @@ export function AdminPanel() {
                 <div className="flex bg-secondary/40 p-1 border border-border rounded-lg self-start sm:self-auto">
                   <button
                     onClick={() => setOffersFilter("all")}
-                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${offersFilter === "all"
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                      }`}
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                      offersFilter === "all"
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
                   >
                     Todos
                   </button>
                   <button
                     onClick={() => setOffersFilter("active")}
-                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${offersFilter === "active"
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                      }`}
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                      offersFilter === "active"
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
                   >
                     Con oferta
                   </button>
                   <button
                     onClick={() => setOffersFilter("inactive")}
-                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${offersFilter === "inactive"
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                      }`}
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                      offersFilter === "inactive"
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
                   >
                     Sin oferta
                   </button>
@@ -2944,8 +3142,8 @@ export function AdminPanel() {
               </div>
 
               {/* Products Table */}
-              <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm mb-6">
-                <table className="w-full">
+              <div className="bg-card rounded-xl border border-border overflow-x-auto shadow-sm mb-6">
+                <table className="w-full min-w-[800px]">
                   <thead className="bg-secondary/50">
                     <tr>
                       <th className="text-left p-4 text-sm font-medium">
@@ -3006,8 +3204,11 @@ export function AdminPanel() {
                                     {product.name}
                                   </p>
                                   <p className="text-xs text-muted-foreground">
-                                    {Array.isArray(product.categories) && product.categories.length > 0
-                                      ? product.categories.map((c: any) => c.nombre ?? c.name).join(" · ")
+                                    {Array.isArray(product.categories) &&
+                                    product.categories.length > 0
+                                      ? product.categories
+                                          .map((c: any) => c.nombre ?? c.name)
+                                          .join(" · ")
                                       : (product.category ?? "")}
                                   </p>
                                 </div>
@@ -3019,10 +3220,11 @@ export function AdminPanel() {
                             <td className="p-4">
                               <div className="relative">
                                 <span
-                                  className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium select-none ${draft.active
-                                    ? "text-muted-foreground"
-                                    : "text-muted-foreground/30"
-                                    }`}
+                                  className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium select-none ${
+                                    draft.active
+                                      ? "text-muted-foreground"
+                                      : "text-muted-foreground/30"
+                                  }`}
                                 >
                                   $
                                 </span>
@@ -3039,10 +3241,11 @@ export function AdminPanel() {
                                   placeholder={
                                     draft.active ? "0,00" : "Desactivado"
                                   }
-                                  className={`w-full pl-7 pr-3 py-1.5 border rounded-lg text-sm transition-all focus:ring-2 focus:ring-primary/20 ${draft.active
-                                    ? "bg-input-background border-border text-foreground font-medium"
-                                    : "bg-secondary/30 border-border/40 text-muted-foreground/40 cursor-not-allowed"
-                                    }`}
+                                  className={`w-full pl-7 pr-3 py-1.5 border rounded-lg text-sm transition-all focus:ring-2 focus:ring-primary/20 ${
+                                    draft.active
+                                      ? "bg-input-background border-border text-foreground font-medium"
+                                      : "bg-secondary/30 border-border/40 text-muted-foreground/40 cursor-not-allowed"
+                                  }`}
                                 />
                               </div>
                             </td>
@@ -3064,16 +3267,18 @@ export function AdminPanel() {
                                   onClick={() =>
                                     handleToggleOfferDraft(product.id)
                                   }
-                                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${draft.active
-                                    ? "bg-accent"
-                                    : "bg-switch-background"
-                                    }`}
+                                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                    draft.active
+                                      ? "bg-accent"
+                                      : "bg-switch-background"
+                                  }`}
                                 >
                                   <span
-                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${draft.active
-                                      ? "translate-x-5"
-                                      : "translate-x-0"
-                                      }`}
+                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                      draft.active
+                                        ? "translate-x-5"
+                                        : "translate-x-0"
+                                    }`}
                                   />
                                 </button>
                               </div>
@@ -3110,10 +3315,11 @@ export function AdminPanel() {
                       "Se descartaron los cambios no guardados.",
                     );
                   }}
-                  className={`px-4 py-2 border border-border rounded-lg transition-colors text-sm text-foreground ${!hasOffersChanges
-                    ? "opacity-50 cursor-not-allowed"
-                    : "hover:bg-secondary/40"
-                    }`}
+                  className={`px-4 py-2 border border-border rounded-lg transition-colors text-sm text-foreground ${
+                    !hasOffersChanges
+                      ? "opacity-50 cursor-not-allowed"
+                      : "hover:bg-secondary/40"
+                  }`}
                 >
                   Descartar
                 </button>
@@ -3121,10 +3327,11 @@ export function AdminPanel() {
                   type="button"
                   disabled={isSavingOffers || !hasOffersChanges}
                   onClick={handleSaveDailyOffers}
-                  className={`px-6 py-2 bg-primary disabled:opacity-50 text-primary-foreground rounded-lg transition-colors text-sm font-semibold shadow-sm flex items-center gap-2 ${!hasOffersChanges || isSavingOffers
-                    ? "cursor-not-allowed"
-                    : "hover:bg-primary/90"
-                    }`}
+                  className={`px-6 py-2 bg-primary disabled:opacity-50 text-primary-foreground rounded-lg transition-colors text-sm font-semibold shadow-sm flex items-center gap-2 ${
+                    !hasOffersChanges || isSavingOffers
+                      ? "cursor-not-allowed"
+                      : "hover:bg-primary/90"
+                  }`}
                 >
                   {isSavingOffers ? "Guardando cambios..." : "Guardar cambios"}
                 </button>
@@ -3455,18 +3662,19 @@ export function AdminPanel() {
                     <button
                       key={val}
                       onClick={() => setOrdersFilter(val)}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${ordersFilter === val
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                        }`}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                        ordersFilter === val
+                          ? "bg-card text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
                     >
                       {label}
                     </button>
                   ))}
                 </div>
               </div>
-              <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
-                <table className="w-full">
+              <div className="bg-card rounded-xl border border-border overflow-x-auto shadow-sm">
+                <table className="w-full min-w-[800px]">
                   <thead className="bg-secondary/50">
                     <tr>
                       <th className="text-left p-4 text-sm font-medium">
@@ -3655,7 +3863,9 @@ export function AdminPanel() {
                                               Método seleccionado
                                             </p>
                                             <p className="font-medium text-foreground">
-                                              {getPaymentMethodLabel(order.metodo_pago)}
+                                              {getPaymentMethodLabel(
+                                                order.metodo_pago,
+                                              )}
                                             </p>
                                           </div>
                                         </div>
@@ -3772,7 +3982,7 @@ export function AdminPanel() {
                                           <span className="text-sm font-medium text-foreground">
                                             {formatARS(
                                               order.total -
-                                              (order.shippingCost || 0),
+                                                (order.shippingCost || 0),
                                             )}
                                           </span>
                                         </div>
@@ -3814,7 +4024,8 @@ export function AdminPanel() {
                 <div>
                   <h1 className="text-2xl font-bold">Métodos de pago</h1>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Definí qué métodos aparecen en el checkout. El soporte del backend se muestra solo como referencia.
+                    Definí qué métodos aparecen en el checkout. El soporte del
+                    backend se muestra solo como referencia.
                   </p>
                 </div>
               </div>
@@ -3834,148 +4045,208 @@ export function AdminPanel() {
                     <table className="w-full min-w-[560px] text-sm">
                       <thead className="bg-secondary/40 border-b border-border">
                         <tr>
-                          <th className="px-5 py-3 text-left font-medium text-muted-foreground">Método</th>
-                          <th className="px-5 py-3 text-left font-medium text-muted-foreground">Tipo</th>
-                          <th className="px-5 py-3 text-left font-medium text-muted-foreground">Visible para clientes</th>
-                          <th className="px-5 py-3 text-right font-medium text-muted-foreground">Acciones</th>
+                          <th className="px-5 py-3 text-left font-medium text-muted-foreground">
+                            Método
+                          </th>
+                          <th className="px-5 py-3 text-left font-medium text-muted-foreground">
+                            Tipo
+                          </th>
+                          <th className="px-5 py-3 text-left font-medium text-muted-foreground">
+                            Visible para clientes
+                          </th>
+                          <th className="px-5 py-3 text-right font-medium text-muted-foreground">
+                            Acciones
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
                         {paymentMethods.map((method) => {
-                          const normalizedCode = normalizePaymentMethodCode(method.codigo);
+                          const normalizedCode = normalizePaymentMethodCode(
+                            method.codigo,
+                          );
                           const isSaving = savingPaymentMethodId === method.id;
                           const isQrPayment = normalizedCode === "qr";
-                          const isQrSetupExpanded = expandedPaymentMethodId === method.id;
-                          const isUploadingQrImage = uploadingQrImageId === method.id;
+                          const isQrSetupExpanded =
+                            expandedPaymentMethodId === method.id;
+                          const isUploadingQrImage =
+                            uploadingQrImageId === method.id;
 
                           return (
                             <React.Fragment key={method.id}>
-                            <tr className="hover:bg-secondary/20 transition-colors">
-                              <td className="px-5 py-3 font-medium text-foreground">
-                                <div className="flex items-center gap-2">
-                                  {getPaymentMethodLabel(method.codigo)}
-                                  {isQrPayment && method.imagePath && (
-                                    <span className="text-xs font-normal text-muted-foreground">QR cargado</span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-5 py-3">
-                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${isOnlinePaymentMethod(normalizedCode) ? "bg-primary/10 text-primary" : "bg-secondary text-secondary-foreground"}`}>
-                                  {isOnlinePaymentMethod(normalizedCode) ? "Online" : "Manual"}
-                                </span>
-                              </td>
-                              <td className="px-5 py-3">
-                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${method.visibleCliente ? "bg-blue-100 text-blue-700" : "bg-secondary text-muted-foreground"}`}>
-                                  {method.visibleCliente ? "Sí" : "No"}
-                                </span>
-                              </td>
-                              <td className="px-5 py-3">
-                                <div className="flex items-center justify-end gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (isQrPayment && !method.imagePath) {
-                                        setExpandedPaymentMethodId(isQrSetupExpanded ? null : method.id);
-                                        return;
-                                      }
-
-                                      handleUpdatePaymentMethod(method, !method.visibleCliente);
-                                    }}
-                                    disabled={isSaving || isUploadingQrImage}
-                                    className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium hover:bg-secondary disabled:opacity-60"
+                              <tr className="hover:bg-secondary/20 transition-colors">
+                                <td className="px-5 py-3 font-medium text-foreground">
+                                  <div className="flex items-center gap-2">
+                                    {getPaymentMethodLabel(method.codigo)}
+                                    {isQrPayment && method.imagePath && (
+                                      <span className="text-xs font-normal text-muted-foreground">
+                                        QR cargado
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3">
+                                  <span
+                                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${isOnlinePaymentMethod(normalizedCode) ? "bg-primary/10 text-primary" : "bg-secondary text-secondary-foreground"}`}
                                   >
-                                    {method.visibleCliente ? <ToggleRight className="w-4 h-4 text-primary" /> : <ToggleLeft className="w-4 h-4 text-muted-foreground" />}
-                                    {isQrPayment && !method.imagePath
-                                      ? "Cargar QR para mostrar"
-                                      : method.visibleCliente ? "Ocultar del checkout" : "Mostrar en checkout"}
-                                  </button>
-                                  {isQrPayment && method.imagePath && (
+                                    {isOnlinePaymentMethod(normalizedCode)
+                                      ? "Online"
+                                      : "Manual"}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3">
+                                  <span
+                                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${method.visibleCliente ? "bg-blue-100 text-blue-700" : "bg-secondary text-muted-foreground"}`}
+                                  >
+                                    {method.visibleCliente ? "Sí" : "No"}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3">
+                                  <div className="flex items-center justify-end gap-2">
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        setQrImageFile(null);
-                                        setQrImagePreview(null);
-                                        setExpandedPaymentMethodId(isQrSetupExpanded ? null : method.id);
+                                        if (isQrPayment && !method.imagePath) {
+                                          setExpandedPaymentMethodId(
+                                            isQrSetupExpanded
+                                              ? null
+                                              : method.id,
+                                          );
+                                          return;
+                                        }
+
+                                        handleUpdatePaymentMethod(
+                                          method,
+                                          !method.visibleCliente,
+                                        );
                                       }}
-                                      disabled={isUploadingQrImage}
-                                      className="rounded-lg border border-border px-3 py-2 text-xs font-medium hover:bg-secondary disabled:opacity-60"
+                                      disabled={isSaving || isUploadingQrImage}
+                                      className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium hover:bg-secondary disabled:opacity-60"
                                     >
-                                      Cambiar QR
+                                      {method.visibleCliente ? (
+                                        <ToggleRight className="w-4 h-4 text-primary" />
+                                      ) : (
+                                        <ToggleLeft className="w-4 h-4 text-muted-foreground" />
+                                      )}
+                                      {isQrPayment && !method.imagePath
+                                        ? "Cargar QR para mostrar"
+                                        : method.visibleCliente
+                                          ? "Ocultar del checkout"
+                                          : "Mostrar en checkout"}
                                     </button>
-                                  )}
-                                  {isSaving && (
-                                    <span className="text-xs text-muted-foreground">Guardando...</span>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                            {isQrPayment && isQrSetupExpanded && (
-                              <tr className="bg-secondary/10">
-                                <td colSpan={4} className="p-0">
-                                  <motion.div
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: "auto" }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    className="overflow-hidden"
-                                  >
-                                    <div className="m-4 rounded-xl border border-border bg-card p-4">
-                                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                                        {qrImagePreview ? (
-                                          <img
-                                            src={qrImagePreview}
-                                            alt="Vista previa del código QR"
-                                            className="h-40 w-40 rounded-lg border border-border bg-white object-contain"
-                                          />
-                                        ) : (
-                                          <label className="flex h-40 w-40 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-secondary/20 text-center hover:border-primary/50">
-                                            <Upload className="mb-2 h-6 w-6 text-muted-foreground" />
-                                            <span className="text-xs font-medium text-muted-foreground">Seleccionar imagen</span>
-                                            <input
-                                              type="file"
-                                              accept="image/jpeg,image/png,image/webp"
-                                              onChange={handleQrImageSelect}
-                                              className="hidden"
-                                            />
-                                          </label>
-                                        )}
-                                        <div className="flex-1 space-y-2 text-sm text-muted-foreground">
-                                          <p className="font-semibold text-foreground">
-                                            {method.imagePath ? "Cambiá el código QR" : "Configurá el pago con QR"}
-                                          </p>
-                                          <p>Recomendamos subir una imagen cuadrada para que se vea correctamente.</p>
-                                          <p>Antes de subirla, verificá que el QR sea válido y corresponda a la cuenta de cobro correcta.</p>
-                                          <p>Formatos admitidos: JPG, PNG o WEBP. Tamaño máximo: 5 MB.</p>
-                                        </div>
-                                      </div>
-                                      <div className="mt-4 flex justify-end gap-3 border-t border-border pt-4">
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setExpandedPaymentMethodId(null);
-                                            setQrImageFile(null);
-                                            setQrImagePreview(null);
-                                          }}
-                                          disabled={isUploadingQrImage}
-                                          className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-secondary disabled:opacity-60"
-                                        >
-                                          Cancelar
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleUploadQrImage(method)}
-                                          disabled={!qrImageFile || isUploadingQrImage}
-                                          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-                                        >
-                                          {isUploadingQrImage
-                                            ? "Cargando..."
-                                            : method.imagePath ? "Guardar nuevo QR" : "Guardar QR y mostrar en checkout"}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </motion.div>
+                                    {isQrPayment && method.imagePath && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setQrImageFile(null);
+                                          setQrImagePreview(null);
+                                          setExpandedPaymentMethodId(
+                                            isQrSetupExpanded
+                                              ? null
+                                              : method.id,
+                                          );
+                                        }}
+                                        disabled={isUploadingQrImage}
+                                        className="rounded-lg border border-border px-3 py-2 text-xs font-medium hover:bg-secondary disabled:opacity-60"
+                                      >
+                                        Cambiar QR
+                                      </button>
+                                    )}
+                                    {isSaving && (
+                                      <span className="text-xs text-muted-foreground">
+                                        Guardando...
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
-                            )}
+                              {isQrPayment && isQrSetupExpanded && (
+                                <tr className="bg-secondary/10">
+                                  <td colSpan={4} className="p-0">
+                                    <motion.div
+                                      initial={{ opacity: 0, height: 0 }}
+                                      animate={{ opacity: 1, height: "auto" }}
+                                      exit={{ opacity: 0, height: 0 }}
+                                      className="overflow-hidden"
+                                    >
+                                      <div className="m-4 rounded-xl border border-border bg-card p-4">
+                                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                                          {qrImagePreview ? (
+                                            <img
+                                              src={qrImagePreview}
+                                              alt="Vista previa del código QR"
+                                              className="h-40 w-40 rounded-lg border border-border bg-white object-contain"
+                                            />
+                                          ) : (
+                                            <label className="flex h-40 w-40 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-secondary/20 text-center hover:border-primary/50">
+                                              <Upload className="mb-2 h-6 w-6 text-muted-foreground" />
+                                              <span className="text-xs font-medium text-muted-foreground">
+                                                Seleccionar imagen
+                                              </span>
+                                              <input
+                                                type="file"
+                                                accept="image/jpeg,image/png,image/webp"
+                                                onChange={handleQrImageSelect}
+                                                className="hidden"
+                                              />
+                                            </label>
+                                          )}
+                                          <div className="flex-1 space-y-2 text-sm text-muted-foreground">
+                                            <p className="font-semibold text-foreground">
+                                              {method.imagePath
+                                                ? "Cambiá el código QR"
+                                                : "Configurá el pago con QR"}
+                                            </p>
+                                            <p>
+                                              Recomendamos subir una imagen
+                                              cuadrada para que se vea
+                                              correctamente.
+                                            </p>
+                                            <p>
+                                              Antes de subirla, verificá que el
+                                              QR sea válido y corresponda a la
+                                              cuenta de cobro correcta.
+                                            </p>
+                                            <p>
+                                              Formatos admitidos: JPG, PNG o
+                                              WEBP. Tamaño máximo: 5 MB.
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <div className="mt-4 flex justify-end gap-3 border-t border-border pt-4">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setExpandedPaymentMethodId(null);
+                                              setQrImageFile(null);
+                                              setQrImagePreview(null);
+                                            }}
+                                            disabled={isUploadingQrImage}
+                                            className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-secondary disabled:opacity-60"
+                                          >
+                                            Cancelar
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handleUploadQrImage(method)
+                                            }
+                                            disabled={
+                                              !qrImageFile || isUploadingQrImage
+                                            }
+                                            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                                          >
+                                            {isUploadingQrImage
+                                              ? "Cargando..."
+                                              : method.imagePath
+                                                ? "Guardar nuevo QR"
+                                                : "Guardar QR y mostrar en checkout"}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </motion.div>
+                                  </td>
+                                </tr>
+                              )}
                             </React.Fragment>
                           );
                         })}
@@ -4059,15 +4330,15 @@ export function AdminPanel() {
                       <div className="flex items-center gap-4">
                         {(carouselImagePreview ||
                           (editingCarouselId && carouselForm.imagenNombre)) && (
-                            <img
-                              src={
-                                carouselImagePreview ||
-                                imgUrl(carouselForm.imagenNombre)
-                              }
-                              alt="Preview"
-                              className="w-24 h-16 object-cover rounded-lg border border-border"
-                            />
-                          )}
+                          <img
+                            src={
+                              carouselImagePreview ||
+                              imgUrl(carouselForm.imagenNombre)
+                            }
+                            alt="Preview"
+                            className="w-24 h-16 object-cover rounded-lg border border-border"
+                          />
+                        )}
                         <input
                           type="file"
                           accept="image/*"
@@ -4339,7 +4610,7 @@ export function AdminPanel() {
                       </label>
                       <div className="flex items-start gap-6 p-4 bg-secondary/20 rounded-xl border border-border/50">
                         {categoryImagePreview ||
-                          (editingCategoryId && categoryForm.imagenNombre) ? (
+                        (editingCategoryId && categoryForm.imagenNombre) ? (
                           <div className="relative group">
                             <img
                               src={
@@ -4533,7 +4804,9 @@ export function AdminPanel() {
                     </span>
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Configurá los costos de envío por distancia desde el local. El tramo activo con mayor "Hasta (km)" define el límite máximo de entrega.
+                    Configurá los costos de envío por distancia desde el local.
+                    El tramo activo con mayor "Hasta (km)" define el límite
+                    máximo de entrega.
                   </p>
                 </div>
                 <button
@@ -4716,9 +4989,12 @@ export function AdminPanel() {
                                       setShippingForm({
                                         hastaKm: String(rate.hastaKm),
                                         precio: String(rate.precio),
-                                        montoMinimoEnvioGratis: rate.montoMinimoEnvioGratis != null
-                                          ? String(rate.montoMinimoEnvioGratis)
-                                          : "",
+                                        montoMinimoEnvioGratis:
+                                          rate.montoMinimoEnvioGratis != null
+                                            ? String(
+                                                rate.montoMinimoEnvioGratis,
+                                              )
+                                            : "",
                                         activo: rate.activo,
                                       });
                                       setShowShippingForm(true);

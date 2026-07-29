@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { X, MapPin, ChevronRight, CheckCircle2, Truck, AlertCircle, User, BookmarkPlus, Loader2 } from "lucide-react";
 import type { SavedAddress } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
@@ -160,6 +160,14 @@ export function Checkout() {
     }
   });
 
+  const [couponCodeInput, setCouponCodeInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    discountAmount: number;
+  } | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+
   // Bloquear el scroll de fondo cuando el modal está abierto
   useEffect(() => {
     if (isCheckoutOpen) {
@@ -224,6 +232,9 @@ export function Checkout() {
       setPaymentUrl(null);
       setPaymentInitializationError(null);
       setConfirmedOrderPath(null);
+      setCouponCodeInput("");
+      setAppliedCoupon(null);
+      setCouponError(null);
       // reset step
       setStep(clientUser ? "datos" : "login-prompt");
     }
@@ -586,6 +597,7 @@ export function Checkout() {
       BuyerDocument: form.dni,
       DestinationPlaceId: form.metodo_entrega === "envio" ? (selectedPlaceId ?? "") : "",
       PaymentMethod: selectedPaymentMethodCode,
+      CouponCode: appliedCoupon?.code,
       OrderInformation: orderInformation,
       Items: items.map((i) => ({
         ProductId: parseInt(i.id, 10),
@@ -671,8 +683,54 @@ export function Checkout() {
     setShippingCost(null);
   };
 
+  const handleValidateCoupon = async () => {
+    if (!couponCodeInput.trim()) return;
+    setValidatingCoupon(true);
+    setCouponError(null);
+    try {
+      const hasWholesaleItems = items.some(item => {
+        const totalForWholesale = items
+          .filter(i => i.id === item.id)
+          .reduce((acc, i) => acc + (i.measurementUnit === "gramo" && i.selectedGramage ? i.quantity * i.selectedGramage.grams : i.quantity), 0);
+        return isWholesaleActive(item, totalForWholesale);
+      });
+
+      const dniParam = form.dni ? `&dni=${encodeURIComponent(form.dni)}` : "";
+      
+      const headers: Record<string, string> = {};
+      const token = localStorage.getItem("clientToken");
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const res = await fetch(`${API_BASE}/api/coupons/validate/${encodeURIComponent(couponCodeInput.trim())}?subtotal=${subtotal}&hasWholesale=${hasWholesaleItems}${dniParam}`, {
+        headers
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || data.title || "Cupón inválido");
+      }
+      if (data.valid) {
+        setAppliedCoupon({ code: couponCodeInput.trim(), discountAmount: data.discountAmount });
+        setCouponCodeInput("");
+      } else {
+        throw new Error(data.errorMessage || "Cupón inválido");
+      }
+    } catch (e: any) {
+      setCouponError(e.message);
+      setAppliedCoupon(null);
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponError(null);
+  };
+
   // finalTotal usa el shippingCost calculado por distancia si existe, si no el subtotal
-  const finalTotal =
+  const baseTotal =
     subtotal === 0
       ? 0
       : form.metodo_entrega === "retiro"
@@ -680,6 +738,16 @@ export function Checkout() {
         : shippingCost !== null
           ? subtotal + shippingCost
           : subtotal;
+          
+  const discountedSubtotal = Math.max(0, subtotal - (appliedCoupon?.discountAmount || 0));
+  const finalTotal = 
+    subtotal === 0
+      ? 0
+      : form.metodo_entrega === "retiro"
+        ? discountedSubtotal
+        : shippingCost !== null
+          ? discountedSubtotal + shippingCost
+          : discountedSubtotal;
   const selectedPaymentMethodCode = normalizePaymentMethodCode(form.metodo_pago);
   const selectedPaymentMethodLabel = getPaymentMethodLabel(selectedPaymentMethodCode);
   const selectedQrImageUrl = selectedPaymentMethodCode === "qr"
@@ -1446,11 +1514,48 @@ export function Checkout() {
                       );
                     })}
                   </div>
+                  
+                  {!appliedCoupon && (
+                    <div className="mb-4 space-y-2">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Código de cupón"
+                          value={couponCodeInput}
+                          onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase())}
+                          className="flex-1 px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm uppercase"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleValidateCoupon}
+                          disabled={validatingCoupon || !couponCodeInput.trim()}
+                          className="px-4 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {validatingCoupon ? "..." : "Aplicar"}
+                        </button>
+                      </div>
+                      {couponError && (
+                        <p className="text-xs text-destructive">{couponError}</p>
+                      )}
+                    </div>
+                  )}
+
                   <div className="border-t border-border pt-3 space-y-1.5 text-sm">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Subtotal</span>
                       <span>{formatARS(subtotal)}</span>
                     </div>
+                    {appliedCoupon && (
+                      <div className="flex justify-between text-emerald-600">
+                        <span className="flex items-center gap-2">
+                          Cupón: {appliedCoupon.code}
+                          <button onClick={removeCoupon} className="text-xs opacity-70 hover:opacity-100 hover:underline">
+                            (Quitar)
+                          </button>
+                        </span>
+                        <span>-{formatARS(appliedCoupon.discountAmount)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-muted-foreground flex items-center gap-1">
                         <Truck className="w-3 h-3" />

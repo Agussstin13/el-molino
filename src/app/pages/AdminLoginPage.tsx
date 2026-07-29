@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Lock, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import logo from "../../imports/image.png"
 
 export function AdminLoginPage() {
   const { login, isAdminAuthenticated } = useAuth();
@@ -42,14 +41,17 @@ export function AdminLoginPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <img
-            src={logo}
+            src="/logo.svg"
             alt="El Molino"
             className="h-20 w-20 object-contain mx-auto mb-4"
           />
-          <h1 className="text-2xl text-primary">
+          <h1 
+            className="text-4xl text-primary font-bold italic tracking-wide"
+            style={{ fontFamily: "'Playfair Display', serif" }}
+          >
             El Molino
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm">Panel de Administración</p>
+          <p className="text-muted-foreground mt-2 text-sm">Panel de Administración</p>
         </div>
 
         {/* Card */}

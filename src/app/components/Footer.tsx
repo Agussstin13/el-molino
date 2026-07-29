@@ -1,6 +1,6 @@
 import { MapPin, Phone, Instagram, Send } from "lucide-react";
 import React, { useState } from "react";
-import logo from "../../imports/image.png";
+
 
 const PHONE_NUMBER = import.meta.env.VITE_PHONE_NUMBER;
 const FORMSPREE_ENDPOINT = "https://formspree.io/f/xgogppqw";
@@ -51,13 +51,13 @@ export function Footer() {
           <div className="space-y-6">
             <div className="flex items-center gap-3">
               <img
-                src={logo}
+                src="/logo.svg"
                 alt="El Molino"
                 className="h-12 w-12 object-contain"
               />
               <span
-                className="text-xl font-bold text-foreground"
-               
+                className="text-2xl text-primary font-bold italic tracking-wide"
+                style={{ fontFamily: "'Playfair Display', serif" }}
               >
                 El Molino
               </span>
