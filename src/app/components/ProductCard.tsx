@@ -5,6 +5,7 @@ import type { Product } from "../../lib/types";
 import {
   formatARS,
   getEffectivePrice,
+  getEffectiveGramagePrice,
   isWholesaleActive,
 } from "../../lib/price";
 import { useCart } from "../context/CartContext";
@@ -27,12 +28,37 @@ export function ProductCard({
 
   const isWholesale = isWholesaleActive(product, quantity);
   const effectivePrice = getEffectivePrice(product, quantity);
-  const hasOffer = product.onOffer && product.offerPrice;
-  const discountPct = hasOffer
-    ? Math.round(((product.price - product.offerPrice!) / product.price) * 100)
-    : 0;
-
   const isGramProduct = product.measurementUnit === "gramo";
+  const smallestGramage =
+    isGramProduct && product.gramages && product.gramages.length > 0
+      ? product.gramages.reduce(
+          (smallest, gramage) =>
+            gramage.grams < smallest.grams ? gramage : smallest,
+        )
+      : undefined;
+  const displayPrice = smallestGramage
+    ? getEffectiveGramagePrice(smallestGramage)
+    : effectivePrice;
+  const originalDisplayPrice = smallestGramage
+    ? smallestGramage.price
+    : product.price;
+  const hasOffer = smallestGramage
+    ? displayPrice < originalDisplayPrice
+    : !isWholesale
+      && product.onOffer === true
+      && displayPrice < originalDisplayPrice;
+  const discountPct = hasOffer
+    ? Math.round(
+        ((originalDisplayPrice - displayPrice) / originalDisplayPrice) * 100,
+      )
+    : 0;
+  const displayPresentation = smallestGramage
+    ? smallestGramage.grams >= 1000
+      ? `${(smallestGramage.grams / 1000).toLocaleString("es-AR", {
+          maximumFractionDigits: 2,
+        })} kg`
+      : `${smallestGramage.grams} g`
+    : null;
 
   const currentUsedInCart = items
     .filter((i) => i.id === product.id)
@@ -94,12 +120,12 @@ export function ProductCard({
           <div className="flex flex-col">
             <div className="flex items-end gap-2 mb-0.5 min-h-[22px]">
               <span className="text-[22px] font-black text-black leading-none">
-                {formatARS(effectivePrice)}
+                {formatARS(displayPrice)}
               </span>
               {hasOffer ? (
                 <div className="flex items-center gap-1.5 pb-0.5">
                   <span className="text-[11px] text-muted-foreground line-through font-medium">
-                    {formatARS(product.price)}
+                    {formatARS(originalDisplayPrice)}
                   </span>
                 </div>
               ) : null}
@@ -108,7 +134,11 @@ export function ProductCard({
             <div className="min-h-[16px] flex items-end justify-between mt-1 gap-2 w-full">
               {/* Formato de Venta (Izquierda) y Stock */}
               <span className="text-[10px] text-muted-foreground font-medium flex items-center shrink-0">
-                {isGramProduct ? "Por peso" : "Por unidad"}
+                {displayPresentation
+                  ? `Precio por ${displayPresentation}`
+                  : isGramProduct
+                    ? "Por peso"
+                    : "Por unidad"}
                 <span className="mx-1.5 text-border">•</span>
                 Stock: {isGramProduct ? (product.stock >= 1000 ? `${(product.stock / 1000).toFixed(2).replace(/\.00$/, '')} kg` : `${product.stock} g`) : product.stock}
               </span>
@@ -205,12 +235,12 @@ export function ProductCard({
           {/* Precio efectivo y Oferta en la misma línea */}
           <div className="flex items-end gap-2 mb-2 min-h-[26px]">
             <span className="text-[26px] font-black text-black leading-none">
-              {formatARS(effectivePrice)}
+              {formatARS(displayPrice)}
             </span>
             {hasOffer ? (
               <div className="flex items-center gap-1.5 pb-0.5">
                 <span className="text-[12px] text-muted-foreground line-through decoration-muted-foreground/50 font-medium">
-                  {formatARS(product.price)}
+                  {formatARS(originalDisplayPrice)}
                 </span>
                 <span className="text-[10px] bg-destructive text-white font-bold px-1.5 py-0.5 rounded-sm leading-none tracking-wide">
                   {discountPct}% OFF
@@ -218,9 +248,18 @@ export function ProductCard({
               </div>
             ) : null}
           </div>
-          <span className="text-[11px] text-muted-foreground font-medium mb-3">
-             Stock: {isGramProduct ? (product.stock >= 1000 ? `${(product.stock / 1000).toFixed(2).replace(/\.00$/, '')} kg` : `${product.stock} g`) : `${product.stock} u.`}
-          </span>
+          <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground font-medium mb-3">
+            <span className="text-primary/80">
+              {displayPresentation
+                ? `Precio por ${displayPresentation}`
+                : isGramProduct
+                  ? "Por peso"
+                  : "Por unidad"}
+            </span>
+            <span className="whitespace-nowrap">
+              Stock: {isGramProduct ? (product.stock >= 1000 ? `${(product.stock / 1000).toFixed(2).replace(/\.00$/, '')} kg` : `${product.stock} g`) : `${product.stock} u.`}
+            </span>
+          </div>
         </div>
 
         {/* Botón Grid View */}
