@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { useCart } from "../context/CartContext";
+import { categoryPath } from "../../lib/seo";
 import { useAuth } from "../context/AuthContext";
 import { ClientLoginModal } from "./ClientLoginModal";
 import { ClientProfileModal } from "./ClientProfileModal";
@@ -63,6 +64,8 @@ export function Header() {
               <img
                 src="/logo.svg"
                 alt="El Molino"
+                width="48"
+                height="48"
                 className="h-12 w-12 object-contain"
               />
               <span
@@ -84,6 +87,7 @@ export function Header() {
               <input
                 id="search-input"
                 type="text"
+                aria-label="Buscar productos en El Molino"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar productos..."
@@ -220,7 +224,7 @@ export function Header() {
                           {categories.map(cat => (
                             <Link 
                               key={cat.id} 
-                              to={`/?categoria=${cat.id}#productos-lista`}
+                              to={categoryPath(cat)}
                               onClick={() => setIsMenuOpen(false)}
                               className="flex items-center justify-between pl-11 pr-3 py-2.5 rounded-lg hover:bg-primary/5 hover:text-primary transition-colors text-sm"
                             >

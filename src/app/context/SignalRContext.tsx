@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import * as signalR from '@microsoft/signalr';
+import type { HubConnection } from '@microsoft/signalr';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -20,27 +20,38 @@ export const SignalRProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [lastCategoriesUpdate, setLastCategoriesUpdate] = useState(Date.now());
 
   useEffect(() => {
-    const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${API_BASE}/appHub`, {
-         withCredentials: false // change to true if credentials are required by the backend
-      })
-      .withAutomaticReconnect()
-      .build();
+    let connection: HubConnection | undefined;
+    let cancelled = false;
 
-    connection.on('ProductsUpdated', () => {
-      setLastProductsUpdate(Date.now());
-    });
+    const connect = async () => {
+      const signalR = await import('@microsoft/signalr');
+      if (cancelled) return;
 
-    connection.on('CategoriesUpdated', () => {
-      setLastCategoriesUpdate(Date.now());
-    });
+      connection = new signalR.HubConnectionBuilder()
+        .withUrl(`${API_BASE}/appHub`, {
+          withCredentials: false,
+        })
+        .withAutomaticReconnect()
+        .build();
 
-    connection.start()
-      .then(() => console.log('SignalR Connected'))
-      .catch(err => console.error('SignalR Connection Error: ', err));
+      connection.on('ProductsUpdated', () => {
+        setLastProductsUpdate(Date.now());
+      });
+
+      connection.on('CategoriesUpdated', () => {
+        setLastCategoriesUpdate(Date.now());
+      });
+
+      connection.start()
+        .then(() => console.log('SignalR Connected'))
+        .catch(err => console.error('SignalR Connection Error: ', err));
+    };
+
+    void connect();
 
     return () => {
-      connection.stop();
+      cancelled = true;
+      void connection?.stop();
     };
   }, []);
 

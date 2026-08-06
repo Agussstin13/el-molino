@@ -22,6 +22,14 @@ import { Cart } from "../components/Cart";
 import { Checkout } from "../components/Checkout";
 import { Footer } from "../components/Footer";
 import { ProductCard } from "../components/ProductCard";
+import { NoIndexSeo, Seo } from "../components/Seo";
+import {
+  absoluteUrl,
+  categoryPath,
+  compactDescription,
+  productPath,
+  SITE_URL,
+} from "../../lib/seo";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 const PHONE_NUMBER = import.meta.env.VITE_PHONE_NUMBER;
@@ -205,8 +213,8 @@ export function ProductDetailPage() {
           category:
             Array.isArray(p.categories) && p.categories.length > 0
               ? p.categories
-                  .map((c: any) => c.name ?? c.nombre ?? "")
-                  .join(", ")
+                .map((c: any) => c.name ?? c.nombre ?? "")
+                .join(", ")
               : (p.categoryName ?? p.description ?? ""),
           categoryId:
             Array.isArray(p.categories) && p.categories.length > 0
@@ -223,16 +231,15 @@ export function ProductDetailPage() {
               : (p.discount ?? p.descuento ?? 0),
           wholesalePrice: p.wholesalePrice
             ? {
-                quantity: p.minimumWholesaleAmount ?? 10,
-                price: p.wholesalePrice,
-              }
+              quantity: p.minimumWholesaleAmount ?? 10,
+              price: p.wholesalePrice,
+            }
             : undefined,
           measurementUnit: p.measurementUnit ?? "unidad",
           gramages: Array.isArray(p.gramages) ? p.gramages : [],
           active: p.active ?? true,
         };
         setProduct(cur);
-        document.title = `El Molino - ${cur.name}`;
         if (
           cur.measurementUnit === "gramo" &&
           cur.gramages &&
@@ -255,8 +262,8 @@ export function ProductDetailPage() {
           category:
             Array.isArray(r.categories) && r.categories.length > 0
               ? r.categories
-                  .map((c: any) => c.name ?? c.nombre ?? "")
-                  .join(", ")
+                .map((c: any) => c.name ?? c.nombre ?? "")
+                .join(", ")
               : (r.categoryName ?? r.description ?? ""),
           categoryId:
             Array.isArray(r.categories) && r.categories.length > 0
@@ -355,6 +362,10 @@ export function ProductDetailPage() {
   if (!product) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+        <NoIndexSeo
+          title="Producto no encontrado | El Molino"
+          description="El producto solicitado no está disponible en El Molino."
+        />
         <Package className="w-16 h-16 text-muted-foreground/40" />
         <p className="text-xl text-muted-foreground font-medium">
           Producto no encontrado.
@@ -405,19 +416,19 @@ export function ProductDetailPage() {
   const effectivePrice = displayPrice;
   const isDiscounted = isGramProduct
     ? !!(
-        selectedGramage?.offerPrice != null &&
-        selectedGramage.offerPrice > 0 &&
-        !wholesale
-      )
+      selectedGramage?.offerPrice != null &&
+      selectedGramage.offerPrice > 0 &&
+      !wholesale
+    )
     : !!(product.offerPrice != null && product.offerPrice > 0 && !wholesale);
 
   const discountPct =
     isGramProduct && selectedGramage && selectedGramage.price > 0
       ? Math.round(
-          ((selectedGramage.price - getEffectiveGramagePrice(selectedGramage)) /
-            selectedGramage.price) *
-            100,
-        )
+        ((selectedGramage.price - getEffectiveGramagePrice(selectedGramage)) /
+          selectedGramage.price) *
+        100,
+      )
       : (product.discount ?? 0);
 
   const handleAdd = () => {
@@ -435,8 +446,80 @@ export function ProductDetailPage() {
   const waMsg = encodeURIComponent(
     `Hola! Me interesa el producto: *${product.name}* (${formatARS(effectivePrice)}). ¿Tienen stock?`,
   );
-  const pageUrl = encodeURIComponent(window.location.href);
+  const canonicalPath = productPath(product);
+  const canonicalUrl = `${SITE_URL}${canonicalPath}`;
+  const pageUrl = encodeURIComponent(canonicalUrl);
   const pageTitle = encodeURIComponent(product.name);
+
+  const primaryCategory = product.categories?.[0];
+  const primaryCategoryName = primaryCategory
+    ? primaryCategory.nombre ?? (primaryCategory as any).name ?? ""
+    : product.category ?? "";
+  const primaryCategoryId = primaryCategory?.id ?? product.categoryId;
+  const productDescription = compactDescription(
+    `${product.name} disponible en El Molino, dietética en Mar del Plata. ${product.description ||
+    "Consultá precio, presentación y stock para comprar online con envío local o retiro en tienda."
+    }`,
+  );
+  const seoPrice = isGramProduct && selectedGramage
+    ? getEffectiveGramagePrice(selectedGramage)
+    : product.offerPrice && product.offerPrice > 0
+      ? product.offerPrice
+      : product.price;
+  const productStructuredData = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Product',
+        '@id': `${canonicalUrl}#product`,
+        name: product.name,
+        description: product.description || productDescription,
+        image: product.image ? [absoluteUrl(product.image)] : undefined,
+        sku: product.id,
+        category: primaryCategoryName || undefined,
+        offers: {
+          '@type': 'Offer',
+          url: canonicalUrl,
+          priceCurrency: 'ARS',
+          price: seoPrice,
+          availability: product.stock > 0
+            ? 'https://schema.org/InStock'
+            : 'https://schema.org/OutOfStock',
+          itemCondition: 'https://schema.org/NewCondition',
+          seller: {
+            '@type': 'GroceryStore',
+            name: 'El Molino',
+            url: SITE_URL,
+          },
+        },
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          {
+            '@type': 'ListItem',
+            position: 1,
+            name: 'Inicio',
+            item: SITE_URL,
+          },
+          ...(primaryCategoryId && primaryCategoryName
+            ? [{
+              '@type': 'ListItem',
+              position: 2,
+              name: primaryCategoryName,
+              item: `${SITE_URL}${categoryPath({ id: primaryCategoryId, name: primaryCategoryName })}`,
+            }]
+            : []),
+          {
+            '@type': 'ListItem',
+            position: primaryCategoryId && primaryCategoryName ? 3 : 2,
+            name: product.name,
+            item: canonicalUrl,
+          },
+        ],
+      },
+    ],
+  };
 
   const shareLinks = [
     {
@@ -491,6 +574,15 @@ export function ProductDetailPage() {
   /* ── Render ── */
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      <Seo
+        title={`${compactDescription(product.name, 52)} | El Molino`}
+        description={productDescription}
+        canonicalPath={canonicalPath}
+        image={product.image || undefined}
+        imageAlt={product.name}
+        type="product"
+        structuredData={productStructuredData}
+      />
       <Header />
 
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
@@ -520,7 +612,7 @@ export function ProductDetailPage() {
                 <React.Fragment key={cat.id}>
                   <span className="text-border">/</span>
                   <Link
-                    to={`/?categoria=${cat.id}`}
+                    to={categoryPath({ id: cat.id, name: catName })}
                     className="hover:text-primary transition-colors font-medium"
                   >
                     {catName}
@@ -532,7 +624,7 @@ export function ProductDetailPage() {
             <>
               <span className="text-border">/</span>
               <Link
-                to={`/?categoria=${product.categoryId}`}
+                to={categoryPath({ id: product.categoryId ?? '', name: product.category })}
                 className="hover:text-primary transition-colors font-medium"
               >
                 {product.category}
@@ -571,7 +663,11 @@ export function ProductDetailPage() {
               {product.image ? (
                 <img
                   src={product.image}
-                  alt={product.name}
+                  alt={`${product.name} en El Molino`}
+                  width="640"
+                  height="640"
+                  fetchPriority="high"
+                  decoding="async"
                   className="w-full h-full object-contain"
                   style={{ maxHeight: "420px" }}
                 />
@@ -599,31 +695,31 @@ export function ProductDetailPage() {
             {/* Categorías */}
             {((product.categories && product.categories.length > 0) ||
               product.category) && (
-              <div className="flex items-center gap-1.5 flex-wrap mb-3">
-                {product.categories && product.categories.length > 0 ? (
-                  product.categories.map((cat) => {
-                    const catName = cat.nombre ?? (cat as any).name ?? "";
-                    if (!catName) return null;
-                    return (
-                      <Link
-                        key={cat.id}
-                        to={`/?categoria=${cat.id}`}
-                        className="text-[11px] font-semibold text-primary uppercase tracking-wider bg-primary/10 px-2.5 py-1 rounded-full hover:bg-primary/20 transition-colors border border-primary/15"
-                      >
-                        {catName}
-                      </Link>
-                    );
-                  })
-                ) : (
-                  <Link
-                    to={`/?categoria=${product.categoryId}`}
-                    className="text-[11px] font-semibold text-primary uppercase tracking-wider bg-primary/10 px-2.5 py-1 rounded-full hover:bg-primary/20 transition-colors border border-primary/15"
-                  >
-                    {product.category}
-                  </Link>
-                )}
-              </div>
-            )}
+                <div className="flex items-center gap-1.5 flex-wrap mb-3">
+                  {product.categories && product.categories.length > 0 ? (
+                    product.categories.map((cat) => {
+                      const catName = cat.nombre ?? (cat as any).name ?? "";
+                      if (!catName) return null;
+                      return (
+                        <Link
+                          key={cat.id}
+                          to={categoryPath({ id: cat.id, name: catName })}
+                          className="text-[11px] font-semibold text-primary uppercase tracking-wider bg-primary/10 px-2.5 py-1 rounded-full hover:bg-primary/20 transition-colors border border-primary/15"
+                        >
+                          {catName}
+                        </Link>
+                      );
+                    })
+                  ) : (
+                    <Link
+                      to={categoryPath({ id: product.categoryId ?? '', name: product.category ?? '' })}
+                      className="text-[11px] font-semibold text-primary uppercase tracking-wider bg-primary/10 px-2.5 py-1 rounded-full hover:bg-primary/20 transition-colors border border-primary/15"
+                    >
+                      {product.category}
+                    </Link>
+                  )}
+                </div>
+              )}
 
             {/* Nombre */}
             <h1 className="text-2xl md:text-[1.75rem] text-foreground leading-tight font-semibold mb-1">
@@ -728,11 +824,10 @@ export function ProductDetailPage() {
                           key={g.id}
                           onClick={() => setSelectedGramage(g)}
                           className={`flex flex-col items-center px-4 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all duration-200 min-w-[72px]
-                          ${
-                            isSelected
+                          ${isSelected
                               ? "bg-primary text-primary-foreground border-primary shadow-md scale-[1.03]"
                               : "border-border text-foreground bg-background hover:border-primary/50 hover:bg-secondary/40"
-                          }`}
+                            }`}
                         >
                           <span>
                             {g.grams >= 1000
@@ -821,12 +916,11 @@ export function ProductDetailPage() {
                 disabled={addDisabled}
                 id="detail-add-to-cart"
                 className={`w-full flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-2xl font-semibold text-[15px] transition-all duration-300 active:scale-[0.98]
-                  ${
-                    addDisabled
-                      ? "bg-muted text-muted-foreground cursor-not-allowed"
-                      : added
-                        ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/25"
-                        : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md hover:shadow-lg hover:shadow-primary/20"
+                  ${addDisabled
+                    ? "bg-muted text-muted-foreground cursor-not-allowed"
+                    : added
+                      ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/25"
+                      : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md hover:shadow-lg hover:shadow-primary/20"
                   }`}
               >
                 <ShoppingCart className="w-5 h-5" />

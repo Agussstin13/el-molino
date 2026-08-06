@@ -14,9 +14,10 @@ interface ProductSectionProps {
   hideTitle?: boolean;
   viewAllLink?: string;
   paginated?: boolean;
+  headingLevel?: 'h1' | 'h2';
 }
 
-export function ProductSection({ title, products, highlightDeals, id, viewMode, hideTitle, viewAllLink, paginated }: ProductSectionProps) {
+export function ProductSection({ title, products, id, viewMode, hideTitle, viewAllLink, paginated, headingLevel = 'h2' }: ProductSectionProps) {
   const [showAll, setShowAll] = useState(false);
   const [page, setPage] = useState(1);
 
@@ -31,6 +32,7 @@ export function ProductSection({ title, products, highlightDeals, id, viewMode, 
     : showAll
     ? products
     : products.slice(0, PAGE_SIZE);
+  const Heading = headingLevel;
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
@@ -52,9 +54,9 @@ export function ProductSection({ title, products, highlightDeals, id, viewMode, 
               <div className="w-full border-t border-border/80"></div>
             </div>
             <div className="relative flex justify-center">
-              <h2 className="bg-background px-6 text-xl md:text-2xl font-semibold text-[#4a7c59] uppercase tracking-wider">
+              <Heading className="bg-background px-6 text-xl md:text-2xl font-semibold text-[#4a7c59] uppercase tracking-wider">
                 {title}
-              </h2>
+              </Heading>
             </div>
           </div>
         )}

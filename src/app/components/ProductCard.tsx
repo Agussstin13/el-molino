@@ -1,7 +1,8 @@
 import { ShoppingCart } from "lucide-react";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import type { Product } from "../../lib/types";
+import { productPath } from "../../lib/seo";
 import {
   formatARS,
   getEffectivePrice,
@@ -25,6 +26,7 @@ export function ProductCard({
   const { addToCart, items } = useCart();
   const [quantity] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
+  const detailPath = productPath(product);
 
   const isWholesale = isWholesaleActive(product, quantity);
   const effectivePrice = getEffectivePrice(product, quantity);
@@ -32,9 +34,9 @@ export function ProductCard({
   const smallestGramage =
     isGramProduct && product.gramages && product.gramages.length > 0
       ? product.gramages.reduce(
-          (smallest, gramage) =>
-            gramage.grams < smallest.grams ? gramage : smallest,
-        )
+        (smallest, gramage) =>
+          gramage.grams < smallest.grams ? gramage : smallest,
+      )
       : undefined;
   const displayPrice = smallestGramage
     ? getEffectiveGramagePrice(smallestGramage)
@@ -45,18 +47,18 @@ export function ProductCard({
   const hasOffer = smallestGramage
     ? displayPrice < originalDisplayPrice
     : !isWholesale
-      && product.onOffer === true
-      && displayPrice < originalDisplayPrice;
+    && product.onOffer === true
+    && displayPrice < originalDisplayPrice;
   const discountPct = hasOffer
     ? Math.round(
-        ((originalDisplayPrice - displayPrice) / originalDisplayPrice) * 100,
-      )
+      ((originalDisplayPrice - displayPrice) / originalDisplayPrice) * 100,
+    )
     : 0;
   const displayPresentation = smallestGramage
     ? smallestGramage.grams >= 1000
       ? `${(smallestGramage.grams / 1000).toLocaleString("es-AR", {
-          maximumFractionDigits: 2,
-        })} kg`
+        maximumFractionDigits: 2,
+      })} kg`
       : `${smallestGramage.grams} g`
     : null;
 
@@ -73,7 +75,7 @@ export function ProductCard({
   const handleAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isGramProduct) {
-      navigate(`/producto/${product.id}`);
+      navigate(detailPath);
       return;
     }
     if (!canAddMore) return;
@@ -90,30 +92,45 @@ export function ProductCard({
     return (
       <div
         className="flex items-center gap-4 bg-card border border-border/60 rounded-2xl p-3 transition-all duration-300 cursor-pointer hover:shadow-md hover:-translate-y-0.5 hover:border-primary/20 h-[140px]"
-        onClick={() => navigate(`/producto/${product.id}`)}
+        onClick={() => navigate(detailPath)}
         id={`product-card-${product.id}`}
       >
         {/* Imagen */}
-        <div className="relative w-[116px] h-[116px] flex-shrink-0 bg-secondary/30 rounded-xl overflow-hidden">
-          <img
-            src={
-              product.image || "https://via.placeholder.com/300?text=Sin+Imagen"
-            }
-            alt={product.name}
-            className="w-full h-full object-cover"
-          />
+        <Link
+          to={detailPath}
+          onClick={(event) => event.stopPropagation()}
+          className="block relative w-[116px] h-[116px] flex-shrink-0 bg-secondary/30 rounded-xl overflow-hidden"
+          aria-label={`Ver ${product.name}`}
+        >
+          {product.image && (
+            <img
+              src={product.image}
+              alt={`${product.name} en El Molino`}
+              loading="lazy"
+              decoding="async"
+              width="300"
+              height="300"
+              className="w-full h-full object-cover"
+            />
+          )}
           {hasOffer && (
             <div className="absolute top-1 left-1 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-sm leading-tight">
               -{discountPct}%
             </div>
           )}
-        </div>
+        </Link>
 
         {/* Info */}
         <div className="flex flex-col flex-1 min-w-0 h-full py-1 justify-between">
           <div>
             <h3 className="text-[14px] font-semibold text-foreground line-clamp-1 leading-tight">
-              {product.name}
+              <Link
+                to={detailPath}
+                onClick={(event) => event.stopPropagation()}
+                className="text-inherit"
+              >
+                {product.name}
+              </Link>
             </h3>
           </div>
 
@@ -198,11 +215,16 @@ export function ProductCard({
   return (
     <div
       className="relative bg-card rounded-3xl overflow-hidden border border-border/50 shadow-sm cursor-pointer flex flex-col transition-all duration-300 hover:shadow-lg hover:-translate-y-1 hover:border-primary/20 h-full"
-      onClick={() => navigate(`/producto/${product.id}`)}
+      onClick={() => navigate(detailPath)}
       id={`product-card-${product.id}`}
     >
       {/* ── Imagen ─────────────────────────────────────────────────────────── */}
-      <div className="relative w-full aspect-square bg-secondary/20 overflow-hidden flex-shrink-0">
+      <Link
+        to={detailPath}
+        onClick={(event) => event.stopPropagation()}
+        className="block relative w-full aspect-square bg-secondary/20 overflow-hidden flex-shrink-0"
+        aria-label={`Ver ${product.name}`}
+      >
         {/* Fondo fantasma */}
         {product.image && (
           <div
@@ -211,14 +233,18 @@ export function ProductCard({
           />
         )}
 
-        <img
-          src={
-            product.image || "https://via.placeholder.com/300?text=Sin+Imagen"
-          }
-          alt={product.name}
-          className="relative z-0 w-full h-full object-cover"
-        />
-      </div>
+        {product.image && (
+          <img
+            src={product.image}
+            alt={`${product.name} en El Molino`}
+            loading="lazy"
+            decoding="async"
+            width="400"
+            height="400"
+            className="relative z-0 w-full h-full object-cover"
+          />
+        )}
+      </Link>
 
       {/* ── Contenido ──────────────────────────────────────────────────────── */}
       <div className="flex flex-col flex-1 px-4 pt-2.5 pb-4">
@@ -227,7 +253,13 @@ export function ProductCard({
 
         {/* Nombre */}
         <h3 className="text-[14px] font-semibold text-foreground line-clamp-2 leading-tight mb-2">
-          {product.name}
+          <Link
+            to={detailPath}
+            onClick={(event) => event.stopPropagation()}
+            className="text-inherit"
+          >
+            {product.name}
+          </Link>
         </h3>
 
         {/* Precios y Tags (Flex grow para empujar hacia abajo) */}
