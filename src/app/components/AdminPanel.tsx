@@ -494,89 +494,43 @@ export function AdminPanel() {
     }
 
     setIsSavingOffers(true);
-    let successCount = 0;
-    let failCount = 0;
-    let failureMessage: string | null = null;
+    try {
+      const response = await fetch(`${API_BASE}/api/products/offers`, {
+        method: "PATCH",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          products: dirtyProducts.map((product) => {
+            const draft = offersDraft[product.id];
+            return {
+              id: Number(product.id),
+              offerPrice: draft.active
+                ? parseInputPrice(draft.offerPrice)
+                : null,
+            };
+          }),
+        }),
+      });
 
-    for (const p of dirtyProducts) {
-      const draft = offersDraft[p.id];
-      const parsedDraftPrice = parseInputPrice(draft.offerPrice);
-
-      const formData = new FormData();
-      formData.append("Id", p.id);
-      formData.append("Name", p.name);
-      formData.append("Description", p.description || "");
-      formData.append("Price", String(p.price));
-      formData.append("Stock", String(p.stock));
-      formData.append("CategoryId", String(p.categoryId));
-      formData.append("Active", String(p.active));
-      formData.append("MeasurementUnit", p.measurementUnit ?? "unidad");
-
-      if (p.measurementUnit === "gramo" && Array.isArray(p.gramages)) {
-        p.gramages.forEach((g: any) => {
-          const gramsVal = typeof g === "number" ? g : g.grams;
-          if (gramsVal) {
-            formData.append("Gramages", String(gramsVal));
-          }
-        });
-      }
-
-      // Si la oferta está activa, enviamos el precio; si no, no enviamos nada (backend lo pone en null)
-      if (draft.active && parsedDraftPrice > 0) {
-        formData.append("OfferPrice", String(parsedDraftPrice));
-      }
-
-      if (p.wholesalePrice) {
-        formData.append("WholesalePrice", String(p.wholesalePrice.price));
-        formData.append(
-          "MinimumWholesaleAmount",
-          String(p.wholesalePrice.quantity),
+      if (!response.ok) {
+        showError(
+          "No se pudieron guardar las ofertas",
+          await getApiErrorMessage(
+            response,
+            "No se pudieron actualizar las ofertas modificadas.",
+          ),
         );
+        return;
       }
 
-      if (p.imagePath) {
-        formData.append("ExistingImagePath", p.imagePath);
-      }
-
-      try {
-        const res = await fetch(`${API_BASE}/api/products/${p.id}`, {
-          method: "PUT",
-          headers: getAuthHeaders(null),
-          body: formData,
-        });
-        if (res.ok) {
-          successCount++;
-        } else {
-          failCount++;
-          failureMessage ??= await getApiErrorMessage(
-            res,
-            "No se pudo actualizar la oferta del producto.",
-          );
-        }
-      } catch {
-        failCount++;
-      }
-    }
-
-    setProductsRefresh((current) => current + 1);
-
-    setIsSavingOffers(false);
-    if (failCount === 0) {
+      setProductsRefresh((current) => current + 1);
       showSuccess(
         "¡Ofertas guardadas!",
-        `Se actualizaron con éxito las ofertas de ${successCount} producto(s).`,
+        `Se actualizaron con éxito las ofertas de ${dirtyProducts.length} producto(s).`,
       );
-    } else if (successCount > 0) {
-      showSuccess(
-        "Guardado parcial",
-        `Se actualizaron ${successCount} ofertas, pero fallaron ${failCount}.`,
-      );
-    } else {
-      showError(
-        "Error",
-        failureMessage ||
-          "No se pudo actualizar ninguna de las ofertas modificadas.",
-      );
+    } catch {
+      showError("Problema de red", "No pudimos conectar con el servidor.");
+    } finally {
+      setIsSavingOffers(false);
     }
   };
 

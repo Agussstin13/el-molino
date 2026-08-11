@@ -695,16 +695,8 @@ export function Checkout() {
         return isWholesaleActive(item, totalForWholesale);
       });
 
-      const dniParam = form.dni ? `&dni=${encodeURIComponent(form.dni)}` : "";
-      
-      const headers: Record<string, string> = {};
-      const token = localStorage.getItem("clientToken");
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-
-      const res = await fetch(`${API_BASE}/api/coupons/validate/${encodeURIComponent(couponCodeInput.trim())}?subtotal=${subtotal}&hasWholesale=${hasWholesaleItems}${dniParam}`, {
-        headers
+      const res = await fetch(`${API_BASE}/api/coupons/validate/${encodeURIComponent(couponCodeInput.trim())}?subtotal=${subtotal}&hasWholesale=${hasWholesaleItems}`, {
+        headers: { Accept: "application/json" },
       });
       const data = await res.json();
       if (!res.ok) {
@@ -729,16 +721,6 @@ export function Checkout() {
     setCouponError(null);
   };
 
-  // finalTotal usa el shippingCost calculado por distancia si existe, si no el subtotal
-  const baseTotal =
-    subtotal === 0
-      ? 0
-      : form.metodo_entrega === "retiro"
-        ? subtotal
-        : shippingCost !== null
-          ? subtotal + shippingCost
-          : subtotal;
-          
   const discountedSubtotal = Math.max(0, subtotal - (appliedCoupon?.discountAmount || 0));
   const finalTotal = 
     subtotal === 0
