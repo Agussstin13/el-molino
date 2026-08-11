@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams, useLocation, useParams } from 'react-router-dom';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { Link, useSearchParams, useLocation, useParams } from 'react-router-dom';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Header } from '../components/Header';
 import { HeroSection } from '../components/HeroSection';
 import { ProductSection } from '../components/ProductSection';
@@ -19,11 +20,13 @@ const imgUrl = (path: string) =>
   path ? (path.startsWith('/') ? `${API_BASE}${path}` : `${API_BASE}/images/${path}`) : '';
 
 export function ShopPage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const { categoryId: routeCategoryId } = useParams<{ categoryId: string }>();
   const categoryId = routeCategoryId ?? searchParams.get('categoria');
   const searchQuery = searchParams.get('q');
+  const requestedPage = Number(searchParams.get('page'));
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const seccion = location.pathname === '/productos-destacados' || location.pathname === '/products/top-selling' ? 'destacados'
     : location.pathname === '/productos' ? 'todos'
       : searchParams.get('seccion');
@@ -31,8 +34,10 @@ export function ShopPage() {
   const [topSellingProducts, setTopSellingProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [totalPages, setTotalPages] = useState(0);
   const [viewMode, setViewMode] = useState<'list' | 'grid-sm' | 'grid-lg'>('grid-sm');
   const [sortBy, setSortBy] = useState('default');
+  const requestScopeRef = useRef('');
   const { lastProductsUpdate, lastCategoriesUpdate } = useSignalR();
 
   useEffect(() => {
@@ -45,74 +50,158 @@ export function ShopPage() {
   }, [lastCategoriesUpdate]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const requestScope = `${categoryId ?? ''}|${searchQuery ?? ''}|${seccion ?? ''}|${sortBy}`;
+    const scopeChanged = requestScopeRef.current !== requestScope;
+    requestScopeRef.current = requestScope;
+
     setLoading(true);
 
-    const fetchProducts = fetch(`${API_BASE}/api/products`).then(res => res.ok ? res.json() : []);
-    const fetchTopSelling = fetch(`${API_BASE}/api/Products/top-selling`).then(res => res.ok ? res.json() : []).catch(() => []);
+    if (scopeChanged) {
+      setProducts([]);
+      setTopSellingProducts([]);
+      setTotalPages(0);
+    }
 
-    Promise.all([fetchProducts, fetchTopSelling])
-      .then(([productsData, topSellingData]) => {
-        const mapProducts = (data: any[]) => {
-          if (!Array.isArray(data)) return [];
-          return data.map((p: any) => ({
-            id: p.id.toString(),
-            name: p.name ?? p.nombre,
-            price: p.price ?? p.precio,
-            stock: p.stock,
-            categories: Array.isArray(p.categories) ? p.categories : [],
-            category: Array.isArray(p.categories) && p.categories.length > 0
-              ? p.categories.map((c: any) => c.name ?? c.nombre).join(", ")
-              : (p.categoryName ?? p.description ?? ""),
-            image: imgUrl(p.imagePath ?? p.imageUrl ?? ''),
-            categoryId: Array.isArray(p.categories) && p.categories.length > 0
-              ? p.categories[0].id
-              : (p.categoryId ?? p.categoriaId),
-            onOffer: p.offerPrice != null,
-            offerPrice: p.offerPrice ?? null,
-            discount: p.offerPrice != null && p.price
-              ? Math.round(((p.price - p.offerPrice) / p.price) * 100)
-              : (p.discount ?? p.descuento ?? 0),
-            wholesalePrice: p.wholesalePrice
-              ? { quantity: p.minimumWholesaleAmount ?? 10, price: p.wholesalePrice }
-              : undefined,
-            measurementUnit: p.measurementUnit ?? "unidad",
-            gramages: Array.isArray(p.gramages) ? p.gramages : [],
-            imagePath: p.imagePath ?? "",
-            description: p.description ?? "",
-            active: p.active ?? true,
-          }));
+    const mapProducts = (data: any[]): Product[] => {
+      if (!Array.isArray(data)) return [];
+
+      return data.map((p: any) => ({
+        id: p.id.toString(),
+        name: p.name ?? p.nombre,
+        price: p.price ?? p.precio,
+        stock: p.stock,
+        categories: Array.isArray(p.categories) ? p.categories : [],
+        category: Array.isArray(p.categories) && p.categories.length > 0
+          ? p.categories.map((c: any) => c.name ?? c.nombre).join(', ')
+          : (p.categoryName ?? p.description ?? ''),
+        image: imgUrl(p.imagePath ?? p.imageUrl ?? ''),
+        categoryId: Array.isArray(p.categories) && p.categories.length > 0
+          ? p.categories[0].id
+          : (p.categoryId ?? p.categoriaId),
+        onOffer: p.offerPrice != null,
+        offerPrice: p.offerPrice ?? null,
+        discount: p.offerPrice != null && p.price
+          ? Math.round(((p.price - p.offerPrice) / p.price) * 100)
+          : (p.discount ?? p.descuento ?? 0),
+        wholesalePrice: p.wholesalePrice
+          ? {
+            quantity: p.minimumWholesaleAmount ?? 10,
+            price: p.wholesalePrice
+          }
+          : undefined,
+        measurementUnit: p.measurementUnit ?? 'unidad',
+        gramages: Array.isArray(p.gramages) ? p.gramages : [],
+        imagePath: p.imagePath ?? '',
+        description: p.description ?? '',
+        active: p.active ?? true
+      }));
+    };
+
+    const loadProducts = async () => {
+      try {
+        const serverOrder = sortBy === 'default' ? 'newest' : sortBy;
+        const applyPageMetadata = (data: any) => {
+          setTotalPages(data.totalPages ?? 0);
+
+          if (Number.isInteger(data.page) && data.page !== page) {
+            setSearchParams(currentParams => {
+              const nextParams = new URLSearchParams(currentParams);
+
+              if (data.page <= 1) nextParams.delete('page');
+              else nextParams.set('page', data.page.toString());
+
+              return nextParams;
+            }, { replace: true });
+          }
         };
 
-        const mappedProducts = mapProducts(productsData);
-        const mappedTopSelling = mapProducts(topSellingData);
+        if (!categoryId && !searchQuery && !seccion) {
+          const [discountedResponse, topSellingResponse] = await Promise.all([
+            fetch(`${API_BASE}/api/products/discounted?page=1`, { signal: controller.signal }),
+            fetch(`${API_BASE}/api/products/top-selling?page=1`, { signal: controller.signal })
+          ]);
 
-        setTopSellingProducts(mappedTopSelling);
+          const discountedData = discountedResponse.ok
+            ? await discountedResponse.json()
+            : { items: [] };
 
-        if (categoryId) {
-          setProducts(mappedProducts.filter((p: any) => {
-            if (Array.isArray(p.categories) && p.categories.length > 0) {
-              return p.categories.some((c: any) => c.id?.toString() === categoryId);
-            }
-            return p.categoryId?.toString() === categoryId;
-          }));
-        } else if (searchQuery) {
-          const normalize = (t: string) => t ? t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : "";
-          const queryWords = normalize(searchQuery).split(/\s+/).map(w => w.endsWith('s') && w.length > 3 ? w.slice(0, -1) : w);
+          const topSellingData = topSellingResponse.ok
+            ? await topSellingResponse.json()
+            : { items: [] };
 
-          setProducts(mappedProducts.filter((p: any) => {
-            const searchableText = normalize(`${p.name} ${p.description || ""} ${Array.isArray(p.categories) && p.categories.length > 0
-                ? p.categories.map((c: any) => c.name ?? c.nombre ?? "").join(" ")
-                : (p.category || "")
-              }`);
-            return queryWords.every(qw => searchableText.includes(qw));
-          }));
-        } else {
-          setProducts(mappedProducts);
+          setProducts(mapProducts(discountedData.items));
+          setTopSellingProducts(mapProducts(topSellingData.items));
+          setTotalPages(0);
+          return;
         }
-      })
-      .catch(err => console.error("Error fetching products:", err))
-      .finally(() => setLoading(false));
-  }, [categoryId, searchQuery, lastProductsUpdate]);
+
+        if (seccion === 'ofertas') {
+          const response = await fetch(
+            `${API_BASE}/api/products/discounted?page=${page}`,
+            { signal: controller.signal },
+          );
+          const data = response.ok
+            ? await response.json()
+            : { items: [], totalPages: 0 };
+
+          setProducts(mapProducts(data.items));
+          applyPageMetadata(data);
+          return;
+        }
+
+        if (seccion === 'destacados' || seccion === 'todos') {
+          const params = new URLSearchParams({
+            page: page.toString(),
+            order: serverOrder,
+          });
+          const response = await fetch(
+            `${API_BASE}/api/products?${params.toString()}`,
+            { signal: controller.signal },
+          );
+
+          const data = response.ok
+            ? await response.json()
+            : { items: [], totalPages: 0 };
+
+          setProducts(mapProducts(data.items));
+          applyPageMetadata(data);
+          return;
+        }
+
+        const params = new URLSearchParams();
+        params.set('page', page.toString());
+
+        if (categoryId) params.append('categoryIds', categoryId);
+        if (searchQuery) params.set('productName', searchQuery);
+        params.set('order', serverOrder);
+
+        const response = await fetch(
+          `${API_BASE}/api/products/filtered?${params.toString()}`,
+          { signal: controller.signal },
+        );
+        const data = response.ok
+          ? await response.json()
+          : { items: [], totalPages: 0 };
+
+        setProducts(mapProducts(data.items));
+        applyPageMetadata(data);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+
+        console.error('Error fetching products:', error);
+        setProducts([]);
+        setTopSellingProducts([]);
+        setTotalPages(0);
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    };
+
+    void loadProducts();
+
+    return () => controller.abort();
+  }, [categoryId, searchQuery, seccion, page, sortBy, lastProductsUpdate, setSearchParams]);
 
   useEffect(() => {
     if (loading) return;
@@ -185,35 +274,69 @@ export function ShopPage() {
     return getCategorySeo(Number(categoryId), categoryName);
   }, [categoryId, categoryName]);
 
-  const displayProducts = seccion === 'ofertas' ? offers : seccion === 'destacados' ? others : sortedProducts;
+  const displayProducts = seccion === 'ofertas' ? offers : sortedProducts;
   const isFilteredView = categoryId || searchQuery || seccion;
-  const sectionTitle = seccion === 'ofertas' ? 'Ofertas del Día' : seccion === 'destacados' ? 'Productos Destacados' : 'Todos los Productos';
+  const showPagination = totalPages > 1;
+
+  const changePage = (nextPage: number) => {
+    if (nextPage < 1 || (totalPages > 0 && nextPage > totalPages)) return;
+
+    const params = new URLSearchParams(searchParams);
+
+    if (nextPage <= 1) {
+      params.delete('page');
+    } else {
+      params.set('page', nextPage.toString());
+    }
+
+    setSearchParams(params);
+  };
+
+  const getPageHref = (nextPage: number) => {
+    const params = new URLSearchParams(searchParams);
+
+    if (nextPage <= 1) params.delete('page');
+    else params.set('page', nextPage.toString());
+
+    const query = params.toString();
+    return `${location.pathname}${query ? `?${query}` : ''}`;
+  };
+
+  const handleSortChange = (nextSort: string) => {
+    setSortBy(nextSort);
+    if (page > 1) changePage(1);
+  };
+
+  const sectionTitle = seccion === 'ofertas' ? 'Ofertas del Día' : 'Todos los Productos';
 
   const isSearchOrOfferView = Boolean(searchQuery || seccion === 'ofertas');
-  const canonicalPath = categoryId && categoryName
+  const baseCanonicalPath = categoryId && categoryName
     ? categoryPath({ id: categoryId, name: categoryName })
     : seccion === 'destacados'
       ? '/productos-destacados'
       : seccion === 'todos'
         ? '/productos'
         : '/';
+  const hasIndexablePagination = Boolean(
+    categoryId || seccion === 'destacados' || seccion === 'todos',
+  );
+  const canonicalPath = page > 1 && hasIndexablePagination
+    ? `${baseCanonicalPath}?page=${page}`
+    : baseCanonicalPath;
+  const seoPageSuffix = page > 1 ? ` - Página ${page}` : '';
   const seoTitle = categorySeo
-    ? `${categorySeo.title} | El Molino`
+    ? `${categorySeo.title}${seoPageSuffix} | El Molino`
     : searchQuery
       ? `Resultados para ${searchQuery} | El Molino`
-      : seccion === 'destacados'
-        ? 'Productos destacados | Dietética El Molino'
-        : seccion === 'todos'
-          ? 'Productos de dietética en Mar del Plata | El Molino'
-          : 'Dietética en Mar del Plata | El Molino';
+      : seccion === 'destacados' || seccion === 'todos'
+        ? `Productos de dietética en Mar del Plata${seoPageSuffix} | El Molino`
+        : 'Dietética en Mar del Plata | El Molino';
   const seoDescription = categorySeo?.description ?? (
-    seccion === 'destacados'
-      ? 'Descubrí productos destacados de El Molino, tu dietética en Mar del Plata. Comprá online con envío local o retiro por Bolívar 2342.'
-      : seccion === 'todos'
-        ? 'Explorá el catálogo de El Molino: alimentos saludables, productos naturales, sin TACC, frutos secos y suplementos en Mar del Plata.'
-        : searchQuery
-          ? `Resultados del catálogo de El Molino para ${searchQuery}.`
-          : 'Comprá alimentos saludables, productos naturales, sin TACC, frutos secos y suplementos en El Molino, dietética en Mar del Plata.'
+    seccion === 'destacados' || seccion === 'todos'
+      ? 'Explorá el catálogo completo de El Molino: alimentos saludables, productos naturales, sin TACC, frutos secos y suplementos en Mar del Plata.'
+      : searchQuery
+        ? `Resultados del catálogo de El Molino para ${searchQuery}.`
+        : 'Comprá alimentos saludables, productos naturales, sin TACC, frutos secos y suplementos en El Molino, dietética en Mar del Plata.'
   );
 
   const homeStructuredData = {
@@ -313,19 +436,67 @@ export function ShopPage() {
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               sortBy={sortBy}
-              onSortChange={setSortBy}
+              onSortChange={handleSortChange}
             />
           </div>
         )}
 
         {isFilteredView ? (
-          <ProductSection
-            title={categoryId ? (categoryName || "Productos") : searchQuery ? `Búsqueda: ${searchQuery}` : sectionTitle}
-            products={displayProducts}
-            viewMode={viewMode}
-            paginated={!!seccion}
-            headingLevel="h1"
-          />
+          <>
+            <ProductSection
+              title={categoryId ? (categoryName || 'Productos') : searchQuery ? `Búsqueda: ${searchQuery}` : sectionTitle}
+              products={displayProducts}
+              viewMode={viewMode}
+              showAllProducts
+              headingLevel="h1"
+            />
+
+            {showPagination && (
+              <nav className="flex items-center justify-center gap-4 pb-10" aria-label="Paginación de productos">
+                {page > 1 && !loading ? (
+                  <Link
+                    to={getPageHref(page - 1)}
+                    rel="prev"
+                    aria-label="Ir a la página anterior"
+                    title="Página anterior"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-primary text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+                  >
+                    <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                  </Link>
+                ) : (
+                  <span
+                    aria-disabled="true"
+                    className="inline-flex h-11 w-11 cursor-not-allowed items-center justify-center rounded-full border border-primary text-primary opacity-40"
+                  >
+                    <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                )}
+
+                <span className="min-w-32 text-center text-sm font-medium" aria-live="polite">
+                  Página {page} de {totalPages}
+                </span>
+
+                {page < totalPages && !loading ? (
+                  <Link
+                    to={getPageHref(page + 1)}
+                    rel="next"
+                    aria-label="Ir a la página siguiente"
+                    title="Página siguiente"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-primary text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+                  >
+                    <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                  </Link>
+                ) : (
+                  <span
+                    aria-disabled="true"
+                    className="inline-flex h-11 w-11 cursor-not-allowed items-center justify-center rounded-full border border-primary text-primary opacity-40"
+                  >
+                    <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                )}
+              </nav>
+            )}
+          </>
         ) : (
           <div className="space-y-0">
             <ProductSection

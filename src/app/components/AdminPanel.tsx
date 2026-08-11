@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   Package,
   Tag,
@@ -106,6 +107,112 @@ const EMPTY_CATEGORY: Omit<Category, "id"> = {
   orden: 0,
 };
 
+const ADMIN_PRODUCTS_PAGE_SIZE = 25;
+
+function mapAdminProduct(product: any): Product {
+  const imagePath = product.imagePath ?? product.imageUrl ?? "";
+
+  return {
+    id: product.id.toString(),
+    name: product.name ?? product.nombre,
+    price: product.price ?? product.precio,
+    stock: product.stock,
+    description: product.description ?? "",
+    categories: Array.isArray(product.categories) ? product.categories : [],
+    category: Array.isArray(product.categories) && product.categories.length > 0
+      ? product.categories.map((category: any) => category.name ?? category.nombre).join(", ")
+      : (product.categoryName ?? ""),
+    categoryId: Array.isArray(product.categories) && product.categories.length > 0
+      ? product.categories[0].id
+      : (product.categoryId ?? product.categoriaId),
+    image: imagePath
+      ? (imagePath.startsWith("/") ? `${API_BASE}${imagePath}` : `${API_BASE}/images/${imagePath}`)
+      : "",
+    imagePath,
+    active: product.active ?? true,
+    offerPrice: product.offerPrice ?? null,
+    onOffer: product.offerPrice != null,
+    measurementUnit: product.measurementUnit ?? "unidad",
+    gramages: Array.isArray(product.gramages) ? product.gramages : [],
+    wholesalePrice: product.wholesalePrice
+      ? {
+          quantity: product.minimumWholesaleAmount ?? 10,
+          price: product.wholesalePrice,
+        }
+      : undefined,
+  };
+}
+
+interface AdminProductPaginationProps {
+  page: number;
+  totalPages: number;
+  totalItems: number;
+  visibleItems: number;
+  loading: boolean;
+  onPageChange: (page: number) => void;
+}
+
+function AdminProductPagination({
+  page,
+  totalPages,
+  totalItems,
+  visibleItems,
+  loading,
+  onPageChange,
+}: AdminProductPaginationProps) {
+  if (totalItems === 0) return null;
+
+  const firstItem = (page - 1) * ADMIN_PRODUCTS_PAGE_SIZE + 1;
+  const lastItem = firstItem + visibleItems - 1;
+
+  return (
+    <nav className="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row" aria-label="Paginación de productos del administrador">
+      <p className="text-sm text-muted-foreground">
+        Mostrando {firstItem}–{lastItem} de {totalItems} productos
+      </p>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => onPageChange(page - 1)}
+          disabled={loading || page <= 1}
+          className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Anterior
+        </button>
+        <span className="min-w-28 text-center text-sm font-medium">
+          Página {page} de {totalPages}
+        </span>
+        <button
+          type="button"
+          onClick={() => onPageChange(page + 1)}
+          disabled={loading || page >= totalPages}
+          className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Siguiente
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </nav>
+  );
+}
+
+interface ProductFormPlacementProps {
+  editing: boolean;
+  inlineTarget: HTMLDivElement | null;
+  children: React.ReactNode;
+}
+
+function ProductFormPlacement({
+  editing,
+  inlineTarget,
+  children,
+}: ProductFormPlacementProps) {
+  if (!editing) return children;
+  if (!inlineTarget) return null;
+  return createPortal(children, inlineTarget);
+}
+
 export function AdminPanel() {
   const { logout, adminToken } = useAuth();
   const navigate = useNavigate();
@@ -123,6 +230,13 @@ export function AdminPanel() {
   );
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [productsPage, setProductsPage] = useState(1);
+  const [productsTotalPages, setProductsTotalPages] = useState(0);
+  const [productsTotalItems, setProductsTotalItems] = useState(0);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [productsRefresh, setProductsRefresh] = useState(0);
+  const [debouncedProductSearch, setDebouncedProductSearch] = useState("");
+  const [inlineEditTarget, setInlineEditTarget] = useState<HTMLDivElement | null>(null);
   const [showProductForm, setShowProductForm] = useState(false);
   const [productForm, setProductForm] = useState({
     name: "",
@@ -236,6 +350,10 @@ export function AdminPanel() {
     setAcceptOnEnter(true);
     return () => setAcceptOnEnter(false);
   }, [setAcceptOnEnter]);
+
+  const handleInlineEditTarget = React.useCallback((element: HTMLDivElement | null) => {
+    setInlineEditTarget(element);
+  }, []);
 
   const maxActiveShippingKm = shippingRates
     .filter((rate) => rate.activo)
@@ -440,47 +558,7 @@ export function AdminPanel() {
       }
     }
 
-    // Refresh products list
-    try {
-      const productsRes = await fetch(`${API_BASE}/api/products`, {
-        headers: getAuthHeaders(null),
-      });
-      if (productsRes.ok) {
-        const data = await productsRes.json();
-        const mapped = data.map((p: any) => ({
-          id: p.id.toString(),
-          name: p.name ?? p.nombre,
-          price: p.price ?? p.precio,
-          stock: p.stock,
-          description: p.description ?? "",
-          categories: Array.isArray(p.categories) ? p.categories : [],
-          category:
-            Array.isArray(p.categories) && p.categories.length > 0
-              ? p.categories.map((c: any) => c.name ?? c.nombre).join(", ")
-              : (p.categoryName ?? ""),
-          categoryId:
-            Array.isArray(p.categories) && p.categories.length > 0
-              ? p.categories[0].id
-              : (p.categoryId ?? p.categoriaId),
-          image: imgUrl(p.imagePath ?? p.imageUrl ?? ""),
-          imagePath: p.imagePath ?? p.imageUrl ?? "",
-          active: p.active ?? true,
-          offerPrice: p.offerPrice ?? null,
-          onOffer: p.offerPrice != null,
-          measurementUnit: p.measurementUnit ?? "unidad",
-          gramages: Array.isArray(p.gramages) ? p.gramages : [],
-          wholesalePrice: p.wholesalePrice
-            ? {
-                quantity: p.minimumWholesaleAmount ?? 10,
-                price: p.wholesalePrice,
-              }
-            : undefined,
-        }));
-        setProducts(mapped);
-      }
-    } catch (err) {
-      console.error("Error refreshing products:", err);
-    }
+    setProductsRefresh((current) => current + 1);
 
     setIsSavingOffers(false);
     if (failCount === 0) {
@@ -665,6 +743,90 @@ export function AdminPanel() {
     return error?.detail || error?.title || error?.message || fallback;
   };
 
+  const activeProductSearch = currentView === "daily-offers"
+    ? offersSearchQuery
+    : productSearchTerm;
+
+  useEffect(() => {
+    if (currentView !== "products" && currentView !== "daily-offers") return;
+
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedProductSearch(activeProductSearch.trim());
+      setProductsPage(1);
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [activeProductSearch, currentView]);
+
+  useEffect(() => {
+    if (!adminToken || (currentView !== "products" && currentView !== "daily-offers")) return;
+
+    const controller = new AbortController();
+
+    const loadProductsPage = async () => {
+      setLoadingProducts(true);
+
+      try {
+        const params = new URLSearchParams({
+          page: productsPage.toString(),
+          order: "newest",
+        });
+
+        if (debouncedProductSearch) {
+          params.set("productName", debouncedProductSearch);
+        }
+
+        if (currentView === "daily-offers" && offersFilter !== "all") {
+          params.set("hasOffer", String(offersFilter === "active"));
+        }
+
+        const response = await fetch(`${API_BASE}/api/products?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${adminToken}` },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          showError(
+            "Error",
+            await getApiErrorMessage(response, "No se pudieron cargar los productos."),
+          );
+          return;
+        }
+
+        const data = await response.json();
+        if (!Array.isArray(data.items)) {
+          showError("Error", "La respuesta paginada de productos no es válida.");
+          return;
+        }
+
+        setProducts(data.items.map(mapAdminProduct));
+        setProductsTotalItems(data.totalItems ?? 0);
+        setProductsTotalPages(data.totalPages ?? 0);
+
+        if (Number.isInteger(data.page) && data.page !== productsPage) {
+          setProductsPage(data.page);
+        }
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error("Error fetching admin products:", error);
+        showError("Error de red", "No se pudieron cargar los productos.");
+      } finally {
+        if (!controller.signal.aborted) setLoadingProducts(false);
+      }
+    };
+
+    void loadProductsPage();
+    return () => controller.abort();
+  }, [
+    adminToken,
+    currentView,
+    debouncedProductSearch,
+    offersFilter,
+    productsPage,
+    productsRefresh,
+    lastProductsUpdate,
+  ]);
+
   React.useEffect(() => {
     const fetchData = async () => {
       const authHeader: Record<string, string> = adminToken
@@ -746,54 +908,6 @@ export function AdminPanel() {
           );
         }
 
-        // Products
-        const productsRes = await fetch(`${API_BASE}/api/products`, {
-          headers: authHeader,
-        });
-        if (productsRes.status === 401) return handleSessionExpired();
-
-        if (productsRes.ok) {
-          const data = await productsRes.json();
-          const mappedProducts = data.map((p: any) => ({
-            id: p.id.toString(),
-            name: p.name ?? p.nombre,
-            price: p.price ?? p.precio,
-            stock: p.stock,
-            categories: Array.isArray(p.categories) ? p.categories : [],
-            category:
-              Array.isArray(p.categories) && p.categories.length > 0
-                ? p.categories.map((c: any) => c.name ?? c.nombre).join(", ")
-                : (p.categoryName ?? ""),
-            categoryId:
-              Array.isArray(p.categories) && p.categories.length > 0
-                ? p.categories[0].id
-                : (p.categoryId ?? undefined),
-            description: p.description ?? "",
-            imagePath: p.imagePath ?? p.imageUrl ?? "",
-            image: imgUrl(p.imagePath ?? p.imageUrl ?? ""),
-            active: p.active ?? true,
-            onOffer: p.offerPrice != null,
-            offerPrice: p.offerPrice ?? null,
-            measurementUnit: p.measurementUnit ?? "unidad",
-            gramages: Array.isArray(p.gramages) ? p.gramages : [],
-            wholesalePrice: p.wholesalePrice
-              ? {
-                  quantity: p.minimumWholesaleAmount ?? 10,
-                  price: p.wholesalePrice,
-                }
-              : undefined,
-          }));
-          setProducts(mappedProducts);
-        } else {
-          showError(
-            "Error",
-            await getApiErrorMessage(
-              productsRes,
-              "No se pudieron cargar los productos.",
-            ),
-          );
-        }
-
         // Coupons
         const couponsRes = await fetch(`${API_BASE}/api/coupons`, {
           headers: authHeader,
@@ -828,7 +942,7 @@ export function AdminPanel() {
     };
 
     fetchData();
-  }, [adminToken, lastProductsUpdate, lastCategoriesUpdate]);
+  }, [adminToken, lastCategoriesUpdate]);
 
   React.useEffect(() => {
     if (!adminToken) return;
@@ -1143,6 +1257,12 @@ export function AdminPanel() {
   };
 
   const handleEditProductClick = (product: any) => {
+    if (showProductForm && editingProductId === product.id) {
+      setShowProductForm(false);
+      setEditingProductId(null);
+      return;
+    }
+
     setEditingProductId(product.id);
     // Obtener IDs de categorías: preferir el array categories[], sino categoryId
     const existingCategoryIds: number[] =
@@ -1317,42 +1437,8 @@ export function AdminPanel() {
       });
 
       if (res.ok) {
-        const productsRes = await fetch(`${API_BASE}/api/products`, {
-          headers: getAuthHeaders(null),
-        });
-        if (productsRes.ok) {
-          const data = await productsRes.json();
-          const mapped = data.map((p: any) => ({
-            id: p.id.toString(),
-            name: p.name ?? p.nombre,
-            price: p.price ?? p.precio,
-            stock: p.stock,
-            description: p.description ?? "",
-            categories: Array.isArray(p.categories) ? p.categories : [],
-            category:
-              Array.isArray(p.categories) && p.categories.length > 0
-                ? p.categories.map((c: any) => c.name ?? c.nombre).join(", ")
-                : (p.categoryName ?? ""),
-            categoryId:
-              Array.isArray(p.categories) && p.categories.length > 0
-                ? p.categories[0].id
-                : (p.categoryId ?? undefined),
-            image: imgUrl(p.imagePath ?? p.imageUrl ?? ""),
-            imagePath: p.imagePath ?? p.imageUrl ?? "",
-            active: p.active ?? true,
-            offerPrice: p.offerPrice ?? null,
-            onOffer: p.offerPrice != null,
-            measurementUnit: p.measurementUnit ?? "unidad",
-            gramages: Array.isArray(p.gramages) ? p.gramages : [],
-            wholesalePrice: p.wholesalePrice
-              ? {
-                  quantity: p.minimumWholesaleAmount ?? 10,
-                  price: p.wholesalePrice,
-                }
-              : undefined,
-          }));
-          setProducts(mapped);
-        }
+        if (!editingProductId) setProductsPage(1);
+        setProductsRefresh((current) => current + 1);
 
         setShowProductForm(false);
         setEditingProductId(null);
@@ -1409,7 +1495,11 @@ export function AdminPanel() {
             headers: getAuthHeaders(null),
           });
           if (res.ok) {
-            setProducts((prev) => prev.filter((p) => p.id !== id));
+            if (products.length === 1 && productsPage > 1) {
+              setProductsPage((current) => current - 1);
+            } else {
+              setProductsRefresh((current) => current + 1);
+            }
             showSuccess("¡Borrado!", "El producto ya no está en la lista.");
           } else {
             const text = await res.text().catch(() => "");
@@ -2146,7 +2236,7 @@ export function AdminPanel() {
           } else {
             const errorData = await res.json().catch(() => ({}));
             const errorMsg: string =
-              errorData.message ?? errorData.title ?? errorData.detail ?? "";
+              errorData.detail ?? errorData.title ?? errorData.message ?? "";
 
             // 409 Conflict o mensaje que menciona productos asociados
             const hasLinkedProducts =
@@ -2230,6 +2320,63 @@ export function AdminPanel() {
     return isStatusChanged || (draftOfferActive && isPriceChanged);
   });
 
+  const handleProductsPageChange = (nextPage: number) => {
+    if (currentView === "products" && editingProductId) {
+      showError(
+        "Edición en curso",
+        "Guardá o cancelá la edición antes de cambiar de página.",
+      );
+      return;
+    }
+
+    if (currentView === "daily-offers" && hasOffersChanges) {
+      showError(
+        "Cambios sin guardar",
+        "Guardá o descartá los cambios de esta página antes de continuar.",
+      );
+      return;
+    }
+
+    setProductsPage(nextPage);
+  };
+
+  const handleOffersFilterChange = (nextFilter: "all" | "active" | "inactive") => {
+    if (hasOffersChanges) {
+      showError(
+        "Cambios sin guardar",
+        "Guardá o descartá los cambios antes de cambiar el filtro.",
+      );
+      return;
+    }
+
+    setOffersFilter(nextFilter);
+    setProductsPage(1);
+  };
+
+  const handleAdminViewChange = (nextView: AdminView) => {
+    if (currentView === "products" && editingProductId && nextView !== "products") {
+      showError(
+        "Edición en curso",
+        "Guardá o cancelá la edición antes de cambiar de sección.",
+      );
+      return;
+    }
+
+    if (currentView === "daily-offers" && hasOffersChanges) {
+      showError(
+        "Cambios sin guardar",
+        "Guardá o descartá los cambios de ofertas antes de cambiar de sección.",
+      );
+      return;
+    }
+
+    if (nextView === "products" || nextView === "daily-offers") {
+      setProductsPage(1);
+    }
+
+    setCurrentView(nextView);
+  };
+
   return (
     <div className="h-screen bg-background flex overflow-hidden">
       {/* Sidebar */}
@@ -2273,7 +2420,7 @@ export function AdminPanel() {
             <button
               key={item.id}
               id={`admin-nav-${item.id}`}
-              onClick={() => setCurrentView(item.id)}
+              onClick={() => handleAdminViewChange(item.id)}
               className={`w-full flex items-center ${isSidebarExpanded ? "justify-center px-0 md:justify-start md:gap-3 md:px-3" : "justify-center px-0"} py-2.5 rounded-lg transition-colors text-sm ${
                 currentView === item.id
                   ? "bg-sidebar-primary text-sidebar-primary-foreground"
@@ -2332,7 +2479,7 @@ export function AdminPanel() {
                 <button
                   id="new-product-btn"
                   onClick={() => {
-                    if (showProductForm) {
+                    if (showProductForm && !editingProductId) {
                       setShowProductForm(false);
                       setEditingProductId(null);
                     } else {
@@ -2341,17 +2488,24 @@ export function AdminPanel() {
                   }}
                   className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg transition-colors shadow-sm text-sm"
                 >
-                  {showProductForm ? (
+                  {showProductForm && !editingProductId ? (
                     <X className="w-4 h-4" />
                   ) : (
                     <Plus className="w-4 h-4" />
                   )}
-                  {showProductForm ? "Cancelar" : "Nuevo Producto"}
+                  {showProductForm && !editingProductId ? "Cancelar" : "Nuevo Producto"}
                 </button>
               </div>
 
               {showProductForm && (
-                <div className="bg-card border-2 border-primary/30 rounded-xl p-6 mb-6 shadow-sm">
+                <ProductFormPlacement
+                  editing={Boolean(editingProductId)}
+                  inlineTarget={inlineEditTarget}
+                >
+                  <div
+                    id="admin-product-form"
+                    className="bg-card border-2 border-primary/30 rounded-xl p-6 mb-6 shadow-sm"
+                  >
                   <h3 className="mb-5 text-base">
                     {editingProductId ? "Editar producto" : "Crear producto"}
                   </h3>
@@ -2361,6 +2515,7 @@ export function AdminPanel() {
                         Nombre *
                       </label>
                       <input
+                        id="admin-product-name"
                         type="text"
                         value={productForm.name || ""}
                         onChange={(e) =>
@@ -2838,7 +2993,8 @@ export function AdminPanel() {
                           : "Guardar producto"}
                     </button>
                   </div>
-                </div>
+                  </div>
+                </ProductFormPlacement>
               )}
 
               <div className="mb-4">
@@ -2847,7 +3003,8 @@ export function AdminPanel() {
                   placeholder="Buscar producto por nombre o categoría..."
                   value={productSearchTerm}
                   onChange={(e) => setProductSearchTerm(e.target.value)}
-                  className="w-full px-4 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                  disabled={Boolean(editingProductId)}
+                  className="w-full px-4 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </div>
 
@@ -2873,27 +3030,22 @@ export function AdminPanel() {
                     </tr>
                   </thead>
                   <tbody>
-                    {products
-                      .filter((p) => {
-                        const term = productSearchTerm.toLowerCase();
-                        if (p.name.toLowerCase().includes(term)) return true;
-                        if (
-                          Array.isArray(p.categories) &&
-                          p.categories.length > 0
-                        ) {
-                          return p.categories.some((c: any) =>
-                            (c.nombre ?? c.name ?? "")
-                              .toLowerCase()
-                              .includes(term),
-                          );
-                        }
-                        return (p.category ?? "").toLowerCase().includes(term);
-                      })
-                      .map((product) => (
-                        <tr
-                          key={product.id}
-                          className="border-t border-border hover:bg-secondary/20 transition-colors"
-                        >
+                    {loadingProducts ? (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-sm text-muted-foreground">
+                          Cargando productos...
+                        </td>
+                      </tr>
+                    ) : products.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-sm text-muted-foreground">
+                          No se encontraron productos.
+                        </td>
+                      </tr>
+                    ) : (
+                      products.map((product) => (
+                        <React.Fragment key={product.id}>
+                          <tr className="border-t border-border hover:bg-secondary/20 transition-colors">
                           <td className="p-4">
                             <div className="flex items-center gap-3">
                               <img
@@ -3016,10 +3168,24 @@ export function AdminPanel() {
                             <div className="flex gap-1 justify-end">
                               <button
                                 onClick={() => handleEditProductClick(product)}
-                                className="p-2 hover:bg-secondary rounded-lg transition-colors"
-                                title="Editar"
+                                aria-expanded={showProductForm && editingProductId === product.id}
+                                aria-controls={`admin-product-edit-${product.id}`}
+                                className={`p-2 rounded-lg transition-colors ${
+                                  showProductForm && editingProductId === product.id
+                                    ? "bg-primary/10 text-primary"
+                                    : "hover:bg-secondary"
+                                }`}
+                                title={
+                                  showProductForm && editingProductId === product.id
+                                    ? "Ocultar edición"
+                                    : "Modificar"
+                                }
                               >
-                                <Edit className="w-4 h-4" />
+                                {showProductForm && editingProductId === product.id ? (
+                                  <ChevronUp className="w-4 h-4" />
+                                ) : (
+                                  <Edit className="w-4 h-4" />
+                                )}
                               </button>
                               <button
                                 onClick={() => handleDeleteProduct(product.id)}
@@ -3030,11 +3196,31 @@ export function AdminPanel() {
                               </button>
                             </div>
                           </td>
-                        </tr>
-                      ))}
+                          </tr>
+                          {showProductForm && editingProductId === product.id && (
+                            <tr className="border-t border-primary/20 bg-secondary/10">
+                              <td colSpan={5} className="p-4">
+                                <div
+                                  id={`admin-product-edit-${product.id}`}
+                                  ref={handleInlineEditTarget}
+                                />
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
+              <AdminProductPagination
+                page={productsPage}
+                totalPages={productsTotalPages}
+                totalItems={productsTotalItems}
+                visibleItems={products.length}
+                loading={loadingProducts}
+                onPageChange={handleProductsPageChange}
+              />
             </div>
           )}
 
@@ -3074,12 +3260,12 @@ export function AdminPanel() {
                     Total productos
                   </span>
                   <span className="text-3xl font-extrabold tracking-tight mt-1">
-                    {products.length}
+                    {productsTotalItems}
                   </span>
                 </div>
                 <div className="bg-card border border-border rounded-xl p-5 shadow-sm flex flex-col justify-between h-28 hover:shadow-md transition-all duration-300">
                   <span className="text-sm font-medium text-muted-foreground">
-                    En oferta hoy
+                    En oferta en esta página
                   </span>
                   <span className="text-3xl font-extrabold tracking-tight mt-1 text-accent">
                     {Object.values(offersDraft).filter((d) => d.active).length}
@@ -3087,7 +3273,7 @@ export function AdminPanel() {
                 </div>
                 <div className="bg-card border border-border rounded-xl p-5 shadow-sm flex flex-col justify-between h-28 hover:shadow-md transition-all duration-300">
                   <span className="text-sm font-medium text-muted-foreground">
-                    Descuento promedio
+                    Promedio de esta página
                   </span>
                   <span className="text-3xl font-extrabold tracking-tight mt-1 text-chart-4">
                     {getAverageDiscount()}%
@@ -3104,12 +3290,13 @@ export function AdminPanel() {
                     placeholder="Buscar producto..."
                     value={offersSearchQuery}
                     onChange={(e) => setOffersSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                    disabled={hasOffersChanges}
+                    className="w-full pl-9 pr-4 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </div>
                 <div className="flex bg-secondary/40 p-1 border border-border rounded-lg self-start sm:self-auto">
                   <button
-                    onClick={() => setOffersFilter("all")}
+                    onClick={() => handleOffersFilterChange("all")}
                     className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
                       offersFilter === "all"
                         ? "bg-card text-foreground shadow-sm"
@@ -3119,7 +3306,7 @@ export function AdminPanel() {
                     Todos
                   </button>
                   <button
-                    onClick={() => setOffersFilter("active")}
+                    onClick={() => handleOffersFilterChange("active")}
                     className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
                       offersFilter === "active"
                         ? "bg-card text-foreground shadow-sm"
@@ -3129,7 +3316,7 @@ export function AdminPanel() {
                     Con oferta
                   </button>
                   <button
-                    onClick={() => setOffersFilter("inactive")}
+                    onClick={() => handleOffersFilterChange("inactive")}
                     className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
                       offersFilter === "inactive"
                         ? "bg-card text-foreground shadow-sm"
@@ -3170,7 +3357,16 @@ export function AdminPanel() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredOffersProducts.length === 0 ? (
+                    {loadingProducts ? (
+                      <tr>
+                        <td
+                          colSpan={5}
+                          className="p-8 text-center text-muted-foreground text-sm"
+                        >
+                          Cargando productos...
+                        </td>
+                      </tr>
+                    ) : filteredOffersProducts.length === 0 ? (
                       <tr>
                         <td
                           colSpan={5}
@@ -3290,6 +3486,14 @@ export function AdminPanel() {
                   </tbody>
                 </table>
               </div>
+              <AdminProductPagination
+                page={productsPage}
+                totalPages={productsTotalPages}
+                totalItems={productsTotalItems}
+                visibleItems={products.length}
+                loading={loadingProducts}
+                onPageChange={handleProductsPageChange}
+              />
 
               {/* Actions Bar */}
               <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-border/40">
@@ -4346,6 +4550,10 @@ export function AdminPanel() {
                           className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-secondary file:text-foreground hover:file:bg-secondary/80 cursor-pointer"
                         />
                       </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Tamaño recomendado: 1920 × 800 px (proporción 12:5).
+                        Formatos JPG, PNG o WebP, hasta 5 MB.
+                      </p>
                     </div>
                     <div className="col-span-2">
                       <label className="block text-sm mb-1.5">Título</label>

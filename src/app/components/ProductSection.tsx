@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ProductCard } from './ProductCard';
 import type { Product } from '../../lib/types';
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 25;
 
 interface ProductSectionProps {
   title: string;
@@ -14,10 +14,21 @@ interface ProductSectionProps {
   hideTitle?: boolean;
   viewAllLink?: string;
   paginated?: boolean;
+  showAllProducts?: boolean;
   headingLevel?: 'h1' | 'h2';
 }
 
-export function ProductSection({ title, products, id, viewMode, hideTitle, viewAllLink, paginated, headingLevel = 'h2' }: ProductSectionProps) {
+export function ProductSection({
+  title,
+  products,
+  id,
+  viewMode,
+  hideTitle,
+  viewAllLink,
+  paginated,
+  showAllProducts,
+  headingLevel = 'h2',
+}: ProductSectionProps) {
   const [showAll, setShowAll] = useState(false);
   const [page, setPage] = useState(1);
 
@@ -27,11 +38,18 @@ export function ProductSection({ title, products, id, viewMode, hideTitle, viewA
   }, [products.length]);
 
   const totalPages = Math.ceil(products.length / PAGE_SIZE);
-  const visibleProducts = paginated
-    ? products.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-    : showAll
+  const visibleProducts = showAllProducts
     ? products
-    : products.slice(0, PAGE_SIZE);
+    : paginated
+      ? products.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+      : showAll
+        ? products
+        : products.slice(0, PAGE_SIZE);
+  const shouldShowViewAll = !showAllProducts
+    && !paginated
+    && !showAll
+    && products.length > 0
+    && (Boolean(viewAllLink) || products.length > PAGE_SIZE);
   const Heading = headingLevel;
 
   const handlePageChange = (newPage: number) => {
@@ -68,13 +86,12 @@ export function ProductSection({ title, products, id, viewMode, hideTitle, viewA
         ) : (
           <>
             <div
-              className={`grid gap-6 ${
-                viewMode === 'list' 
-                  ? 'grid-cols-1' 
-                  : viewMode === 'grid-lg'
+              className={`grid gap-6 ${viewMode === 'list'
+                ? 'grid-cols-1'
+                : viewMode === 'grid-lg'
                   ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
-                  : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
-              }`}
+                  : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5'
+                }`}
             >
               {visibleProducts.map(product => (
                 <ProductCard key={product.id} product={product} viewMode={viewMode} />
@@ -96,11 +113,10 @@ export function ProductSection({ title, products, id, viewMode, hideTitle, viewA
                   <button
                     key={p}
                     onClick={() => handlePageChange(p)}
-                    className={`w-10 h-10 rounded-full text-sm font-bold transition-all ${
-                      p === page
-                        ? 'bg-primary text-primary-foreground shadow-md scale-110'
-                        : 'border border-border text-foreground hover:bg-secondary/50'
-                    }`}
+                    className={`w-10 h-10 rounded-full text-sm font-bold transition-all ${p === page
+                      ? 'bg-primary text-primary-foreground shadow-md scale-110'
+                      : 'border border-border text-foreground hover:bg-secondary/50'
+                      }`}
                   >
                     {p}
                   </button>
@@ -117,7 +133,7 @@ export function ProductSection({ title, products, id, viewMode, hideTitle, viewA
             )}
 
             {/* Botón "Ver todos" para la home */}
-            {!paginated && !showAll && products.length > PAGE_SIZE && (
+            {shouldShowViewAll && (
               <div className="mt-10 flex justify-center">
                 {viewAllLink ? (
                   <Link

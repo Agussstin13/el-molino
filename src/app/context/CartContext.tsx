@@ -72,11 +72,24 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const parsedItems = JSON.parse(stored) as CartItem[];
         if (parsedItems.length === 0) return;
 
-        const res = await fetch(`${API_BASE}/api/products`);
-        if (!res.ok) return;
-        const allData = await res.json();
+        const productIds = [...new Set(parsedItems.map(item => item.id))];
 
-        const activeDbProducts = new Map<string, any>(allData.map((r: any) => [
+        const allData = await Promise.all(
+          productIds.map(async productId => {
+            const response = await fetch(`${API_BASE}/api/products/${productId}`);
+
+            if (response.status === 404) return null;
+            if (!response.ok) throw new Error('No se pudo sincronizar el carrito.');
+
+            return await response.json();
+          }),
+        );
+
+        const existingProducts = allData.filter(
+          (product): product is any => product !== null,
+        );
+
+        const activeDbProducts = new Map<string, any>(existingProducts.map((r: any) => [
           r.id.toString(),
           {
             stock: r.stock,

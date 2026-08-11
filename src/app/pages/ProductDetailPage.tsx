@@ -248,68 +248,66 @@ export function ProductDetailPage() {
           setSelectedGramage(cur.gramages[0]);
         }
 
-        const allRes = await fetch(`${API_BASE}/api/products`);
-        if (!allRes.ok) return;
-        const allData = await allRes.json();
-        if (!Array.isArray(allData)) return;
+        const categoryIds: string[] = cur.categories?.map(category => category.id.toString()) ?? [];
 
-        const activeDbProducts = allData.map((r: any) => ({
-          id: r.id.toString(),
-          name: r.name ?? r.nombre,
-          price: r.price ?? r.precio,
-          stock: r.stock,
-          categories: Array.isArray(r.categories) ? r.categories : [],
-          category:
-            Array.isArray(r.categories) && r.categories.length > 0
-              ? r.categories
-                .map((c: any) => c.name ?? c.nombre ?? "")
-                .join(", ")
-              : (r.categoryName ?? r.description ?? ""),
-          categoryId:
-            Array.isArray(r.categories) && r.categories.length > 0
-              ? r.categories[0].id
-              : (r.categoryId ?? r.categoriaId),
-          image: imgUrl(r.imagePath ?? r.imageUrl ?? ""),
-          onOffer: r.offerPrice != null,
-          offerPrice: r.offerPrice ?? null,
-          discount:
-            r.offerPrice != null && r.price
-              ? Math.round(((r.price - r.offerPrice) / r.price) * 100)
-              : (r.discount ?? r.descuento ?? 0),
-          measurementUnit: r.measurementUnit ?? "unidad",
-          gramages: Array.isArray(r.gramages) ? r.gramages : [],
-        }));
+        if (categoryIds.length === 0 && cur.categoryId) {
+          categoryIds.push(cur.categoryId.toString());
+        }
 
-        setRelated(
-          activeDbProducts
-            .filter((r: any) => {
-              if (r.id.toString() === id) return false;
-              if (
-                Array.isArray(r.categories) &&
-                r.categories.length > 0 &&
-                Array.isArray(cur.categories) &&
-                cur.categories.length > 0
-              ) {
-                return r.categories.some((rc: any) =>
-                  cur.categories!.some((cc: any) => cc.id === rc.id),
-                );
-              }
-              return r.category === cur.category;
-            })
-            .slice(0, 4),
-        );
+        if (categoryIds.length > 0) {
+          const params = new URLSearchParams();
+          categoryIds.forEach(categoryId => params.append("categoryIds", categoryId));
+          params.set("page", "1");
+
+          const relatedRes = await fetch(`${API_BASE}/api/products/filtered?${params.toString()}`);
+
+          if (relatedRes.ok) {
+            const relatedData = await relatedRes.json();
+            const relatedProducts = Array.isArray(relatedData.items)
+              ? relatedData.items.map((r: any) => ({
+                id: r.id.toString(),
+                name: r.name ?? r.nombre,
+                price: r.price ?? r.precio,
+                stock: r.stock,
+                categories: Array.isArray(r.categories) ? r.categories : [],
+                category: Array.isArray(r.categories) && r.categories.length > 0
+                  ? r.categories.map((c: any) => c.name ?? c.nombre ?? "").join(", ")
+                  : (r.categoryName ?? r.description ?? ""),
+                categoryId: Array.isArray(r.categories) && r.categories.length > 0
+                  ? r.categories[0].id
+                  : (r.categoryId ?? r.categoriaId),
+                image: imgUrl(r.imagePath ?? r.imageUrl ?? ""),
+                onOffer: r.offerPrice != null,
+                offerPrice: r.offerPrice ?? null,
+                discount: r.offerPrice != null && r.price
+                  ? Math.round(((r.price - r.offerPrice) / r.price) * 100)
+                  : (r.discount ?? r.descuento ?? 0),
+                wholesalePrice: r.wholesalePrice
+                  ? {
+                    quantity: r.minimumWholesaleAmount ?? 10,
+                    price: r.wholesalePrice,
+                  }
+                  : undefined,
+                measurementUnit: r.measurementUnit ?? "unidad",
+                gramages: Array.isArray(r.gramages) ? r.gramages : [],
+                active: r.active ?? true,
+              }))
+              : [];
+
+            setRelated(
+              relatedProducts
+                .filter((relatedProduct: Product) => relatedProduct.id !== cur.id && relatedProduct.active)
+                .slice(0, 4),
+            );
+          }
+        }
 
         try {
-          const stored: Product[] = JSON.parse(
-            localStorage.getItem(RECENT_KEY) || "[]",
-          );
-          const activeIds = new Set(activeDbProducts.map((p) => p.id));
-          const next = [
-            cur,
-            ...stored.filter((r) => r.id !== cur.id && activeIds.has(r.id)),
-          ].slice(0, 8);
+          const stored: Product[] = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+          const next = [cur, ...stored.filter(recentProduct => recentProduct.id !== cur.id)].slice(0, 8);
+
           localStorage.setItem(RECENT_KEY, JSON.stringify(next));
-          setRecentlyViewed(next.filter((r) => r.id !== cur.id).slice(0, 4));
+          setRecentlyViewed(next.filter(recentProduct => recentProduct.id !== cur.id).slice(0, 4));
         } catch {
           /* noop */
         }

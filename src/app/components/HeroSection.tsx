@@ -85,7 +85,7 @@ export function HeroSection() {
 
   if (loading) {
     return (
-      <section className="relative h-[500px] md:h-[625px] overflow-hidden bg-secondary animate-pulse" />
+      <section className="relative w-full aspect-[12/5] overflow-hidden bg-secondary animate-pulse" />
     );
   }
 
@@ -94,7 +94,7 @@ export function HeroSection() {
   }
 
   return (
-    <section className="relative h-[500px] md:h-[625px] overflow-hidden">
+    <section className="relative w-full aspect-[12/5] overflow-hidden">
       {/* Slides container */}
       <div className="relative w-full h-full">
         {displaySlides.map((banner, idx) => (
@@ -117,7 +117,7 @@ export function HeroSection() {
           >
             {/* Background image */}
             <div
-              className="absolute inset-0 bg-cover bg-center"
+              className="absolute inset-0 bg-cover bg-center bg-no-repeat bg-secondary"
               style={{
                 backgroundImage: banner.image
                   ? `url('${banner.image}')`
