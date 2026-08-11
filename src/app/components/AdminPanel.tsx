@@ -1378,10 +1378,6 @@ export function AdminPanel() {
 
       if (editingProductId) {
         formData.append("Id", editingProductId);
-        const currentProd = products.find((p) => p.id === editingProductId);
-        if (currentProd?.imagePath) {
-          formData.append("ExistingImagePath", currentProd.imagePath);
-        }
       }
 
       const res = await fetch(url, {
@@ -1782,7 +1778,6 @@ export function AdminPanel() {
         formData.append("Id", String(editingCarouselId));
         formData.append("Title", carouselForm.titulo || "");
         formData.append("Description", carouselForm.subtitulo || "");
-        formData.append("ExistingImageUrl", carouselForm.imagenNombre);
         formData.append("RedirectUrl", carouselForm.redirectUrl || "");
         formData.append("DisplayOrder", String(carouselForm.orden));
         formData.append("Active", String(carouselForm.activo));
@@ -1992,7 +1987,6 @@ export function AdminPanel() {
       formData.append("Id", String(id));
       formData.append("Title", item.titulo || "");
       formData.append("Description", item.subtitulo || "");
-      formData.append("ExistingImageUrl", item.imagenNombre);
       formData.append("DisplayOrder", String(item.orden));
       formData.append("Active", String(!current));
       const res = await fetch(`${API_BASE}/api/carousel/${id}`, {
@@ -2044,10 +2038,7 @@ export function AdminPanel() {
       formData.append("Name", categoryForm.nombre);
       formData.append("DisplayOrder", String(categoryForm.orden));
       if (categoryImageFile) formData.append("Image", categoryImageFile);
-      // En edición, pasar la URL actual para que el servicio pueda borrar la vieja si se sube una nueva
-      if (editingCategoryId) {
-        formData.append("ExistingImagePath", categoryForm.imagenNombre);
-      }
+      if (editingCategoryId && !categoryForm.imagenNombre && !categoryImageFile) formData.append("RemoveImage", "true");
 
       const res = await fetch(url, {
         method,
