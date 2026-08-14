@@ -306,6 +306,12 @@ export function GuestOrderPage() {
           </div>
 
           <div className="pt-3 space-y-1">
+            {order.couponDiscount > 0 && (
+              <div className="flex justify-between text-sm text-emerald-600">
+                <span>Descuento por cupón</span>
+                <span>-{formatARS(order.couponDiscount)}</span>
+              </div>
+            )}
             {order.shippingCost > 0 && (
               <div className="flex justify-between text-sm text-muted-foreground">
                 <span>Envío</span>

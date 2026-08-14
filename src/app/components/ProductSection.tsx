@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ProductCard } from './ProductCard';
 import type { Product } from '../../lib/types';
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 42;
 
 interface ProductSectionProps {
   title: string;
@@ -65,7 +65,7 @@ export function ProductSection({
 
   return (
     <section className="py-8" id={id}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
         {!hideTitle && (
           <div className="relative flex items-center justify-center mb-10">
             <div className="absolute inset-0 flex items-center" aria-hidden="true">
@@ -90,7 +90,7 @@ export function ProductSection({
                 ? 'grid-cols-1'
                 : viewMode === 'grid-lg'
                   ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
-                  : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5'
+                  : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 justify-items-center'
                 }`}
             >
               {visibleProducts.map(product => (

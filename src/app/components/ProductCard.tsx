@@ -214,7 +214,7 @@ export function ProductCard({
   /* ─────────────────────────── VISTA GRID ──────────────────────────────── */
   return (
     <div
-      className="relative bg-card rounded-3xl overflow-hidden border border-border/50 shadow-sm cursor-pointer flex flex-col transition-all duration-300 hover:shadow-lg hover:-translate-y-1 hover:border-primary/20 h-full"
+      className="relative w-full bg-card rounded-3xl overflow-hidden border border-border/50 shadow-sm cursor-pointer flex flex-col transition-all duration-300 hover:shadow-lg hover:-translate-y-1 hover:border-primary/20 h-full"
       onClick={() => navigate(detailPath)}
       id={`product-card-${product.id}`}
     >

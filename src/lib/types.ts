@@ -86,6 +86,8 @@ export interface Order {
   direccionEnvio?: string;
   estadoPago?: string;
   shippingCost?: number;
+  couponDiscount?: number;
+  couponId?: number;
   items?: OrderItem[];
   guestToken?: string;
   cancelledAt?: string;

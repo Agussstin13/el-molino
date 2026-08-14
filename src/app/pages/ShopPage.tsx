@@ -3,6 +3,7 @@ import { Link, useSearchParams, useLocation, useParams } from 'react-router-dom'
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Header } from '../components/Header';
 import { HeroSection } from '../components/HeroSection';
+import { CategoryGrid, type ShopCategory } from '../components/CategoryGrid';
 import { ProductSection } from '../components/ProductSection';
 import { Seo } from '../components/Seo';
 import { Footer } from '../components/Footer';
@@ -32,7 +33,8 @@ export function ShopPage() {
       : searchParams.get('seccion');
   const [products, setProducts] = useState<Product[]>([]);
   const [topSellingProducts, setTopSellingProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
+  const [categories, setCategories] = useState<ShopCategory[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
   const [loading, setLoading] = useState(true);
   const [totalPages, setTotalPages] = useState(0);
   const [viewMode, setViewMode] = useState<'list' | 'grid-sm' | 'grid-lg'>('grid-sm');
@@ -46,7 +48,8 @@ export function ShopPage() {
       .then(data => {
         if (Array.isArray(data)) setCategories(data);
       })
-      .catch(err => console.error("Error fetching categories:", err));
+      .catch(err => console.error("Error fetching categories:", err))
+      .finally(() => setLoadingCategories(false));
   }, [lastCategoriesUpdate]);
 
   useEffect(() => {
@@ -428,7 +431,12 @@ export function ShopPage() {
       />
       <Header />
       <main className="flex-1">
-        {!isFilteredView && <HeroSection />}
+        {!isFilteredView && (
+          <>
+            <HeroSection />
+            <CategoryGrid categories={categories} loading={loadingCategories} />
+          </>
+        )}
         {isFilteredView && (
           <div className="pt-8 pb-0" id="productos-lista">
             <ShopFilters

@@ -19,7 +19,6 @@ import {
   Upload,
   Percent,
   Search,
-  Calendar,
   ChevronDown,
   ChevronUp,
   ChevronLeft,
@@ -32,6 +31,8 @@ import {
   Hash,
   Truck,
   Save,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { motion, Reorder } from "motion/react";
 import { useNavigate } from "react-router-dom";
@@ -61,7 +62,6 @@ type AdminView =
   | "payment-methods"
   | "carousel"
   | "categories"
-  | "daily-offers"
   | "shipping";
 
 const EMPTY_CAROUSEL: Omit<CarouselImage, "id"> = {
@@ -101,13 +101,51 @@ const EMPTY_COUPON: Omit<Coupon, "id"> = {
   valido_mayorista: false,
 };
 
+interface CouponApiResponse {
+  id: number;
+  nombre: string;
+  detalle: string;
+  codigo: string;
+  monto: number | null;
+  porcentaje: number | null;
+  tope: number | null;
+  compraMinima: number | null;
+  activo: boolean;
+  validoMayorista: boolean;
+}
+
+const mapCoupon = (coupon: CouponApiResponse): Coupon => ({
+  id: coupon.id.toString(),
+  nombre: coupon.nombre,
+  detalle: coupon.detalle,
+  codigo: coupon.codigo,
+  monto: coupon.monto,
+  porcentaje: coupon.porcentaje,
+  tope: coupon.tope,
+  compra_minima: coupon.compraMinima,
+  activo: coupon.activo,
+  valido_mayorista: coupon.validoMayorista,
+});
+
 const EMPTY_CATEGORY: Omit<Category, "id"> = {
   nombre: "",
   imagenNombre: "",
   orden: 0,
 };
 
-const ADMIN_PRODUCTS_PAGE_SIZE = 25;
+interface ProductCatalogSummary {
+  totalProducts: number;
+  productsOnOffer: number;
+  activeProductsOutOfStock: number;
+}
+
+type ProductOfferFilter = "all" | "with-offer" | "without-offer";
+type ProductStatusFilter = "all" | "active" | "inactive";
+
+function getDiscountPercentage(product: Product): number | null {
+  if (product.offerPrice == null || product.price <= 0) return null;
+  return Math.round(((product.price - product.offerPrice) / product.price) * 100);
+}
 
 function mapAdminProduct(product: any): Product {
   const imagePath = product.imagePath ?? product.imageUrl ?? "";
@@ -162,7 +200,7 @@ function AdminProductPagination({
 }: AdminProductPaginationProps) {
   if (totalItems === 0) return null;
 
-  const firstItem = (page - 1) * ADMIN_PRODUCTS_PAGE_SIZE + 1;
+  const firstItem = (page - 1) * 42 + 1;
   const lastItem = firstItem + visibleItems - 1;
 
   return (
@@ -220,6 +258,7 @@ export function AdminPanel() {
   const [currentView, setCurrentView] = useState<AdminView>("products");
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [visibleCouponCodes, setVisibleCouponCodes] = useState<Set<string>>(new Set());
   const [orders, setOrders] = useState<Order[]>([]);
   const [showCouponForm, setShowCouponForm] = useState(false);
   const [editingCouponId, setEditingCouponId] = useState<string | null>(null);
@@ -228,6 +267,10 @@ export function AdminPanel() {
   const [tipoDescuento, setTipoDescuento] = useState<"monto" | "porcentaje">(
     "porcentaje",
   );
+
+  useEffect(() => {
+    if (currentView === "promotions") setVisibleCouponCodes(new Set());
+  }, [currentView]);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [productsPage, setProductsPage] = useState(1);
@@ -259,7 +302,13 @@ export function AdminPanel() {
   const [productImageFile, setProductImageFile] = useState<File | null>(null);
   const [productImagePreview, setProductImagePreview] = useState<string>("");
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [editingPriceProductId, setEditingPriceProductId] = useState<string | null>(null);
+  const [priceDraft, setPriceDraft] = useState({ price: "", offerPrice: "" });
+  const [savingPriceProductId, setSavingPriceProductId] = useState<string | null>(null);
   const [productSearchTerm, setProductSearchTerm] = useState("");
+  const [productOfferFilter, setProductOfferFilter] = useState<ProductOfferFilter>("all");
+  const [productStatusFilter, setProductStatusFilter] = useState<ProductStatusFilter>("all");
+  const [productCatalogSummary, setProductCatalogSummary] = useState<ProductCatalogSummary | null>(null);
 
   // Carousel state
   const [carouselImages, setCarouselImages] = useState<CarouselImage[]>([]);
@@ -301,16 +350,6 @@ export function AdminPanel() {
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(
     null,
   );
-
-  // Daily offers state
-  const [offersDraft, setOffersDraft] = useState<
-    Record<string, { active: boolean; offerPrice: string | number }>
-  >({});
-  const [offersSearchQuery, setOffersSearchQuery] = useState("");
-  const [offersFilter, setOffersFilter] = useState<
-    "all" | "active" | "inactive"
-  >("all");
-  const [isSavingOffers, setIsSavingOffers] = useState(false);
 
   // Shipping state
   interface ShippingRateAdmin {
@@ -365,174 +404,10 @@ export function AdminPanel() {
 
   useEffect(() => {
     document.title = "El Molino - Admin";
-    if (currentView === "daily-offers") {
-      const initialDraft: Record<
-        string,
-        { active: boolean; offerPrice: string | number }
-      > = {};
-      products.forEach((p) => {
-        initialDraft[p.id] = {
-          active: p.offerPrice != null,
-          offerPrice: p.offerPrice ? formatInputPrice(p.offerPrice) : "",
-        };
-      });
-      setOffersDraft(initialDraft);
-    }
     if (currentView === "shipping") {
       fetchShippingRates();
     }
-  }, [currentView, products]);
-
-  const handleToggleOfferDraft = (productId: string) => {
-    setOffersDraft((prev) => {
-      const current = prev[productId] || { active: false, offerPrice: "" };
-      const nextActive = !current.active;
-
-      let nextOfferPrice = current.offerPrice;
-      if (nextActive && !nextOfferPrice) {
-        const prod = products.find((p) => p.id === productId);
-        if (prod) {
-          const suggested = Math.round(prod.price * 0.9);
-          nextOfferPrice = formatInputPrice(suggested);
-        }
-      } else if (!nextActive) {
-        nextOfferPrice = "";
-      }
-
-      return {
-        ...prev,
-        [productId]: {
-          active: nextActive,
-          offerPrice: nextOfferPrice,
-        },
-      };
-    });
-  };
-
-  const handleOfferPriceDraftChange = (productId: string, value: string) => {
-    setOffersDraft((prev) => {
-      const current = prev[productId] || { active: false, offerPrice: "" };
-      return {
-        ...prev,
-        [productId]: {
-          ...current,
-          offerPrice: formatInputPrice(value),
-        },
-      };
-    });
-  };
-
-  const getDiscountPercentage = (productId: string): number | null => {
-    const prod = products.find((p) => p.id === productId);
-    if (!prod) return null;
-
-    const draft = offersDraft[productId];
-    if (!draft || !draft.active) return null;
-
-    const offerVal = parseInputPrice(draft.offerPrice);
-    if (offerVal <= 0 || offerVal >= prod.price) return null;
-
-    const discount = ((prod.price - offerVal) / prod.price) * 100;
-    return Math.round(discount);
-  };
-
-  const getAverageDiscount = (): number => {
-    let sum = 0;
-    let count = 0;
-    products.forEach((p) => {
-      const draft = offersDraft[p.id];
-      if (draft && draft.active) {
-        const offerVal = parseInputPrice(draft.offerPrice);
-        if (offerVal > 0 && offerVal < p.price) {
-          sum += ((p.price - offerVal) / p.price) * 100;
-          count++;
-        }
-      }
-    });
-    return count > 0 ? Math.round(sum / count) : 0;
-  };
-
-  const handleSaveDailyOffers = async () => {
-    const dirtyProducts = products.filter((p) => {
-      const draft = offersDraft[p.id];
-      if (!draft) return false;
-      const parsedDraftPrice = parseInputPrice(draft.offerPrice);
-      const currentOfferActive = p.offerPrice != null;
-      const draftOfferActive = draft.active;
-      const isStatusChanged = draftOfferActive !== currentOfferActive;
-      const isPriceChanged = parsedDraftPrice !== (p.offerPrice ?? 0);
-      return isStatusChanged || (draftOfferActive && isPriceChanged);
-    });
-
-    if (dirtyProducts.length === 0) {
-      showError(
-        "Sin cambios",
-        "No se detectaron modificaciones en las ofertas.",
-      );
-      return;
-    }
-
-    for (const p of dirtyProducts) {
-      const draft = offersDraft[p.id];
-      if (draft.active) {
-        const parsedDraftPrice = parseInputPrice(draft.offerPrice);
-        if (parsedDraftPrice >= p.price) {
-          showError(
-            "Error de precio",
-            `El producto "${p.name}" tiene un precio de oferta (${formatARS(parsedDraftPrice)}) mayor o igual a su precio normal (${formatARS(p.price)}).`,
-          );
-          return;
-        }
-        if (p.wholesalePrice && parsedDraftPrice <= p.wholesalePrice.price) {
-          showError(
-            "Error en promoción",
-            `El producto "${p.name}" tiene un precio de oferta (${formatARS(parsedDraftPrice)}) menor o igual a su precio mayorista (${formatARS(p.wholesalePrice.price)}).`,
-          );
-          return;
-        }
-      }
-    }
-
-    setIsSavingOffers(true);
-    try {
-      const response = await fetch(`${API_BASE}/api/products/offers`, {
-        method: "PATCH",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          products: dirtyProducts.map((product) => {
-            const draft = offersDraft[product.id];
-            return {
-              id: Number(product.id),
-              offerPrice: draft.active
-                ? parseInputPrice(draft.offerPrice)
-                : null,
-            };
-          }),
-        }),
-      });
-
-      if (!response.ok) {
-        showError(
-          "No se pudieron guardar las ofertas",
-          await getApiErrorMessage(
-            response,
-            "No se pudieron actualizar las ofertas modificadas.",
-          ),
-        );
-        return;
-      }
-
-      setProductsRefresh((current) => current + 1);
-      showSuccess(
-        "¡Ofertas guardadas!",
-        `Se actualizaron con éxito las ofertas de ${dirtyProducts.length} producto(s).`,
-      );
-    } catch {
-      showError("Problema de red", "No pudimos conectar con el servidor.");
-    } finally {
-      setIsSavingOffers(false);
-    }
-  };
+  }, [currentView]);
 
   // ── Shipping handlers ──────────────────────────────────────────────────────
   const fetchShippingRates = async () => {
@@ -697,23 +572,19 @@ export function AdminPanel() {
     return error?.detail || error?.title || error?.message || fallback;
   };
 
-  const activeProductSearch = currentView === "daily-offers"
-    ? offersSearchQuery
-    : productSearchTerm;
-
   useEffect(() => {
-    if (currentView !== "products" && currentView !== "daily-offers") return;
+    if (currentView !== "products") return;
 
     const timeoutId = window.setTimeout(() => {
-      setDebouncedProductSearch(activeProductSearch.trim());
+      setDebouncedProductSearch(productSearchTerm.trim());
       setProductsPage(1);
     }, 300);
 
     return () => window.clearTimeout(timeoutId);
-  }, [activeProductSearch, currentView]);
+  }, [productSearchTerm, currentView]);
 
   useEffect(() => {
-    if (!adminToken || (currentView !== "products" && currentView !== "daily-offers")) return;
+    if (!adminToken || currentView !== "products") return;
 
     const controller = new AbortController();
 
@@ -730,8 +601,12 @@ export function AdminPanel() {
           params.set("productName", debouncedProductSearch);
         }
 
-        if (currentView === "daily-offers" && offersFilter !== "all") {
-          params.set("hasOffer", String(offersFilter === "active"));
+        if (productOfferFilter !== "all") {
+          params.set("hasOffer", String(productOfferFilter === "with-offer"));
+        }
+
+        if (productStatusFilter !== "all") {
+          params.set("active", String(productStatusFilter === "active"));
         }
 
         const response = await fetch(`${API_BASE}/api/products?${params.toString()}`, {
@@ -775,11 +650,54 @@ export function AdminPanel() {
     adminToken,
     currentView,
     debouncedProductSearch,
-    offersFilter,
+    productOfferFilter,
+    productStatusFilter,
     productsPage,
     productsRefresh,
     lastProductsUpdate,
   ]);
+
+  useEffect(() => {
+    if (!adminToken || currentView !== "products") return;
+
+    const controller = new AbortController();
+
+    const loadProductCatalogSummary = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/products/catalog-summary`, {
+          headers: { Authorization: `Bearer ${adminToken}` },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          showError(
+            "No se pudo cargar el resumen",
+            await getApiErrorMessage(response, "No se pudieron obtener las métricas del catálogo."),
+          );
+          return;
+        }
+
+        const data = await response.json();
+        if (
+          !Number.isInteger(data.totalProducts) ||
+          !Number.isInteger(data.productsOnOffer) ||
+          !Number.isInteger(data.activeProductsOutOfStock)
+        ) {
+          showError("No se pudo cargar el resumen", "La respuesta de métricas del catálogo no es válida.");
+          return;
+        }
+
+        setProductCatalogSummary(data);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error("Error fetching product catalog summary:", error);
+        showError("Error de red", "No se pudieron cargar las métricas del catálogo.");
+      }
+    };
+
+    void loadProductCatalogSummary();
+    return () => controller.abort();
+  }, [adminToken, currentView, productsRefresh, lastProductsUpdate]);
 
   React.useEffect(() => {
     const fetchData = async () => {
@@ -869,14 +787,8 @@ export function AdminPanel() {
         if (couponsRes.status === 401) return handleSessionExpired();
 
         if (couponsRes.ok) {
-          const data = await couponsRes.json();
-          const mappedCoupons = data.map((c: any) => ({
-            ...c,
-            id: c.id.toString(),
-            compra_minima: c.compraMinima,
-            valido_mayorista: c.validoMayorista,
-          }));
-          setCoupons(mappedCoupons);
+          const data: CouponApiResponse[] = await couponsRes.json();
+          setCoupons(data.map(mapCoupon));
         } else {
           showError(
             "Error",
@@ -926,6 +838,8 @@ export function AdminPanel() {
             direccionEnvio: o.shippingAddress,
             estadoPago: o.paymentStatus,
             shippingCost: o.shippingCost,
+            couponDiscount: o.couponDiscount,
+            couponId: o.couponId,
             items: o.items,
             fechaCreacion: o.createdAt || o.fechaCreacion,
           }));
@@ -1188,6 +1102,11 @@ export function AdminPanel() {
   };
 
   const handleNewProductClick = () => {
+    if (editingPriceProductId) {
+      showError("Edición de precios en curso", "Guardá o cancelá los cambios de precios antes de crear un producto.");
+      return;
+    }
+
     setEditingProductId(null);
     setProductForm({
       name: "",
@@ -1211,6 +1130,11 @@ export function AdminPanel() {
   };
 
   const handleEditProductClick = (product: any) => {
+    if (editingPriceProductId) {
+      showError("Edición de precios en curso", "Guardá o cancelá los cambios de precios antes de modificar los detalles.");
+      return;
+    }
+
     if (showProductForm && editingProductId === product.id) {
       setShowProductForm(false);
       setEditingProductId(null);
@@ -1249,6 +1173,88 @@ export function AdminPanel() {
     setProductImagePreview(product.image || "");
     setProductImageFile(null);
     setShowProductForm(true);
+  };
+
+  const handleStartPriceEdit = (product: Product) => {
+    if (editingProductId) {
+      showError("Edición de producto en curso", "Guardá o cancelá la edición completa antes de modificar los precios.");
+      return;
+    }
+
+    if (editingPriceProductId && editingPriceProductId !== product.id) {
+      showError("Edición de precios en curso", "Guardá o cancelá los cambios actuales antes de editar otro producto.");
+      return;
+    }
+
+    setEditingPriceProductId(product.id);
+    setPriceDraft({
+      price: formatInputPrice(product.price),
+      offerPrice: product.offerPrice != null ? formatInputPrice(product.offerPrice) : "",
+    });
+  };
+
+  const handleCancelPriceEdit = () => {
+    setEditingPriceProductId(null);
+    setPriceDraft({ price: "", offerPrice: "" });
+  };
+
+  const handleSavePrices = async (product: Product) => {
+    const price = parseInputPrice(priceDraft.price);
+    const hasOffer = priceDraft.offerPrice.trim().length > 0;
+    const offerPrice = hasOffer ? parseInputPrice(priceDraft.offerPrice) : null;
+
+    if (price <= 0) {
+      showError("Precio normal inválido", "El precio normal debe ser mayor a 0.");
+      return;
+    }
+
+    if (product.wholesalePrice && price <= product.wholesalePrice.price) {
+      showError("Precio normal inválido", "El precio normal debe ser mayor al precio mayorista.");
+      return;
+    }
+
+    if (hasOffer && (!offerPrice || offerPrice >= price)) {
+      showError("Precio con descuento inválido", "El precio con descuento debe ser mayor a 0 y menor al precio normal.");
+      return;
+    }
+
+    if (offerPrice && product.wholesalePrice && offerPrice <= product.wholesalePrice.price) {
+      showError("Precio con descuento inválido", "El precio con descuento debe ser mayor al precio mayorista.");
+      return;
+    }
+
+    setSavingPriceProductId(product.id);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/products/${product.id}/prices`, {
+        method: "PATCH",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ price, offerPrice }),
+      });
+
+      if (response.status === 401) {
+        handleSessionExpired();
+        return;
+      }
+
+      if (!response.ok) {
+        showError(
+          "No se pudieron actualizar los precios",
+          await getApiErrorMessage(response, "Revisá los valores e intentá nuevamente."),
+        );
+        return;
+      }
+
+      setProducts((current) => current.map((item) => item.id === product.id ? { ...item, price, offerPrice } : item));
+      setEditingPriceProductId(null);
+      setPriceDraft({ price: "", offerPrice: "" });
+      setProductsRefresh((current) => current + 1);
+      showSuccess("Precios actualizados", `Los precios de ${product.name} se guardaron correctamente.`);
+    } catch {
+      showError("Problema de red", "No pudimos conectar con el servidor.");
+    } finally {
+      setSavingPriceProductId(null);
+    }
   };
 
   const handleSaveProduct = async () => {
@@ -1486,13 +1492,18 @@ export function AdminPanel() {
   };
 
   const handleSaveCoupon = async () => {
+    if (!couponForm.nombre.trim() || !couponForm.detalle.trim() || !couponForm.codigo.trim()) {
+      showError("Datos inválidos", "Completá el nombre, el código y la descripción del cupón.");
+      return;
+    }
+
     if (
       tipoDescuento === "porcentaje" &&
-      (!couponForm.porcentaje || couponForm.porcentaje <= 0)
+      (!couponForm.porcentaje || couponForm.porcentaje <= 0 || couponForm.porcentaje > 100)
     ) {
       showError(
         "Datos inválidos",
-        "El porcentaje de descuento debe ser mayor a 0.",
+        "El porcentaje de descuento debe estar entre 1 y 100.",
       );
       return;
     }
@@ -1555,9 +1566,9 @@ export function AdminPanel() {
     }
 
     const backendCoupon = {
-      nombre: couponForm.nombre,
-      detalle: couponForm.detalle,
-      codigo: couponForm.codigo,
+      nombre: couponForm.nombre.trim(),
+      detalle: couponForm.detalle.trim(),
+      codigo: couponForm.codigo.trim().toUpperCase(),
       monto: tipoDescuento === "monto" ? Number(couponForm.monto) : null,
       porcentaje:
         tipoDescuento === "porcentaje" ? Number(couponForm.porcentaje) : null,
@@ -1577,45 +1588,22 @@ export function AdminPanel() {
         ? `${API_BASE}/api/coupons/${editingCouponId}`
         : `${API_BASE}/api/coupons`;
       const method = editingCouponId ? "PUT" : "POST";
-      const payload = editingCouponId
-        ? { ...backendCoupon, id: parseInt(editingCouponId) }
-        : backendCoupon;
 
       const res = await fetch(url, {
         method,
         headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
+        body: JSON.stringify(backendCoupon),
       });
 
       if (res.ok) {
+        const savedCoupon = mapCoupon(await res.json());
         if (editingCouponId) {
-          const updatedCoupon: Coupon = {
-            ...couponForm,
-            id: editingCouponId,
-            monto: backendCoupon.monto,
-            porcentaje: backendCoupon.porcentaje,
-            tope: backendCoupon.tope,
-            compra_minima: backendCoupon.compraMinima,
-            activo: backendCoupon.activo,
-            valido_mayorista: backendCoupon.validoMayorista,
-          };
-          setCoupons(
-            coupons.map((c) => (c.id === editingCouponId ? updatedCoupon : c)),
+          setCoupons((current) =>
+            current.map((coupon) => (coupon.id === editingCouponId ? savedCoupon : coupon)),
           );
           showSuccess("¡Listo!", "El cupón se actualizó correctamente.");
         } else {
-          const created = await res.json();
-          const newCoupon: Coupon = {
-            ...couponForm,
-            id: created.id.toString(),
-            monto: created.monto,
-            porcentaje: created.porcentaje,
-            tope: created.tope,
-            compra_minima: created.compraMinima,
-            activo: created.activo,
-            valido_mayorista: created.validoMayorista,
-          };
-          setCoupons((prev) => [newCoupon, ...prev]);
+          setCoupons((current) => [savedCoupon, ...current]);
           showSuccess("¡Listo!", "El cupón se guardó correctamente.");
         }
         setCouponForm(EMPTY_COUPON);
@@ -1685,6 +1673,15 @@ export function AdminPanel() {
         }
       },
     );
+  };
+
+  const toggleCouponCodeVisibility = (id: string) => {
+    setVisibleCouponCodes((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const setCF = (field: keyof Omit<Coupon, "id">, value: unknown) => {
@@ -2223,50 +2220,14 @@ export function AdminPanel() {
     { id: "orders" as AdminView, icon: ShoppingBag, label: "Pedidos" },
     { id: "payment-methods" as AdminView, icon: CreditCard, label: "Pagos" },
     { id: "products" as AdminView, icon: Package, label: "Productos" },
-    {
-      id: "daily-offers" as AdminView,
-      icon: Percent,
-      label: "Ofertas del día",
-    },
     { id: "promotions" as AdminView, icon: Tag, label: "Cupones" },
     { id: "carousel" as AdminView, icon: ImageIcon, label: "Carousel" },
     { id: "categories" as AdminView, icon: Layers, label: "Categorías" },
     { id: "shipping" as AdminView, icon: Truck, label: "Envíos" },
   ];
 
-  const filteredOffersProducts = products.filter((p) => {
-    if (offersSearchQuery) {
-      const q = offersSearchQuery.toLowerCase();
-      const matchesName = p.name.toLowerCase().includes(q);
-      const catNames =
-        Array.isArray(p.categories) && p.categories.length > 0
-          ? p.categories
-              .map((c: any) => (c.nombre ?? c.name ?? "").toLowerCase())
-              .join(" ")
-          : (p.category ?? "").toLowerCase();
-      const matchesCat = catNames.includes(q);
-      if (!matchesName && !matchesCat) return false;
-    }
-    const draft = offersDraft[p.id];
-    const isOnOffer = draft ? draft.active : p.offerPrice != null;
-    if (offersFilter === "active") return isOnOffer;
-    if (offersFilter === "inactive") return !isOnOffer;
-    return true;
-  });
-
-  const hasOffersChanges = products.some((p) => {
-    const draft = offersDraft[p.id];
-    if (!draft) return false;
-    const parsedDraftPrice = parseInputPrice(draft.offerPrice);
-    const currentOfferActive = p.offerPrice != null;
-    const draftOfferActive = draft.active;
-    const isStatusChanged = draftOfferActive !== currentOfferActive;
-    const isPriceChanged = parsedDraftPrice !== (p.offerPrice ?? 0);
-    return isStatusChanged || (draftOfferActive && isPriceChanged);
-  });
-
   const handleProductsPageChange = (nextPage: number) => {
-    if (currentView === "products" && editingProductId) {
+    if (editingProductId || editingPriceProductId) {
       showError(
         "Edición en curso",
         "Guardá o cancelá la edición antes de cambiar de página.",
@@ -2274,32 +2235,11 @@ export function AdminPanel() {
       return;
     }
 
-    if (currentView === "daily-offers" && hasOffersChanges) {
-      showError(
-        "Cambios sin guardar",
-        "Guardá o descartá los cambios de esta página antes de continuar.",
-      );
-      return;
-    }
-
     setProductsPage(nextPage);
   };
 
-  const handleOffersFilterChange = (nextFilter: "all" | "active" | "inactive") => {
-    if (hasOffersChanges) {
-      showError(
-        "Cambios sin guardar",
-        "Guardá o descartá los cambios antes de cambiar el filtro.",
-      );
-      return;
-    }
-
-    setOffersFilter(nextFilter);
-    setProductsPage(1);
-  };
-
   const handleAdminViewChange = (nextView: AdminView) => {
-    if (currentView === "products" && editingProductId && nextView !== "products") {
+    if (currentView === "products" && (editingProductId || editingPriceProductId) && nextView !== "products") {
       showError(
         "Edición en curso",
         "Guardá o cancelá la edición antes de cambiar de sección.",
@@ -2307,17 +2247,7 @@ export function AdminPanel() {
       return;
     }
 
-    if (currentView === "daily-offers" && hasOffersChanges) {
-      showError(
-        "Cambios sin guardar",
-        "Guardá o descartá los cambios de ofertas antes de cambiar de sección.",
-      );
-      return;
-    }
-
-    if (nextView === "products" || nextView === "daily-offers") {
-      setProductsPage(1);
-    }
+    if (nextView === "products") setProductsPage(1);
 
     setCurrentView(nextView);
   };
@@ -2942,26 +2872,106 @@ export function AdminPanel() {
                 </ProductFormPlacement>
               )}
 
-              <div className="mb-4">
-                <input
-                  type="text"
-                  placeholder="Buscar producto por nombre o categoría..."
-                  value={productSearchTerm}
-                  onChange={(e) => setProductSearchTerm(e.target.value)}
-                  disabled={Boolean(editingProductId)}
-                  className="w-full px-4 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all disabled:cursor-not-allowed disabled:opacity-50"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+                  <span className="text-sm font-medium text-muted-foreground">Total de productos</span>
+                  <p className="text-3xl font-extrabold tracking-tight mt-1">
+                    {productCatalogSummary?.totalProducts ?? "—"}
+                  </p>
+                </div>
+                <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+                  <span className="text-sm font-medium text-muted-foreground">Productos en oferta</span>
+                  <p className="text-3xl font-extrabold tracking-tight mt-1 text-accent">
+                    {productCatalogSummary?.productsOnOffer ?? "—"}
+                  </p>
+                </div>
+                <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+                  <span className="text-sm font-medium text-muted-foreground">Activos sin stock</span>
+                  <p className="text-3xl font-extrabold tracking-tight mt-1 text-destructive">
+                    {productCatalogSummary?.activeProductsOutOfStock ?? "—"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-4 mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="Buscar producto por nombre o categoría..."
+                    value={productSearchTerm}
+                    onChange={(e) => setProductSearchTerm(e.target.value)}
+                    disabled={Boolean(editingProductId || editingPriceProductId)}
+                    className="w-full pl-9 pr-4 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </div>
+                <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold text-muted-foreground">Oferta:</span>
+                    {([
+                      ["all", "Todos"],
+                      ["with-offer", "Con descuento"],
+                      ["without-offer", "Sin descuento"],
+                    ] as const).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => {
+                          setProductOfferFilter(value);
+                          setProductsPage(1);
+                        }}
+                        disabled={Boolean(editingProductId || editingPriceProductId)}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                          productOfferFilter === value
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-card text-muted-foreground border-border hover:text-foreground"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="hidden lg:block h-6 border-l border-border" />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold text-muted-foreground">Estado:</span>
+                    {([
+                      ["all", "Todos"],
+                      ["active", "Activos"],
+                      ["inactive", "Inactivos"],
+                    ] as const).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => {
+                          setProductStatusFilter(value);
+                          setProductsPage(1);
+                        }}
+                        disabled={Boolean(editingProductId || editingPriceProductId)}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                          productStatusFilter === value
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-card text-muted-foreground border-border hover:text-foreground"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="bg-card rounded-xl border border-border overflow-x-auto shadow-sm">
-                <table className="w-full min-w-[800px]">
+                <table className="w-full min-w-[980px]">
                   <thead className="bg-secondary/50">
                     <tr>
                       <th className="text-left p-4 text-sm font-medium">
                         Producto
                       </th>
                       <th className="text-left p-4 text-sm font-medium">
-                        Precio
+                        Precio normal
+                      </th>
+                      <th className="text-left p-4 text-sm font-medium">
+                        Precio con descuento
                       </th>
                       <th className="text-left p-4 text-sm font-medium">
                         Stock
@@ -2977,13 +2987,13 @@ export function AdminPanel() {
                   <tbody>
                     {loadingProducts ? (
                       <tr>
-                        <td colSpan={5} className="p-8 text-center text-sm text-muted-foreground">
+                        <td colSpan={6} className="p-8 text-center text-sm text-muted-foreground">
                           Cargando productos...
                         </td>
                       </tr>
                     ) : products.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="p-8 text-center text-sm text-muted-foreground">
+                        <td colSpan={6} className="p-8 text-center text-sm text-muted-foreground">
                           No se encontraron productos.
                         </td>
                       </tr>
@@ -3026,59 +3036,84 @@ export function AdminPanel() {
                             </div>
                           </td>
                           <td className="p-4 text-sm">
-                            {product.offerPrice != null ? (
-                              <div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="line-through text-muted-foreground text-xs">
-                                    {formatARS(product.price)}
-                                  </span>
-                                  <span className="font-bold text-accent">
-                                    {formatARS(product.offerPrice)}
-                                  </span>
-                                </div>
-                                {product.wholesalePrice && (
-                                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                                    May:{" "}
-                                    <span className="font-medium text-foreground">
-                                      {formatARS(product.wholesalePrice.price)}
-                                    </span>{" "}
-                                    (min. {product.wholesalePrice.quantity} u.)
-                                  </p>
-                                )}
+                            {editingPriceProductId === product.id ? (
+                              <div className="relative w-36">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  aria-label={`Precio normal de ${product.name}`}
+                                  value={priceDraft.price}
+                                  onChange={(event) => setPriceDraft((current) => ({ ...current, price: formatInputPrice(event.target.value) }))}
+                                  className="w-full rounded-lg border border-primary/40 bg-input-background py-2 pl-7 pr-2 font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                />
                               </div>
                             ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleStartPriceEdit(product)}
+                                className="group flex items-center gap-1.5 rounded-lg px-2 py-1 -ml-2 font-medium hover:bg-secondary transition-colors"
+                                title="Editar precios"
+                              >
+                                {formatARS(product.price)}
+                                {product.measurementUnit === "gramo" && <span className="text-muted-foreground text-xs">/kg</span>}
+                                <Edit className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                              </button>
+                            )}
+                            {product.wholesalePrice && (
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                May: <span className="font-medium text-foreground">{formatARS(product.wholesalePrice.price)}</span>{" "}
+                                (min. {product.wholesalePrice.quantity} u.)
+                              </p>
+                            )}
+                            {product.measurementUnit === "gramo" && Array.isArray(product.gramages) && product.gramages.length > 0 && (
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                {(product.gramages as any[]).map((gramage: any) => gramage.grams >= 1000 ? `${gramage.grams / 1000}kg` : `${gramage.grams}g`).join(" · ")}
+                              </p>
+                            )}
+                          </td>
+                          <td className="p-4 text-sm">
+                            {editingPriceProductId === product.id ? (
                               <div>
-                                <span className="font-medium">
-                                  {formatARS(product.price)}
-                                  {product.measurementUnit === "gramo" && (
-                                    <span className="text-muted-foreground text-xs ml-1">
-                                      /kg
-                                    </span>
-                                  )}
-                                </span>
-                                {product.wholesalePrice && (
-                                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                                    May:{" "}
-                                    <span className="font-medium text-foreground">
-                                      {formatARS(product.wholesalePrice.price)}
-                                    </span>{" "}
-                                    (min. {product.wholesalePrice.quantity} u.)
-                                  </p>
-                                )}
-                                {product.measurementUnit === "gramo" &&
-                                  Array.isArray(product.gramages) &&
-                                  product.gramages.length > 0 && (
-                                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                                      {(product.gramages as any[])
-                                        .map((g: any) =>
-                                          g.grams >= 1000
-                                            ? `${g.grams / 1000}kg`
-                                            : `${g.grams}g`,
-                                        )
-                                        .join(" · ")}
-                                    </p>
-                                  )}
+                                <div className="relative w-36">
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    aria-label={`Precio con descuento de ${product.name}`}
+                                    placeholder="Sin descuento"
+                                    value={priceDraft.offerPrice}
+                                    onChange={(event) => setPriceDraft((current) => ({ ...current, offerPrice: formatInputPrice(event.target.value) }))}
+                                    className="w-full rounded-lg border border-accent/40 bg-input-background py-2 pl-7 pr-2 font-medium focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                  />
+                                </div>
+                                <p className="mt-1 text-[10px] text-muted-foreground">Dejalo vacío para quitarlo</p>
                               </div>
+                            ) : product.offerPrice != null ? (
+                              <button
+                                type="button"
+                                onClick={() => handleStartPriceEdit(product)}
+                                className="group inline-flex items-center gap-1.5 rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 font-bold text-accent hover:bg-accent/20 transition-colors"
+                                title="Editar precios"
+                              >
+                                {formatARS(product.offerPrice)}
+                                {getDiscountPercentage(product) !== null && (
+                                  <span className="text-[10px] font-extrabold">
+                                    -{getDiscountPercentage(product)}%
+                                  </span>
+                                )}
+                                <Edit className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleStartPriceEdit(product)}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-secondary/40 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-primary transition-colors"
+                                title="Agregar precio con descuento"
+                              >
+                                <Percent className="h-3 w-3" />
+                                Sin descuento
+                              </button>
                             )}
                           </td>
                           <td className="p-4">
@@ -3111,40 +3146,61 @@ export function AdminPanel() {
                           </td>
                           <td className="p-4">
                             <div className="flex gap-1 justify-end">
-                              <button
-                                onClick={() => handleEditProductClick(product)}
-                                aria-expanded={showProductForm && editingProductId === product.id}
-                                aria-controls={`admin-product-edit-${product.id}`}
-                                className={`p-2 rounded-lg transition-colors ${
-                                  showProductForm && editingProductId === product.id
-                                    ? "bg-primary/10 text-primary"
-                                    : "hover:bg-secondary"
-                                }`}
-                                title={
-                                  showProductForm && editingProductId === product.id
-                                    ? "Ocultar edición"
-                                    : "Modificar"
-                                }
-                              >
-                                {showProductForm && editingProductId === product.id ? (
-                                  <ChevronUp className="w-4 h-4" />
-                                ) : (
-                                  <Edit className="w-4 h-4" />
-                                )}
-                              </button>
-                              <button
-                                onClick={() => handleDeleteProduct(product.id)}
-                                className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors"
-                                title="Eliminar"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              {editingPriceProductId === product.id ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSavePrices(product)}
+                                    disabled={savingPriceProductId === product.id}
+                                    className="p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:cursor-wait disabled:opacity-50"
+                                    title="Guardar precios"
+                                  >
+                                    <Save className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleCancelPriceEdit}
+                                    disabled={savingPriceProductId === product.id}
+                                    className="p-2 rounded-lg text-muted-foreground hover:bg-secondary transition-colors disabled:opacity-50"
+                                    title="Cancelar edición de precios"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => handleEditProductClick(product)}
+                                    aria-expanded={showProductForm && editingProductId === product.id}
+                                    aria-controls={`admin-product-edit-${product.id}`}
+                                    className={`p-2 rounded-lg transition-colors ${
+                                      showProductForm && editingProductId === product.id
+                                        ? "bg-primary/10 text-primary"
+                                        : "hover:bg-secondary"
+                                    }`}
+                                    title={showProductForm && editingProductId === product.id ? "Ocultar edición" : "Modificar"}
+                                  >
+                                    {showProductForm && editingProductId === product.id ? (
+                                      <ChevronUp className="w-4 h-4" />
+                                    ) : (
+                                      <Edit className="w-4 h-4" />
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteProduct(product.id)}
+                                    className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors"
+                                    title="Eliminar"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                           </tr>
                           {showProductForm && editingProductId === product.id && (
                             <tr className="border-t border-primary/20 bg-secondary/10">
-                              <td colSpan={5} className="p-4">
+                              <td colSpan={6} className="p-4">
                                 <div
                                   id={`admin-product-edit-${product.id}`}
                                   ref={handleInlineEditTarget}
@@ -3166,325 +3222,6 @@ export function AdminPanel() {
                 loading={loadingProducts}
                 onPageChange={handleProductsPageChange}
               />
-            </div>
-          )}
-
-          {/* OFERTAS DEL DÍA */}
-          {currentView === "daily-offers" && (
-            <div>
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div>
-                  <h1 className="text-2xl font-bold">Ofertas del día</h1>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Activá el descuento por producto y definí el precio de
-                    oferta
-                  </p>
-                </div>
-                <div className="bg-accent/10 text-accent border border-accent/20 px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 shadow-sm self-start md:self-auto">
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>
-                    {(() => {
-                      const d = new Date();
-                      const dayName = d.toLocaleDateString("es-AR", {
-                        weekday: "long",
-                      });
-                      const dayNum = d.getDate();
-                      const monthName = d.toLocaleDateString("es-AR", {
-                        month: "long",
-                      });
-                      return `${dayName.charAt(0).toUpperCase() + dayName.slice(1)} ${dayNum} de ${monthName}`;
-                    })()}
-                  </span>
-                </div>
-              </div>
-
-              {/* KPIs Rows */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-card border border-border rounded-xl p-5 shadow-sm flex flex-col justify-between h-28 hover:shadow-md transition-all duration-300">
-                  <span className="text-sm font-medium text-muted-foreground">
-                    Total productos
-                  </span>
-                  <span className="text-3xl font-extrabold tracking-tight mt-1">
-                    {productsTotalItems}
-                  </span>
-                </div>
-                <div className="bg-card border border-border rounded-xl p-5 shadow-sm flex flex-col justify-between h-28 hover:shadow-md transition-all duration-300">
-                  <span className="text-sm font-medium text-muted-foreground">
-                    En oferta en esta página
-                  </span>
-                  <span className="text-3xl font-extrabold tracking-tight mt-1 text-accent">
-                    {Object.values(offersDraft).filter((d) => d.active).length}
-                  </span>
-                </div>
-                <div className="bg-card border border-border rounded-xl p-5 shadow-sm flex flex-col justify-between h-28 hover:shadow-md transition-all duration-300">
-                  <span className="text-sm font-medium text-muted-foreground">
-                    Promedio de esta página
-                  </span>
-                  <span className="text-3xl font-extrabold tracking-tight mt-1 text-chart-4">
-                    {getAverageDiscount()}%
-                  </span>
-                </div>
-              </div>
-
-              {/* Filters & Search Row */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-6">
-                <div className="relative flex-1 max-w-md">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                  <input
-                    type="text"
-                    placeholder="Buscar producto..."
-                    value={offersSearchQuery}
-                    onChange={(e) => setOffersSearchQuery(e.target.value)}
-                    disabled={hasOffersChanges}
-                    className="w-full pl-9 pr-4 py-2 border border-border rounded-lg bg-input-background text-sm focus:ring-2 focus:ring-primary/20 transition-all disabled:cursor-not-allowed disabled:opacity-50"
-                  />
-                </div>
-                <div className="flex bg-secondary/40 p-1 border border-border rounded-lg self-start sm:self-auto">
-                  <button
-                    onClick={() => handleOffersFilterChange("all")}
-                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                      offersFilter === "all"
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Todos
-                  </button>
-                  <button
-                    onClick={() => handleOffersFilterChange("active")}
-                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                      offersFilter === "active"
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Con oferta
-                  </button>
-                  <button
-                    onClick={() => handleOffersFilterChange("inactive")}
-                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                      offersFilter === "inactive"
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Sin oferta
-                  </button>
-                </div>
-              </div>
-
-              {/* Products Table */}
-              <div className="bg-card rounded-xl border border-border overflow-x-auto shadow-sm mb-6">
-                <table className="w-full min-w-[800px]">
-                  <thead className="bg-secondary/50">
-                    <tr>
-                      <th className="text-left p-4 text-sm font-medium">
-                        Producto
-                      </th>
-                      <th className="text-left p-4 text-sm font-medium">
-                        Precio Normal
-                      </th>
-                      <th
-                        className="text-left p-4 text-sm font-medium"
-                        style={{ width: "200px" }}
-                      >
-                        Precio Oferta
-                      </th>
-                      <th className="text-left p-4 text-sm font-medium">
-                        Descuento
-                      </th>
-                      <th
-                        className="text-right p-4 text-sm font-medium"
-                        style={{ width: "100px" }}
-                      >
-                        Activo
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loadingProducts ? (
-                      <tr>
-                        <td
-                          colSpan={5}
-                          className="p-8 text-center text-muted-foreground text-sm"
-                        >
-                          Cargando productos...
-                        </td>
-                      </tr>
-                    ) : filteredOffersProducts.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={5}
-                          className="p-8 text-center text-muted-foreground text-sm"
-                        >
-                          No se encontraron productos para los criterios
-                          seleccionados.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredOffersProducts.map((product) => {
-                        const draft = offersDraft[product.id] || {
-                          active: false,
-                          offerPrice: "",
-                        };
-                        const pct = getDiscountPercentage(product.id);
-                        return (
-                          <tr
-                            key={product.id}
-                            className="border-t border-border hover:bg-secondary/20 transition-colors"
-                          >
-                            <td className="p-4">
-                              <div className="flex items-center gap-3">
-                                <img
-                                  src={product.image}
-                                  alt={product.name}
-                                  className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
-                                />
-                                <div>
-                                  <p className="text-sm font-medium">
-                                    {product.name}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {Array.isArray(product.categories) &&
-                                    product.categories.length > 0
-                                      ? product.categories
-                                          .map((c: any) => c.nombre ?? c.name)
-                                          .join(" · ")
-                                      : (product.category ?? "")}
-                                  </p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="p-4 text-sm font-medium text-foreground">
-                              {formatARS(product.price)}
-                            </td>
-                            <td className="p-4">
-                              <div className="relative">
-                                <span
-                                  className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium select-none ${
-                                    draft.active
-                                      ? "text-muted-foreground"
-                                      : "text-muted-foreground/30"
-                                  }`}
-                                >
-                                  $
-                                </span>
-                                <input
-                                  type="text"
-                                  disabled={!draft.active}
-                                  value={draft.offerPrice}
-                                  onChange={(e) =>
-                                    handleOfferPriceDraftChange(
-                                      product.id,
-                                      e.target.value,
-                                    )
-                                  }
-                                  placeholder={
-                                    draft.active ? "0,00" : "Desactivado"
-                                  }
-                                  className={`w-full pl-7 pr-3 py-1.5 border rounded-lg text-sm transition-all focus:ring-2 focus:ring-primary/20 ${
-                                    draft.active
-                                      ? "bg-input-background border-border text-foreground font-medium"
-                                      : "bg-secondary/30 border-border/40 text-muted-foreground/40 cursor-not-allowed"
-                                  }`}
-                                />
-                              </div>
-                            </td>
-                            <td className="p-4">
-                              {pct !== null ? (
-                                <span className="px-2.5 py-0.5 bg-accent/20 text-accent border border-accent/20 rounded-full text-xs font-semibold">
-                                  -{pct}%
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground/50 text-sm">
-                                  —
-                                </span>
-                              )}
-                            </td>
-                            <td className="p-4">
-                              <div className="flex justify-end">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleToggleOfferDraft(product.id)
-                                  }
-                                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                    draft.active
-                                      ? "bg-accent"
-                                      : "bg-switch-background"
-                                  }`}
-                                >
-                                  <span
-                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                      draft.active
-                                        ? "translate-x-5"
-                                        : "translate-x-0"
-                                    }`}
-                                  />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <AdminProductPagination
-                page={productsPage}
-                totalPages={productsTotalPages}
-                totalItems={productsTotalItems}
-                visibleItems={products.length}
-                loading={loadingProducts}
-                onPageChange={handleProductsPageChange}
-              />
-
-              {/* Actions Bar */}
-              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-border/40">
-                <button
-                  type="button"
-                  disabled={!hasOffersChanges}
-                  onClick={() => {
-                    const initialDraft: Record<
-                      string,
-                      { active: boolean; offerPrice: string | number }
-                    > = {};
-                    products.forEach((p) => {
-                      initialDraft[p.id] = {
-                        active: p.offerPrice != null,
-                        offerPrice: p.offerPrice
-                          ? formatInputPrice(p.offerPrice)
-                          : "",
-                      };
-                    });
-                    setOffersDraft(initialDraft);
-                    showSuccess(
-                      "Descartado",
-                      "Se descartaron los cambios no guardados.",
-                    );
-                  }}
-                  className={`px-4 py-2 border border-border rounded-lg transition-colors text-sm text-foreground ${
-                    !hasOffersChanges
-                      ? "opacity-50 cursor-not-allowed"
-                      : "hover:bg-secondary/40"
-                  }`}
-                >
-                  Descartar
-                </button>
-                <button
-                  type="button"
-                  disabled={isSavingOffers || !hasOffersChanges}
-                  onClick={handleSaveDailyOffers}
-                  className={`px-6 py-2 bg-primary disabled:opacity-50 text-primary-foreground rounded-lg transition-colors text-sm font-semibold shadow-sm flex items-center gap-2 ${
-                    !hasOffersChanges || isSavingOffers
-                      ? "cursor-not-allowed"
-                      : "hover:bg-primary/90"
-                  }`}
-                >
-                  {isSavingOffers ? "Guardando cambios..." : "Guardar cambios"}
-                </button>
-              </div>
             </div>
           )}
 
@@ -3528,6 +3265,7 @@ export function AdminPanel() {
                       <label className="block text-sm mb-1.5">Nombre *</label>
                       <input
                         value={couponForm.nombre}
+                        maxLength={80}
                         onChange={(e) => setCF("nombre", e.target.value)}
                         placeholder="Ej: Verano 2026"
                         className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -3537,6 +3275,7 @@ export function AdminPanel() {
                       <label className="block text-sm mb-1.5">Código *</label>
                       <input
                         value={couponForm.codigo}
+                        maxLength={40}
                         onChange={(e) =>
                           setCF("codigo", e.target.value.toUpperCase())
                         }
@@ -3709,7 +3448,11 @@ export function AdminPanel() {
                     <button
                       id="save-coupon-btn"
                       onClick={handleSaveCoupon}
-                      disabled={!couponForm.nombre || !couponForm.codigo}
+                      disabled={
+                        !couponForm.nombre.trim() ||
+                        !couponForm.codigo.trim() ||
+                        !couponForm.detalle.trim()
+                      }
                       className="px-6 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-lg transition-colors text-sm"
                     >
                       Guardar cupón
@@ -3728,20 +3471,42 @@ export function AdminPanel() {
                 {coupons.map((coupon) => (
                   <div
                     key={coupon.id}
-                    className="bg-card rounded-xl border border-border p-4 flex items-start justify-between gap-4 shadow-sm"
+                    className="bg-card rounded-xl border border-border p-4 flex flex-col gap-4 shadow-sm sm:flex-row sm:items-center"
                   >
-                    <div className="flex items-start gap-4">
-                      <div
-                        className={`px-2.5 py-1 rounded-md text-xs font-mono font-bold flex-shrink-0 ${coupon.activo ? "bg-accent/20 text-accent" : "bg-muted text-muted-foreground"}`}
-                      >
-                        {coupon.codigo}
-                      </div>
-                      <div>
+                    <div className="grid min-w-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(180px,auto)_minmax(220px,1fr)] lg:items-center">
+                      <div className="min-w-0">
                         <p className="font-medium text-sm">{coupon.nombre}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           {coupon.detalle}
                         </p>
-                        <div className="flex flex-wrap gap-2 mt-2">
+                      </div>
+                      <div className="flex min-w-0 flex-wrap items-center gap-1.5 lg:border-l lg:border-border/60 lg:pl-4">
+                          <span className="text-xs text-muted-foreground">Código</span>
+                          <span
+                            className={`max-w-full break-all px-2.5 py-1 rounded-md text-xs font-mono font-bold ${coupon.activo ? "bg-accent/20 text-accent" : "bg-muted text-muted-foreground"}`}
+                          >
+                            {visibleCouponCodes.has(coupon.id) ? coupon.codigo : "••••••••"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => toggleCouponCodeVisibility(coupon.id)}
+                            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-md transition-colors"
+                            title={visibleCouponCodes.has(coupon.id) ? "Ocultar código" : "Mostrar código"}
+                            aria-label={visibleCouponCodes.has(coupon.id) ? "Ocultar código del cupón" : "Mostrar código del cupón"}
+                            aria-pressed={visibleCouponCodes.has(coupon.id)}
+                          >
+                            {visibleCouponCodes.has(coupon.id) ? (
+                              <EyeOff className="w-4 h-4" />
+                            ) : (
+                              <Eye className="w-4 h-4" />
+                            )}
+                          </button>
+                      </div>
+                      <div className="min-w-0 lg:border-l lg:border-border/60 lg:pl-4">
+                        <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Beneficio y condiciones
+                        </p>
+                        <div className="flex flex-wrap gap-2">
                           <span className="text-xs bg-secondary px-2 py-0.5 rounded-full">
                             {coupon.porcentaje
                               ? `${coupon.porcentaje}% OFF`
@@ -3770,7 +3535,7 @@ export function AdminPanel() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex gap-1 flex-shrink-0">
+                    <div className="flex flex-shrink-0 gap-1 self-end sm:self-center">
                       <button
                         onClick={() => handleEditCoupon(coupon)}
                         className="p-2 hover:bg-secondary rounded-lg transition-colors"
@@ -4130,11 +3895,21 @@ export function AdminPanel() {
                                           </span>
                                           <span className="text-sm font-medium text-foreground">
                                             {formatARS(
-                                              order.total -
-                                                (order.shippingCost || 0),
+                                              order.items?.reduce(
+                                                (total, item) => total + item.price * item.quantity,
+                                                0,
+                                              ) || 0,
                                             )}
                                           </span>
                                         </div>
+                                        {!!order.couponDiscount && (
+                                          <div className="flex justify-between items-center mb-2 text-emerald-600">
+                                            <span className="text-sm">Descuento por cupón</span>
+                                            <span className="text-sm font-medium">
+                                              -{formatARS(order.couponDiscount)}
+                                            </span>
+                                          </div>
+                                        )}
                                         <div className="flex justify-between items-center mb-3 pb-3 border-b border-border/30">
                                           <span className="text-sm text-muted-foreground">
                                             Envío

@@ -172,8 +172,8 @@ export function Header() {
               </button>
             </div>
             
-            <div className="flex-1 overflow-y-auto py-4">
-              <nav className="space-y-1 px-3">
+            <div className="menu-scrollbar min-w-0 flex-1 overflow-x-hidden overflow-y-auto py-4">
+              <nav className="min-w-0 space-y-1 px-3">
                 <Link 
                   to="/" 
                   onClick={() => setIsMenuOpen(false)}
@@ -208,11 +208,11 @@ export function Header() {
                     onClick={() => setIsCategoriesOpen(!isCategoriesOpen)}
                     className="w-full flex items-center justify-between px-3 py-3 rounded-xl hover:bg-secondary transition-colors text-foreground font-medium"
                   >
-                    <div className="flex items-center gap-3">
-                      <List className="w-5 h-5 text-primary" />
-                      Categorías
+                    <div className="flex min-w-0 items-center gap-3">
+                      <List className="w-5 h-5 flex-shrink-0 text-primary" />
+                      <span className="min-w-0 whitespace-normal break-words">Categorías</span>
                     </div>
-                    <ChevronDown className={`w-4 h-4 opacity-70 transition-transform duration-200 ${isCategoriesOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-4 h-4 flex-shrink-0 opacity-70 transition-transform duration-200 ${isCategoriesOpen ? 'rotate-180' : ''}`} />
                   </button>
                   
                   {isCategoriesOpen && (
@@ -226,10 +226,12 @@ export function Header() {
                               key={cat.id} 
                               to={categoryPath(cat)}
                               onClick={() => setIsMenuOpen(false)}
-                              className="flex items-center justify-between pl-11 pr-3 py-2.5 rounded-lg hover:bg-primary/5 hover:text-primary transition-colors text-sm"
+                              className="flex min-w-0 items-center gap-3 pl-11 pr-3 py-2.5 rounded-lg hover:bg-primary/5 hover:text-primary transition-colors text-sm"
                             >
-                              {cat.name}
-                              <ChevronRight className="w-4 h-4 opacity-50" />
+                              <span className="min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere]">
+                                {cat.name}
+                              </span>
+                              <ChevronRight className="w-4 h-4 flex-shrink-0 opacity-50" />
                             </Link>
                           ))}
                         </div>

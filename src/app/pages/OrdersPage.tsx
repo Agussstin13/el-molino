@@ -114,6 +114,7 @@ function mapOrder(o: any) {
     buyerLastName: o.buyerLastName ?? "",
     total: o.total ?? 0,
     shippingCost: o.shippingCost ?? 0,
+    couponDiscount: o.couponDiscount ?? 0,
     orderStatus: o.orderStatus ?? "pendiente",
     paymentStatus: o.paymentStatus ?? "pendiente",
     paymentMethod: normalizePaymentMethodCode(o.paymentMethod ?? ""),
@@ -346,6 +347,12 @@ function OrderCard({
                 ))}
               </div>
             </div>
+            {order.couponDiscount > 0 && (
+              <div className="flex items-center justify-between text-sm px-3 py-2 mt-2 rounded-lg bg-emerald-50 text-emerald-700">
+                <span>Descuento por cupón</span>
+                <span className="font-semibold">-{formatARS(order.couponDiscount)}</span>
+              </div>
+            )}
           </div>
 
           {/* Info grid */}

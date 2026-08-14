@@ -168,6 +168,13 @@ export function Checkout() {
   const [couponError, setCouponError] = useState<string | null>(null);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
 
+  useEffect(() => {
+    if (clientUser) return;
+    setAppliedCoupon(null);
+    setCouponCodeInput("");
+    setCouponError(null);
+  }, [clientUser]);
+
   // Bloquear el scroll de fondo cuando el modal está abierto
   useEffect(() => {
     if (isCheckoutOpen) {
@@ -663,9 +670,13 @@ export function Checkout() {
       } else {
         const errData = await res.json().catch(() => null);
         const msg =
-          errData?.title ||
           errData?.detail ||
+          errData?.title ||
           "Error al confirmar el pedido. Intente nuevamente.";
+        if (errData?.title === "Cupón inválido.") {
+          setAppliedCoupon(null);
+          setCouponError(msg);
+        }
         showError("Error", msg);
       }
     } catch (e) {
@@ -684,7 +695,20 @@ export function Checkout() {
   };
 
   const handleValidateCoupon = async () => {
-    if (!couponCodeInput.trim()) return;
+    if (!clientUser) {
+      setCouponError("Iniciá sesión para utilizar cupones.");
+      return;
+    }
+
+    const normalizedCode = couponCodeInput.trim().toUpperCase();
+    if (!normalizedCode) return;
+
+    const userToken = localStorage.getItem("userToken");
+    if (!userToken) {
+      setCouponError("Tu sesión venció. Iniciá sesión nuevamente para utilizar cupones.");
+      return;
+    }
+
     setValidatingCoupon(true);
     setCouponError(null);
     try {
@@ -695,21 +719,37 @@ export function Checkout() {
         return isWholesaleActive(item, totalForWholesale);
       });
 
-      const res = await fetch(`${API_BASE}/api/coupons/validate/${encodeURIComponent(couponCodeInput.trim())}?subtotal=${subtotal}&hasWholesale=${hasWholesaleItems}`, {
-        headers: { Accept: "application/json" },
+      const headers: Record<string, string> = {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      };
+      headers.Authorization = `Bearer ${userToken}`;
+
+      const res = await fetch(`${API_BASE}/api/coupons/validate`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          code: normalizedCode,
+          subtotal,
+          hasWholesale: hasWholesaleItems,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 401) logoutClient();
         throw new Error(data.detail || data.title || "Cupón inválido");
       }
       if (data.valid) {
-        setAppliedCoupon({ code: couponCodeInput.trim(), discountAmount: data.discountAmount });
+        setAppliedCoupon({
+          code: normalizedCode,
+          discountAmount: data.discountAmount,
+        });
         setCouponCodeInput("");
       } else {
         throw new Error(data.errorMessage || "Cupón inválido");
       }
-    } catch (e: any) {
-      setCouponError(e.message);
+    } catch (error) {
+      setCouponError(error instanceof Error ? error.message : "No pudimos validar el cupón.");
       setAppliedCoupon(null);
     } finally {
       setValidatingCoupon(false);
@@ -1498,28 +1538,42 @@ export function Checkout() {
                   </div>
                   
                   {!appliedCoupon && (
-                    <div className="mb-4 space-y-2">
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          placeholder="Código de cupón"
-                          value={couponCodeInput}
-                          onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase())}
-                          className="flex-1 px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm uppercase"
-                        />
+                    clientUser ? (
+                      <div className="mb-4 space-y-2">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            maxLength={40}
+                            placeholder="Código de cupón"
+                            value={couponCodeInput}
+                            onChange={(e) => setCouponCodeInput(e.target.value.trim().toUpperCase())}
+                            className="flex-1 px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm uppercase"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleValidateCoupon}
+                            disabled={validatingCoupon || !couponCodeInput}
+                            className="px-4 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {validatingCoupon ? "..." : "Aplicar"}
+                          </button>
+                        </div>
+                        {couponError && (
+                          <p className="text-xs text-destructive">{couponError}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary/30 px-3 py-2.5 text-sm">
+                        <span className="text-muted-foreground">Iniciá sesión para utilizar cupones.</span>
                         <button
                           type="button"
-                          onClick={handleValidateCoupon}
-                          disabled={validatingCoupon || !couponCodeInput.trim()}
-                          className="px-4 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          onClick={() => setShowLoginModal(true)}
+                          className="shrink-0 font-medium text-primary hover:underline"
                         >
-                          {validatingCoupon ? "..." : "Aplicar"}
+                          Iniciar sesión
                         </button>
                       </div>
-                      {couponError && (
-                        <p className="text-xs text-destructive">{couponError}</p>
-                      )}
-                    </div>
+                    )
                   )}
 
                   <div className="border-t border-border pt-3 space-y-1.5 text-sm">

@@ -1,5 +1,7 @@
-import { Link } from 'react-router-dom';
-import { categoryPath } from '../../lib/seo';
+import type { CSSProperties } from "react";
+import { Link } from "react-router-dom";
+import { Leaf } from "lucide-react";
+import { categoryPath } from "../../lib/seo";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -12,51 +14,109 @@ export interface ShopCategory {
 
 // imagePath viene como "/images/categories/filename.jpg" del backend
 const imgUrl = (path?: string | null) =>
-  path ? (path.startsWith('/') ? `${API_BASE}${path}` : `${API_BASE}/images/${path}`) : '';
+  path ? (path.startsWith("/") ? `${API_BASE}${path}` : `${API_BASE}/images/${path}`) : "";
 
-export function CategoryGrid({ categories }: { categories: ShopCategory[] }) {
-  if (categories.length === 0) return null;
+interface CategoryItemProps {
+  category: ShopCategory;
+  hiddenFromNavigation: boolean;
+  eager: boolean;
+}
+
+function CategoryItem({ category, hiddenFromNavigation, eager }: CategoryItemProps) {
+  return (
+    <Link
+      to={categoryPath(category)}
+      tabIndex={hiddenFromNavigation ? -1 : undefined}
+      aria-hidden={hiddenFromNavigation || undefined}
+      className="category-marquee__item group"
+    >
+      <span className="category-marquee__image-frame">
+        {category.imagePath ? (
+          <img
+            src={imgUrl(category.imagePath)}
+            alt={hiddenFromNavigation ? "" : `${category.name} en El Molino`}
+            loading={eager ? "eager" : "lazy"}
+            fetchPriority={eager ? "high" : "auto"}
+            decoding="async"
+            width="112"
+            height="112"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110 group-focus-visible:scale-110"
+          />
+        ) : (
+          <span className="flex h-full w-full items-center justify-center bg-secondary text-primary/65">
+            <Leaf className="h-8 w-8" aria-hidden="true" />
+          </span>
+        )}
+      </span>
+      <span className="category-marquee__label">{category.name}</span>
+    </Link>
+  );
+}
+
+interface CategoryGridProps {
+  categories: ShopCategory[];
+  loading?: boolean;
+}
+
+export function CategoryGrid({ categories, loading = false }: CategoryGridProps) {
+  if (!loading && categories.length === 0) return null;
+
+  const sortedCategories = [...categories].sort(
+    (a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0),
+  );
+  const repetitions = sortedCategories.length > 0
+    ? Math.max(1, Math.ceil(10 / sortedCategories.length))
+    : 0;
+  const loopCategories = Array.from({ length: repetitions }, (_, repetition) =>
+    sortedCategories.map((category) => ({ category, repeated: repetition > 0 })),
+  ).flat();
+  const marqueeStyle = {
+    "--category-marquee-duration": `${Math.max(28, loopCategories.length * 3.8)}s`,
+  } as CSSProperties;
 
   return (
-    <section className="py-12 bg-secondary/20" id="categorias">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h2 className="text-2xl mb-8 text-center">
-          Explorar Categorías
+    <section className="border-y border-border/60 bg-card/55 py-5 sm:py-6" id="categorias" aria-labelledby="categories-title">
+      <div className="mb-4 px-4 text-center sm:mb-5">
+        <h2 id="categories-title" className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
+          Encontrá tu sección favorita
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
-          {[...categories]
-            .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
-            .map((category, index) => (
-            <Link
-              key={category.id}
-              to={categoryPath(category)}
-              className="group flex flex-col items-center gap-3"
-            >
-              <div className="w-full aspect-square rounded-2xl overflow-hidden border-2 border-border group-hover:border-primary transition-colors shadow-sm">
-                {category.imagePath ? (
-                  <img
-                    src={imgUrl(category.imagePath)}
-                    alt={`${category.name} en El Molino`}
-                    loading={index < 2 ? "eager" : "lazy"}
-                    fetchPriority={index < 2 ? "high" : "auto"}
-                    decoding="async"
-                    width="240"
-                    height="240"
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-secondary flex items-center justify-center">
-                    <span className="text-2xl opacity-20">🏷️</span>
-                  </div>
-                )}
-              </div>
-              <span className="text-sm font-medium text-center group-hover:text-primary transition-colors">
-                {category.name}
-              </span>
-            </Link>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center gap-5 overflow-hidden px-4 sm:gap-8" aria-busy="true" aria-label="Cargando categorías">
+          {Array.from({ length: 10 }, (_, index) => (
+            <div key={index} className="flex w-[5.5rem] flex-none flex-col items-center gap-2.5" aria-hidden="true">
+              <span className="block aspect-square w-[5.25rem] animate-pulse rounded-full bg-secondary sm:w-24" />
+              <span className="block h-3 w-16 animate-pulse rounded-full bg-secondary" />
+            </div>
           ))}
         </div>
-      </div>
+      ) : (
+        <div className="category-marquee" style={marqueeStyle}>
+          <div className="category-marquee__track">
+            <div className="category-marquee__group">
+              {loopCategories.map(({ category, repeated }, index) => (
+                <CategoryItem
+                  key={`primary-${category.id}-${index}`}
+                  category={category}
+                  hiddenFromNavigation={repeated}
+                  eager={!repeated && index < 4}
+                />
+              ))}
+            </div>
+            <div className="category-marquee__group category-marquee__group--duplicate" aria-hidden="true">
+              {loopCategories.map(({ category }, index) => (
+                <CategoryItem
+                  key={`duplicate-${category.id}-${index}`}
+                  category={category}
+                  hiddenFromNavigation
+                  eager={false}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
