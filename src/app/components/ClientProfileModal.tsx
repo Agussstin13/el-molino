@@ -17,7 +17,7 @@ const API_BASE = import.meta.env.VITE_API_BASE;
 export function ClientProfileModal({ isOpen, onClose }: ClientProfileModalProps) {
   const { clientUser, logoutClient, updateClientProfile, savedAddresses, removeAddress } = useAuth();
   const { showConfirm, showSuccess } = useAlert();
-  const { items, clearCart } = useCart();
+  const { items } = useCart();
 
   const [tab, setTab] = useState<Tab>('perfil');
   const [nombre, setNombre] = useState('');
@@ -96,8 +96,8 @@ export function ClientProfileModal({ isOpen, onClose }: ClientProfileModalProps)
     if (items.length > 0) {
       showConfirm(
         '¿Cerrar sesión?',
-        'Tenés productos en tu carrito. Si cerrás sesión ahora, tu carrito se vaciará.',
-        () => { clearCart(); logoutClient(); onClose(); }
+        'Tu carrito seguirá guardado en este dispositivo cuando cierres sesión.',
+        () => { logoutClient(); onClose(); }
       );
     } else {
       logoutClient();

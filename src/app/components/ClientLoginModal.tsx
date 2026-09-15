@@ -8,11 +8,18 @@ import { useAlert } from '../context/AlertContext';
 interface ClientLoginModalProps {
   isOpen: boolean;
   onClose: () => void;
+  isSessionRenewal?: boolean;
+  renewalEmail?: string;
 }
 
-export function ClientLoginModal({ isOpen, onClose }: ClientLoginModalProps) {
+export function ClientLoginModal({
+  isOpen,
+  onClose,
+  isSessionRenewal = false,
+  renewalEmail,
+}: ClientLoginModalProps) {
   const { isClientAuthenticated, clientUser, loginClient, registerClient, logoutClient } = useAuth();
-  const { items, clearCart } = useCart();
+  const { items } = useCart();
   const { showConfirm } = useAlert();
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
@@ -36,6 +43,15 @@ export function ClientLoginModal({ isOpen, onClose }: ClientLoginModalProps) {
       document.body.style.overflow = previousOverflow;
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !isSessionRenewal) return;
+
+    setIsRegistering(false);
+    setEmail(renewalEmail || clientUser?.email || '');
+    setPassword('');
+    setError('');
+  }, [clientUser?.email, isOpen, isSessionRenewal, renewalEmail]);
 
   if (!isOpen) return null;
 
@@ -93,7 +109,13 @@ export function ClientLoginModal({ isOpen, onClose }: ClientLoginModalProps) {
         {/* Header */}
         <div className="flex flex-shrink-0 items-center justify-between gap-2 border-b border-border bg-secondary/10 p-4 sm:p-6">
           <h2 className="text-xl font-medium text-primary">
-            {isClientAuthenticated ? 'Mi Perfil' : isRegistering ? 'Crear Cuenta' : 'Ingresar'}
+            {isSessionRenewal
+              ? 'Renovar sesión'
+              : isClientAuthenticated
+                ? 'Mi Perfil'
+                : isRegistering
+                  ? 'Crear Cuenta'
+                  : 'Ingresar'}
           </h2>
           <button 
             onClick={onClose} 
@@ -105,7 +127,7 @@ export function ClientLoginModal({ isOpen, onClose }: ClientLoginModalProps) {
 
         {/* Content */}
         <div className="custom-scrollbar min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6">
-          {isClientAuthenticated && clientUser ? (
+          {isClientAuthenticated && clientUser && !isSessionRenewal ? (
             <div className="space-y-6">
               <div className="flex flex-col items-center text-center p-6 bg-secondary/20 rounded-2xl border border-border/50">
                 <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
@@ -123,14 +145,13 @@ export function ClientLoginModal({ isOpen, onClose }: ClientLoginModalProps) {
                   onClick={() => {
                     const doLogout = () => {
                       logoutClient();
-                      clearCart();
                       onClose();
                     };
 
                     if (items.length > 0) {
                       showConfirm(
                         "Carrito con productos",
-                        "Tenés productos en el carrito. Si cerrás sesión los perderás. ¿Querés continuar?",
+                        "Tu carrito seguirá guardado en este dispositivo cuando cierres sesión. ¿Querés continuar?",
                         doLogout
                       );
                     } else {
@@ -146,6 +167,12 @@ export function ClientLoginModal({ isOpen, onClose }: ClientLoginModalProps) {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
+              {isSessionRenewal && (
+                <p className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-center text-sm text-muted-foreground">
+                  Ingresá nuevamente tu contraseña para continuar sin interrupciones.
+                </p>
+              )}
+
               {error && (
                 <div className="bg-destructive/10 border border-destructive/20 text-destructive text-sm p-3 rounded-lg text-center">
                   {error}
@@ -203,8 +230,9 @@ export function ClientLoginModal({ isOpen, onClose }: ClientLoginModalProps) {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    readOnly={isSessionRenewal}
                     placeholder="tu@email.com"
-                    className="w-full pl-10 pr-3 py-2.5 bg-input-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                    className="w-full pl-10 pr-3 py-2.5 bg-input-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all read-only:cursor-not-allowed read-only:opacity-70"
                   />
                 </div>
               </div>
@@ -233,28 +261,32 @@ export function ClientLoginModal({ isOpen, onClose }: ClientLoginModalProps) {
                     <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     Cargando...
                   </span>
-                ) : isRegistering ? 'Crear Cuenta' : 'Iniciar Sesión'}
+                ) : isRegistering ? 'Crear Cuenta' : isSessionRenewal ? 'Renovar Sesión' : 'Iniciar Sesión'}
               </button>
 
-              <div className="relative py-2">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border"></div>
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">O</span>
-                </div>
-              </div>
+              {!isSessionRenewal && (
+                <>
+                  <div className="relative py-2">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-border"></div>
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-card px-2 text-muted-foreground">O</span>
+                    </div>
+                  </div>
 
-              <p className="text-center text-sm text-muted-foreground">
-                {isRegistering ? '¿Ya tienes cuenta?' : '¿No tienes cuenta?'}
-                <button
-                  type="button"
-                  onClick={() => { setIsRegistering(!isRegistering); setError(''); }}
-                  className="text-primary hover:underline ml-1 font-semibold"
-                >
-                  {isRegistering ? 'Inicia sesión' : 'Regístrate ahora'}
-                </button>
-              </p>
+                  <p className="text-center text-sm text-muted-foreground">
+                    {isRegistering ? '¿Ya tienes cuenta?' : '¿No tienes cuenta?'}
+                    <button
+                      type="button"
+                      onClick={() => { setIsRegistering(!isRegistering); setError(''); }}
+                      className="text-primary hover:underline ml-1 font-semibold"
+                    >
+                      {isRegistering ? 'Inicia sesión' : 'Regístrate ahora'}
+                    </button>
+                  </p>
+                </>
+              )}
             </form>
           )}
         </div>

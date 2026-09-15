@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { WhatsAppFloatingButton } from "./components/WhatsAppFloatingButton";
+import { ClientSessionMonitor } from "./components/ClientSessionMonitor";
 import { NoIndexSeo } from "./components/Seo";
 import { AlertProvider } from "./context/AlertContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -68,6 +69,7 @@ export default function App() {
         <SignalRProvider>
           <AlertProvider>
             <CartProvider>
+              <ClientSessionMonitor />
               <Suspense fallback={null}>
                 <Routes>
                   <Route path="/" element={<ShopPage />} />
