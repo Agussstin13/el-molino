@@ -91,7 +91,7 @@ export function ProductCard({
   if (isList) {
     return (
       <div
-        className="flex items-center gap-4 bg-card border border-border/60 rounded-2xl p-3 transition-all duration-300 cursor-pointer hover:shadow-md hover:-translate-y-0.5 hover:border-primary/20 h-[140px]"
+        className="grid min-w-0 grid-cols-[84px_minmax(0,1fr)] items-center gap-3 rounded-2xl border border-border/60 bg-card p-3 transition-all duration-300 cursor-pointer hover:shadow-md hover:-translate-y-0.5 hover:border-primary/20 sm:flex sm:h-[140px] sm:gap-4"
         onClick={() => navigate(detailPath)}
         id={`product-card-${product.id}`}
       >
@@ -99,7 +99,7 @@ export function ProductCard({
         <Link
           to={detailPath}
           onClick={(event) => event.stopPropagation()}
-          className="block relative w-[116px] h-[116px] flex-shrink-0 bg-secondary/30 rounded-xl overflow-hidden"
+          className="relative block h-[84px] w-[84px] flex-shrink-0 overflow-hidden rounded-xl bg-secondary/30 sm:h-[116px] sm:w-[116px]"
           aria-label={`Ver ${product.name}`}
         >
           {product.image && (
@@ -135,8 +135,8 @@ export function ProductCard({
           </div>
 
           <div className="flex flex-col">
-            <div className="flex items-end gap-2 mb-0.5 min-h-[22px]">
-              <span className="text-[22px] font-black text-black leading-none">
+            <div className="mb-0.5 flex min-h-[22px] min-w-0 flex-wrap items-end gap-1.5 sm:gap-2">
+              <span className="break-words text-[20px] font-black leading-none text-black sm:text-[22px]">
                 {formatARS(displayPrice)}
               </span>
               {hasOffer ? (
@@ -148,9 +148,9 @@ export function ProductCard({
               ) : null}
             </div>
 
-            <div className="min-h-[16px] flex items-end justify-between mt-1 gap-2 w-full">
+            <div className="mt-1 flex min-h-[16px] min-w-0 w-full flex-wrap items-end justify-between gap-1 sm:gap-2">
               {/* Formato de Venta (Izquierda) y Stock */}
-              <span className="text-[10px] text-muted-foreground font-medium flex items-center shrink-0">
+              <span className="min-w-0 text-[10px] text-muted-foreground font-medium flex flex-wrap items-center">
                 {displayPresentation
                   ? `Precio por ${displayPresentation}`
                   : isGramProduct
@@ -189,7 +189,7 @@ export function ProductCard({
         <button
           onClick={handleAdd}
           disabled={!isGramProduct && !canAddMore}
-          className={`flex-shrink-0 px-4 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-300 whitespace-nowrap flex items-center justify-center gap-2 w-[140px] active:scale-95 ${!isGramProduct && !canAddMore
+          className={`col-span-full flex w-full flex-shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-medium transition-all duration-300 active:scale-95 sm:w-[140px] sm:whitespace-nowrap ${!isGramProduct && !canAddMore
             ? "bg-muted/50 text-muted-foreground border border-border/50 cursor-not-allowed"
             : justAdded
               ? "bg-primary text-primary-foreground shadow-sm"
@@ -265,8 +265,8 @@ export function ProductCard({
         {/* Precios y Tags (Flex grow para empujar hacia abajo) */}
         <div className="flex flex-col mt-auto">
           {/* Precio efectivo y Oferta en la misma línea */}
-          <div className="flex items-end gap-2 mb-2 min-h-[26px]">
-            <span className="text-[26px] font-black text-black leading-none">
+          <div className="mb-2 flex min-h-[26px] min-w-0 flex-wrap items-end gap-1.5 sm:gap-2">
+            <span className="break-words text-[24px] font-black leading-none text-black sm:text-[26px]">
               {formatARS(displayPrice)}
             </span>
             {hasOffer ? (

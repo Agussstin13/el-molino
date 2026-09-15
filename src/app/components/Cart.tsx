@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { X, Trash2, Plus, Minus, ShoppingBag } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import {
@@ -18,31 +19,43 @@ export function Cart() {
     subtotal,
   } = useCart();
 
+  useEffect(() => {
+    if (!isCartOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isCartOpen]);
+
   if (!isCartOpen) return null;
 
   return (
     <>
       <div className="fixed inset-0 bg-black/50 z-50" onClick={closeCart} />
-      <div className="fixed top-0 right-0 h-full w-full max-w-md bg-card shadow-2xl z-50 flex flex-col">
+      <div className="fixed top-0 right-0 z-50 flex h-[100dvh] w-full max-w-md min-w-0 flex-col overflow-x-hidden bg-card shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b-2 border-border bg-secondary/30">
-          <div className="flex items-center gap-2">
-            <ShoppingBag className="w-5 h-5 text-primary" />
-            <h2>
+        <div className="flex min-w-0 items-center justify-between gap-2 border-b-2 border-border bg-secondary/30 p-3 sm:p-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <ShoppingBag className="h-5 w-5 flex-shrink-0 text-primary" />
+            <h2 className="min-w-0 truncate text-base sm:text-lg">
               Carrito ({items.length} {items.length === 1 ? 'producto' : 'productos'})
             </h2>
           </div>
           <button
             id="cart-close"
             onClick={closeCart}
-            className="p-2 hover:bg-secondary rounded-lg transition-colors"
+            className="flex-shrink-0 p-2 hover:bg-secondary rounded-lg transition-colors"
+            aria-label="Cerrar carrito"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Items */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3 sm:p-4">
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center gap-3">
               <ShoppingBag className="w-16 h-16 text-muted-foreground/30" />
@@ -81,19 +94,19 @@ export function Cart() {
                 return (
                   <div
                     key={`${item.id}-${item.selectedGramage?.id || 'base'}`}
-                    className="flex gap-3 p-3 bg-secondary/30 rounded-xl border border-border/50"
+                    className="flex min-w-0 gap-2 rounded-xl border border-border/50 bg-secondary/30 p-2.5 sm:gap-3 sm:p-3"
                   >
                     <img
                       src={item.image}
                       alt={item.name}
-                      className="w-20 h-20 object-cover rounded-lg flex-shrink-0"
+                      className="h-16 w-16 flex-shrink-0 rounded-lg object-cover sm:h-20 sm:w-20"
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium line-clamp-2 mb-1">
                         {item.name} {item.selectedGramage && `(${item.selectedGramage.grams >= 1000 ? `${item.selectedGramage.grams / 1000} kg` : `${item.selectedGramage.grams} g`})`}
                       </p>
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <span className="text-sm text-primary font-semibold">
+                      <div className="mb-2 flex min-w-0 flex-wrap items-center gap-1.5">
+                        <span className="min-w-0 break-words text-sm font-semibold text-primary">
                           {formatARS(unitPrice)}
                         </span>
                         {wholesale && (
@@ -102,8 +115,8 @@ export function Cart() {
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center border border-border rounded-lg bg-card overflow-hidden">
+                      <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2">
+                        <div className="flex flex-shrink-0 items-center overflow-hidden rounded-lg border border-border bg-card">
                           <button
                             onClick={() => updateQuantity(item.id, item.quantity - 1, item.selectedGramage?.id)}
                             className="p-1.5 hover:bg-secondary transition-colors"
@@ -131,12 +144,12 @@ export function Cart() {
                             <Plus className="w-3 h-3" />
                           </button>
                         </div>
-                        <span className="text-sm text-muted-foreground ml-auto">
+                        <span className="ml-auto min-w-0 break-words text-right text-sm text-muted-foreground">
                           {formatARS(unitPrice * item.quantity)}
                         </span>
                         <button
                           onClick={() => removeItem(item.id, item.selectedGramage?.id)}
-                          className="p-1.5 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                          className="flex-shrink-0 p-1.5 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
                           aria-label="Eliminar"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -152,7 +165,7 @@ export function Cart() {
 
         {/* Footer */}
         {items.length > 0 && (
-          <div className="border-t-2 border-border p-4 space-y-4 bg-secondary/20">
+          <div className="space-y-4 border-t-2 border-border bg-secondary/20 p-3 sm:p-4">
             <div className="space-y-1.5 text-sm">
               <div className="flex justify-between font-semibold text-base">
                 <span>Total</span>

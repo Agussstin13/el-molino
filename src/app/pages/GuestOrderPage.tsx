@@ -226,7 +226,7 @@ export function GuestOrderPage() {
           </p>
         </div>
 
-        <div className="bg-card border border-border rounded-2xl p-5 mb-5 space-y-4">
+        <div className="mb-5 min-w-0 space-y-4 rounded-2xl border border-border bg-card p-4 sm:p-5">
           <h2 className="text-base font-semibold text-foreground">Estado del pedido</h2>
 
           <div className="flex items-center gap-2 flex-wrap">
@@ -283,22 +283,22 @@ export function GuestOrderPage() {
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-2xl p-5 mb-5">
+        <div className="mb-5 min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-5">
           <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
             <ShoppingBag className="w-4 h-4 text-primary" />
             Productos
           </h2>
           <div className="space-y-2">
             {items.map((item: any, idx: number) => (
-              <div key={idx} className="flex items-center justify-between py-2.5 border-b border-border/50 last:border-0">
-                <div className="text-sm">
+              <div key={idx} className="flex min-w-0 items-start justify-between gap-3 border-b border-border/50 py-2.5 last:border-0">
+                <div className="min-w-0 break-words text-sm">
                   <span className="font-medium text-foreground">{item.productName}</span>
                   {item.gramageGrams && (
                     <span className="text-muted-foreground ml-1">({item.gramageGrams}g)</span>
                   )}
                   <span className="text-muted-foreground ml-2">× {item.quantity}</span>
                 </div>
-                <span className="text-sm font-semibold text-foreground">
+                <span className="flex-shrink-0 text-right text-sm font-semibold text-foreground">
                   {formatARS(item.price * item.quantity)}
                 </span>
               </div>
@@ -325,22 +325,22 @@ export function GuestOrderPage() {
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-2xl p-5 mb-5 space-y-3">
+        <div className="mb-5 min-w-0 space-y-3 rounded-2xl border border-border bg-card p-4 sm:p-5">
           <h2 className="text-base font-semibold text-foreground">Informacion de entrega</h2>
 
           <div className="flex flex-col gap-2 text-sm">
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               {isOnlinePaymentMethod(paymentMethodCode)
                 ? <Smartphone className="w-4 h-4 text-primary flex-shrink-0" />
                 : paymentMethodCode === 'transferencia'
                   ? <CreditCard className="w-4 h-4 text-primary flex-shrink-0" />
                   : <Banknote className="w-4 h-4 text-primary flex-shrink-0" />}
               <span className="text-muted-foreground">Método de pago:</span>
-              <span className="font-medium">{getPaymentMethodLabel(paymentMethodCode)}</span>
+              <span className="min-w-0 break-words font-medium">{getPaymentMethodLabel(paymentMethodCode)}</span>
             </div>
 
             {paymentMethodCode === 'transferencia' && (
-              <div className="ml-6 mt-1 bg-secondary/40 rounded-lg p-3 text-sm space-y-1.5 border border-border">
+              <div className="mt-1 min-w-0 space-y-1.5 rounded-lg border border-border bg-secondary/40 p-3 text-sm sm:ml-6">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Datos para transferir</p>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Titular</span>
@@ -358,7 +358,7 @@ export function GuestOrderPage() {
             )}
 
             {canShowQr && (
-              <div className="ml-6 mt-1 bg-secondary/40 rounded-lg p-3 text-sm space-y-3 border border-border">
+              <div className="mt-1 min-w-0 space-y-3 rounded-lg border border-border bg-secondary/40 p-3 text-sm sm:ml-6">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Escaneá el código QR para pagar</p>
                 <img
                   src={getPaymentMethodImageUrl(order.paymentMethodImagePath) ?? undefined}
@@ -370,9 +370,9 @@ export function GuestOrderPage() {
             )}
           </div>
 
-          <div className="flex items-start gap-2 text-sm">
+            <div className="flex min-w-0 items-start gap-2 text-sm">
             <MapPin className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
-            <div>
+              <div className="min-w-0 break-words">
               <span className="text-muted-foreground">
                 {order.shippingAddress ? 'Dirección de envío: ' : 'Modalidad: '}
               </span>

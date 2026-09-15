@@ -18,9 +18,9 @@ export function ShopFilters({
 }: ShopFiltersProps) {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-0">
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="flex min-w-0 flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-center">
         {/* Breadcrumbs */}
-        <nav className="flex items-center gap-2 text-sm text-[#4a7c59] tracking-wide">
+        <nav className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-[#4a7c59] tracking-wide">
           <Link to="/" className="hover:text-primary transition-colors flex items-center">
             <Home className="w-4 h-4 stroke-[1.75]" />
           </Link>
@@ -31,17 +31,17 @@ export function ShopFilters({
           {categoryName && (
             <>
               <span className="text-border">/</span>
-              <span className="text-[#4a7c59] font-medium">
+              <span className="min-w-0 break-words font-medium text-[#4a7c59]">
                 {categoryName}
               </span>
             </>
           )}
         </nav>
 
-        <div className="flex items-center gap-4 self-stretch sm:self-auto justify-between sm:justify-end">
+        <div className="flex min-w-0 items-center justify-between gap-4 self-stretch sm:self-auto sm:justify-end">
 
           {/* Sort Dropdown */}
-          <div className="relative group min-w-[180px]">
+          <div className="group relative min-w-0 flex-1 sm:min-w-[180px] sm:flex-none">
             <select
               value={sortBy}
               onChange={(e) => onSortChange(e.target.value)}

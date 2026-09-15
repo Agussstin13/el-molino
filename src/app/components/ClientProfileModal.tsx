@@ -43,12 +43,12 @@ export function ClientProfileModal({ isOpen, onClose }: ClientProfileModalProps)
   }, [clientUser, isOpen]);
 
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-    return () => { document.body.style.overflow = 'unset'; };
+    if (!isOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => { document.body.style.overflow = previousOverflow; };
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -116,10 +116,10 @@ export function ClientProfileModal({ isOpen, onClose }: ClientProfileModalProps)
   const initials = `${clientUser?.nombre?.[0] ?? ''}${clientUser?.apellido?.[0] ?? ''}`.toUpperCase() || '?';
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative w-full max-w-sm bg-card border border-border rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-200">
+      <div className="relative max-h-[calc(100dvh-1rem)] w-full max-w-sm min-w-0 overflow-x-hidden overflow-y-auto rounded-2xl border border-border bg-card shadow-2xl animate-in zoom-in-95 fade-in duration-200 sm:max-h-[calc(100dvh-2rem)]">
 
         {/* ── VISTA PERFIL ──────────────────────────────────────────── */}
         {!isEditing ? (
@@ -173,10 +173,10 @@ export function ClientProfileModal({ isOpen, onClose }: ClientProfileModalProps)
                 <div className="space-y-4">
                   <div className="w-full h-px bg-border/60" />
 
-                  <div className="grid grid-cols-2 gap-2.5">
+                  <div className="grid min-w-0 grid-cols-1 gap-2.5 sm:grid-cols-2">
                     <DataRow icon={<ShieldCheck className="w-3.5 h-3.5" />} label="DNI" value={clientUser?.dni ?? '—'} />
                     <DataRow icon={<Phone className="w-3.5 h-3.5" />} label="Teléfono" value={clientUser?.telefono ?? '—'} />
-                    <div className="col-span-2">
+                    <div className="col-span-full">
                       <DataRow icon={<Calendar className="w-3.5 h-3.5" />} label="Fecha de nacimiento" value={displayDate} />
                     </div>
                   </div>
@@ -282,7 +282,7 @@ export function ClientProfileModal({ isOpen, onClose }: ClientProfileModalProps)
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
                 <FormField label="Nombre" icon={<UserIcon className="w-4 h-4" />} type="text" value={nombre} onChange={setNombre} required />
                 <FormField label="Apellido" icon={<UserIcon className="w-4 h-4" />} type="text" value={apellido} onChange={setApellido} required />
               </div>
@@ -325,11 +325,11 @@ export function ClientProfileModal({ isOpen, onClose }: ClientProfileModalProps)
 
 function DataRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="bg-secondary/30 border border-border/50 rounded-xl px-3 py-2.5">
+    <div className="min-w-0 rounded-xl border border-border/50 bg-secondary/30 px-3 py-2.5">
       <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
         {icon}{label}
       </span>
-      <p className="text-sm font-medium text-foreground">{value}</p>
+      <p className="break-words text-sm font-medium text-foreground">{value}</p>
     </div>
   );
 }
@@ -339,17 +339,17 @@ function FormField({ label, hint, icon, type, value, onChange, placeholder, requ
   onChange: (v: string) => void; placeholder?: string; required?: boolean; max?: string; isDate?: boolean;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className="min-w-0 space-y-1.5">
       <label className="flex items-center justify-between text-xs font-semibold text-foreground px-0.5">
         <span>{label}</span>
         {hint && <span className="text-muted-foreground font-normal">{hint}</span>}
       </label>
-      <div className="relative">
+      <div className="relative min-w-0">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">{icon}</span>
         <input
           type={type} value={value} onChange={e => onChange(e.target.value)}
           placeholder={placeholder} required={required} max={max}
-          className={`w-full pl-9 pr-3 py-2.5 bg-input-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring transition-all ${isDate ? '[&::-webkit-calendar-picker-indicator]:opacity-40' : ''}`}
+          className={`w-full min-w-0 pl-9 pr-3 py-2.5 bg-input-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring transition-all ${isDate ? '[&::-webkit-calendar-picker-indicator]:opacity-40' : ''}`}
         />
       </div>
     </div>

@@ -100,23 +100,23 @@ const InputField = ({
   error?: string;
   onUpdate?: () => void;
 }) => (
-  <div className={half ? "" : "col-span-2"}>
+  <div className={`min-w-0 ${half ? "" : "col-span-full"}`}>
     <label className="block text-sm mb-1.5">{label}</label>
-    <div className="flex items-center gap-2">
+    <div className="flex min-w-0 items-center gap-2">
       <input
         type={type}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
         readOnly={readOnly}
-        className={`w-full px-3 py-2.5 bg-input-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-sm transition-colors ${error ? "border-destructive" : "border-border"
+        className={`min-w-0 w-full px-3 py-2.5 bg-input-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-sm transition-colors ${error ? "border-destructive" : "border-border"
           } ${readOnly ? "opacity-70 cursor-not-allowed bg-secondary/50" : ""}`}
       />
       {showUpdateBtn && onUpdate && (
         <button
           type="button"
           onClick={onUpdate}
-          className="px-3 py-2.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg text-sm font-medium transition-colors"
+          className="shrink-0 px-3 py-2.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg text-sm font-medium transition-colors"
         >
           Actualizar
         </button>
@@ -177,13 +177,13 @@ export function Checkout() {
 
   // Bloquear el scroll de fondo cuando el modal está abierto
   useEffect(() => {
-    if (isCheckoutOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
+    if (!isCheckoutOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
     return () => {
-      document.body.style.overflow = "unset";
+      document.body.style.overflow = previousOverflow;
     };
   }, [isCheckoutOpen]);
 
@@ -787,19 +787,19 @@ export function Checkout() {
 
       {/* Modal confirmación de dirección */}
       {showAddressConfirm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4">
           <div
             className="absolute inset-0 bg-black/60"
             onClick={() => setShowAddressConfirm(false)}
           />
-          <div className="relative bg-card rounded-2xl shadow-2xl border-2 border-border w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="relative max-h-[calc(100dvh-1rem)] w-full max-w-sm min-w-0 overflow-y-auto overflow-x-hidden rounded-2xl border-2 border-border bg-card shadow-2xl animate-in fade-in zoom-in-95 duration-200 sm:max-h-[calc(100dvh-2rem)]">
             {/* Header */}
             <div className="p-4 border-b border-border bg-secondary/30">
               <div className="flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-primary flex-shrink-0" />
-                <div>
+                <div className="min-w-0">
                   <p className="font-semibold text-sm">¿Es aquí tu dirección de entrega?</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-snug line-clamp-2">{form.calle}</p>
+                  <p className="mt-0.5 line-clamp-2 break-words text-xs leading-snug text-muted-foreground">{form.calle}</p>
                 </div>
               </div>
             </div>
@@ -810,6 +810,7 @@ export function Checkout() {
                 title="Confirmar dirección"
                 width="100%"
                 height="260"
+                className="h-48 sm:h-[260px]"
                 style={{ border: 0, display: "block" }}
                 loading="lazy"
                 allowFullScreen
@@ -842,13 +843,14 @@ export function Checkout() {
           </div>
         </div>
       )}
-      <div className="fixed inset-4 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-4xl md:max-h-[92vh] bg-card rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden border-2 border-border">
+      <div className="fixed inset-0 z-50 flex max-h-[100dvh] w-full max-w-full min-w-0 flex-col overflow-hidden rounded-none border-2 border-border bg-card shadow-2xl sm:inset-4 sm:w-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl md:inset-auto md:left-1/2 md:top-1/2 md:w-full md:max-w-4xl md:-translate-x-1/2 md:-translate-y-1/2 md:max-h-[92dvh]">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b-2 border-border bg-secondary/30 flex-shrink-0">
-          <h2>Finalizar Compra</h2>
+        <div className="flex min-w-0 flex-shrink-0 items-center justify-between gap-2 border-b-2 border-border bg-secondary/30 p-4 sm:p-5">
+          <h2 className="min-w-0 truncate">Finalizar Compra</h2>
           <button
             onClick={handleClose}
-            className="p-2 hover:bg-secondary rounded-lg transition-colors"
+            className="flex-shrink-0 p-2 hover:bg-secondary rounded-lg transition-colors"
+            aria-label="Cerrar checkout"
           >
             <X className="w-5 h-5" />
           </button>
@@ -856,8 +858,8 @@ export function Checkout() {
 
         {/* Confirmado */}
         {step === "confirmado" ? (
-          <div className="flex-1 min-h-0 overflow-y-auto p-6 text-center">
-            <div className="flex flex-col items-center justify-start gap-4 max-w-md mx-auto">
+          <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4 text-center sm:p-6">
+            <div className="mx-auto flex max-w-md min-w-0 flex-col items-center justify-start gap-4">
             <div className="w-20 h-20 flex items-center justify-center shrink-0">
               {isOnlinePaymentMethod(selectedPaymentMethodCode) && !paymentInitializationFailed ? (
                 <CheckCircle2 className="w-20 h-20 shrink-0 text-primary" />
@@ -907,17 +909,17 @@ export function Checkout() {
                   Datos para transferir
                 </p>
                 <div className="space-y-1 text-sm">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-3">
                     <span className="text-muted-foreground">Titular</span>
-                    <span className="font-medium">Mateo Agustin Lucero</span>
+                    <span className="min-w-0 break-words text-right font-medium">Mateo Agustin Lucero</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-3">
                     <span className="text-muted-foreground">Banco</span>
-                    <span className="font-medium">Mercado Pago</span>
+                    <span className="min-w-0 break-words text-right font-medium">Mercado Pago</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-3">
                     <span className="text-muted-foreground">Alias</span>
-                    <span className="font-medium font-mono">elmolinomdp</span>
+                    <span className="min-w-0 break-all text-right font-mono font-medium">elmolinomdp</span>
                   </div>
                 </div>
               </div>
@@ -948,7 +950,7 @@ export function Checkout() {
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="bg-[#25D366] hover:bg-[#1ebd5a] text-white px-6 py-3.5 rounded-xl transition-all font-medium flex items-center justify-center gap-2 shadow-lg shadow-[#25D366]/20 active:scale-[0.98]"
+                  className="flex items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 py-3.5 text-center font-medium text-white shadow-lg shadow-[#25D366]/20 transition-all hover:bg-[#1ebd5a] active:scale-[0.98] sm:px-6"
                   >
                     {selectedPaymentMethodCode === "transferencia"
                       ? "Enviar comprobante por WhatsApp"
@@ -962,7 +964,7 @@ export function Checkout() {
                   href={paymentUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="bg-[#009EE3] hover:bg-[#008ACB] text-white px-6 py-3.5 rounded-xl transition-all font-medium flex items-center justify-center gap-2 shadow-lg shadow-[#009EE3]/20 active:scale-[0.98]"
+                  className="flex items-center justify-center gap-2 rounded-xl bg-[#009EE3] px-4 py-3.5 text-center font-medium text-white shadow-lg shadow-[#009EE3]/20 transition-all hover:bg-[#008ACB] active:scale-[0.98] sm:px-6"
                 >
                   Pagar con {selectedPaymentMethodLabel}
                 </a>
@@ -970,7 +972,7 @@ export function Checkout() {
               {paymentInitializationFailed && confirmedOrderPath && (
                 <a
                   href={confirmedOrderPath}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3.5 rounded-xl transition-colors font-medium"
+                  className="break-words rounded-xl bg-primary px-4 py-3.5 text-center font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:px-6"
                 >
                   Ir al pedido y reintentar el pago
                 </a>
@@ -985,7 +987,7 @@ export function Checkout() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto p-5">
+          <div className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-5">
             {/* Steps */}
             {step !== "login-prompt" && (
               <div className="flex flex-wrap items-center gap-2 mb-6">
@@ -1012,9 +1014,9 @@ export function Checkout() {
               </div>
             )}
 
-            <div className="grid md:grid-cols-5 gap-6">
+            <div className="grid min-w-0 grid-cols-1 gap-6 md:grid-cols-5">
               {/* Formulario */}
-              <div className="md:col-span-3 space-y-5">
+              <div className="min-w-0 space-y-5 md:col-span-3">
                 {step === "login-prompt" && (
                   <div className="flex flex-col items-center justify-center py-10 space-y-8 animate-in fade-in zoom-in duration-300">
                     <div className="bg-primary/10 p-5 rounded-full">
@@ -1057,7 +1059,7 @@ export function Checkout() {
                       <p className="text-sm font-medium mb-3">
                         Método de entrega
                       </p>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <label
                           className={`flex items-center justify-center p-3 rounded-xl border-2 cursor-pointer transition-colors text-sm font-medium ${form.metodo_entrega === "envio" ? "border-primary bg-primary/5 text-primary" : "border-border hover:border-primary/40"}`}
                         >
@@ -1087,7 +1089,7 @@ export function Checkout() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
                       <InputField
                         label="Nombre *"
                         field="nombre"
@@ -1129,8 +1131,8 @@ export function Checkout() {
                       />
                       {form.metodo_entrega === "envio" && (
                         <>
-                          <div className="col-span-2 relative">
-                            <div className="flex items-center justify-between mb-1.5">
+                          <div className="relative col-span-full min-w-0">
+                            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-1">
                               <label className="block text-sm">
                                 Dirección *
                               </label>
@@ -1162,7 +1164,7 @@ export function Checkout() {
                                       setShippingQuoteError(null);
                                       if (errors.calle) setErrors((err) => ({ ...err, calle: "" }));
                                     }}
-                                    className="w-full pl-9 pr-8 py-2.5 bg-input-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none cursor-pointer"
+                                    className="w-full min-w-0 appearance-none rounded-lg border border-border bg-input-background py-2.5 pl-9 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
                                   >
                                     <option value="">Elegir dirección guardada...</option>
                                     {savedAddresses.map((addr: SavedAddress) => (
@@ -1203,7 +1205,7 @@ export function Checkout() {
                                   setShippingCost(null);
                                 }}
                                 placeholder="Ej: Av. Independencia 1200"
-                                className={`w-full px-3 py-2.5 bg-input-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-sm transition-colors 
+                                className={`w-full min-w-0 px-3 py-2.5 bg-input-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-sm transition-colors
                                   ${errors.calle
                                     ? "border-destructive"
                                     : "border-border"
@@ -1350,53 +1352,53 @@ export function Checkout() {
                       return (
                         <div
                           key={method.id}
-                          className={`rounded-xl border-2 transition-colors ${isSelected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
-                        >
-                          <label className="flex items-center gap-4 p-4 cursor-pointer">
+                            className={`min-w-0 rounded-xl border-2 transition-colors ${isSelected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
+                          >
+                          <label className="flex min-w-0 cursor-pointer items-center gap-3 p-3 sm:gap-4 sm:p-4">
                             <input
                               type="radio"
                               name="pago"
                               value={methodCode}
                               checked={isSelected}
                               onChange={set("metodo_pago")}
-                              className="accent-primary"
+                              className="shrink-0 accent-primary"
                             />
-                            <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm flex-shrink-0">
+                            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-white shadow-sm sm:h-12 sm:w-12">
                               <span className="text-2xl">{methodIcon}</span>
                             </div>
-                            <div>
-                              <p className="font-medium">{getPaymentMethodLabel(methodCode)}</p>
-                              <p className="text-sm text-muted-foreground">
+                            <div className="min-w-0 flex-1">
+                              <p className="break-words font-medium">{getPaymentMethodLabel(methodCode)}</p>
+                              <p className="break-words text-sm text-muted-foreground">
                                 {getCheckoutPaymentDescription(methodCode)}
                               </p>
                             </div>
                           </label>
 
                           {isSelected && methodCode === "transferencia" && (
-                            <div className="px-4 pb-4 pl-20">
+                            <div className="px-3 pb-3 sm:px-4 sm:pb-4 sm:pl-20">
                               <div className="bg-white/50 p-3 rounded-lg border border-border/50 space-y-1.5">
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                                   Datos para transferir
                                 </p>
-                                <div className="flex justify-between text-sm">
+                                <div className="flex flex-col gap-0.5 text-sm sm:flex-row sm:justify-between sm:gap-3">
                                   <span className="text-muted-foreground">
                                     Titular
                                   </span>
-                                  <span className="font-medium">
+                                  <span className="break-words font-medium sm:text-right">
                                     Mateo Agustin Lucero
                                   </span>
                                 </div>
-                                <div className="flex justify-between text-sm">
+                                <div className="flex flex-col gap-0.5 text-sm sm:flex-row sm:justify-between sm:gap-3">
                                   <span className="text-muted-foreground">
                                     Banco
                                   </span>
                                   <span className="font-medium">Mercado Pago</span>
                                 </div>
-                                <div className="flex justify-between text-sm">
+                                <div className="flex flex-col gap-0.5 text-sm sm:flex-row sm:justify-between sm:gap-3">
                                   <span className="text-muted-foreground">
                                     Alias
                                   </span>
-                                  <span className="font-medium font-mono tracking-wide">
+                                  <span className="break-all font-mono font-medium tracking-wide sm:text-right">
                                     elmolinomdp
                                   </span>
                                 </div>
@@ -1404,7 +1406,7 @@ export function Checkout() {
                             </div>
                           )}
                           {isSelected && methodCode === "qr" && method.imagePath && (
-                            <div className="px-4 pb-4 pl-20">
+                            <div className="px-3 pb-3 sm:px-4 sm:pb-4 sm:pl-20">
                               <div className="bg-white/50 p-3 rounded-lg border border-border/50 space-y-3">
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                                   Escaneá el código QR para pagar
@@ -1436,7 +1438,7 @@ export function Checkout() {
                     <p className="text-sm font-medium">
                       Revisá los datos de tu compra
                     </p>
-                    <div className="bg-secondary/20 p-4 rounded-xl border border-border space-y-3 text-sm">
+                    <div className="min-w-0 space-y-3 overflow-hidden rounded-xl border border-border bg-secondary/20 p-4 text-sm [overflow-wrap:anywhere]">
                       <div>
                         <span className="text-muted-foreground block text-xs">
                           Datos Personales
@@ -1497,8 +1499,8 @@ export function Checkout() {
               </div>
 
               {/* Resumen */}
-              <div className="md:col-span-2 space-y-4">
-                <div className="bg-secondary/30 p-4 rounded-xl border border-border sticky top-0">
+              <div className="min-w-0 space-y-4 md:col-span-2">
+                <div className="sticky top-0 min-w-0 rounded-xl border border-border bg-secondary/30 p-4">
                   <h3 className="mb-4 text-base">Resumen del pedido</h3>
                   <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
                     {items.map((item) => {
@@ -1540,20 +1542,20 @@ export function Checkout() {
                   {!appliedCoupon && (
                     clientUser ? (
                       <div className="mb-4 space-y-2">
-                        <div className="flex gap-2">
+                        <div className="flex min-w-0 gap-2">
                           <input
                             type="text"
                             maxLength={40}
                             placeholder="Código de cupón"
                             value={couponCodeInput}
                             onChange={(e) => setCouponCodeInput(e.target.value.trim().toUpperCase())}
-                            className="flex-1 px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm uppercase"
+                            className="min-w-0 flex-1 px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm uppercase"
                           />
                           <button
                             type="button"
                             onClick={handleValidateCoupon}
                             disabled={validatingCoupon || !couponCodeInput}
-                            className="px-4 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="shrink-0 px-3 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed sm:px-4"
                           >
                             {validatingCoupon ? "..." : "Aplicar"}
                           </button>
@@ -1563,7 +1565,7 @@ export function Checkout() {
                         )}
                       </div>
                     ) : (
-                      <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary/30 px-3 py-2.5 text-sm">
+                      <div className="mb-4 flex flex-col items-start gap-2 rounded-lg border border-border bg-secondary/30 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                         <span className="text-muted-foreground">Iniciá sesión para utilizar cupones.</span>
                         <button
                           type="button"
@@ -1577,23 +1579,23 @@ export function Checkout() {
                   )}
 
                   <div className="border-t border-border pt-3 space-y-1.5 text-sm">
-                    <div className="flex justify-between">
+                    <div className="flex min-w-0 justify-between gap-3">
                       <span className="text-muted-foreground">Subtotal</span>
-                      <span>{formatARS(subtotal)}</span>
+                      <span className="shrink-0 text-right">{formatARS(subtotal)}</span>
                     </div>
                     {appliedCoupon && (
-                      <div className="flex justify-between text-emerald-600">
-                        <span className="flex items-center gap-2">
+                      <div className="flex min-w-0 justify-between gap-3 text-emerald-600">
+                        <span className="flex min-w-0 flex-wrap items-center gap-2">
                           Cupón: {appliedCoupon.code}
                           <button onClick={removeCoupon} className="text-xs opacity-70 hover:opacity-100 hover:underline">
                             (Quitar)
                           </button>
                         </span>
-                        <span>-{formatARS(appliedCoupon.discountAmount)}</span>
+                        <span className="shrink-0 text-right">-{formatARS(appliedCoupon.discountAmount)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground flex items-center gap-1">
+                    <div className="flex min-w-0 justify-between gap-3">
+                      <span className="flex min-w-0 flex-wrap items-center gap-1 text-muted-foreground">
                         <Truck className="w-3 h-3" />
                         Envío
                         {distanciaKm !== null &&
@@ -1603,7 +1605,7 @@ export function Checkout() {
                             </span>
                           )}
                       </span>
-                      <span>
+                      <span className="shrink-0 text-right">
                         {form.metodo_entrega === "retiro"
                           ? "Gratis (retiro)"
                           : shippingCost === 0
@@ -1613,9 +1615,9 @@ export function Checkout() {
                               : "Ingresá tu dirección"}
                       </span>
                     </div>
-                    <div className="flex justify-between pt-2 border-t border-border font-semibold">
+                    <div className="flex justify-between gap-3 pt-2 border-t border-border font-semibold">
                       <span>Total</span>
-                      <span className="text-primary text-base">
+                      <span className="shrink-0 text-right text-base text-primary">
                         {formatARS(finalTotal)}
                       </span>
                     </div>

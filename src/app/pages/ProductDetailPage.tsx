@@ -583,7 +583,7 @@ export function ProductDetailPage() {
       />
       <Header />
 
-      <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+      <main className="mx-auto w-full max-w-6xl min-w-0 flex-1 px-3 py-6 sm:px-6 sm:py-8 lg:px-8">
         {/* ── Breadcrumb ── */}
         <nav
           className="flex items-center gap-2 text-sm text-[#4a7c59] mb-6 flex-wrap tracking-wide"
@@ -634,7 +634,7 @@ export function ProductDetailPage() {
         </nav>
 
         {/* ── Bloque principal ── */}
-        <div className="grid md:grid-cols-2 gap-0 bg-card rounded-3xl border border-border/40 shadow-md mb-10">
+        <div className="mb-10 grid min-w-0 grid-cols-1 gap-0 rounded-3xl border border-border/40 bg-card shadow-md md:grid-cols-2">
           {/* ── Columna izquierda: Imagen ── */}
           <div className="relative flex flex-col bg-white border-b md:border-b-0 md:border-r border-border/40 rounded-t-3xl md:rounded-l-3xl md:rounded-tr-none overflow-hidden">
             {/* Badges */}
@@ -657,7 +657,7 @@ export function ProductDetailPage() {
             </div>
 
             {/* Imagen principal */}
-            <div className="relative flex-1 flex items-center justify-center min-h-[320px] md:min-h-[420px]">
+            <div className="relative flex min-h-[260px] flex-1 items-center justify-center sm:min-h-[320px] md:min-h-[420px]">
               {product.image ? (
                 <img
                   src={product.image}
@@ -689,7 +689,7 @@ export function ProductDetailPage() {
           </div>
 
           {/* ── Columna derecha: Info ── */}
-          <div className="flex flex-col p-7 md:p-9 gap-0 rounded-b-3xl md:rounded-r-3xl md:rounded-bl-none">
+          <div className="flex min-w-0 flex-col gap-0 rounded-b-3xl p-5 sm:p-7 md:rounded-bl-none md:rounded-r-3xl md:p-9">
             {/* Categorías */}
             {((product.categories && product.categories.length > 0) ||
               product.category) && (
@@ -748,8 +748,8 @@ export function ProductDetailPage() {
                   </span>
                 </div>
               )}
-              <div className="flex items-baseline gap-3">
-                <span className="text-[2.4rem] font-black text-foreground leading-none tracking-tight">
+              <div className="flex min-w-0 flex-wrap items-baseline gap-3">
+                <span className="break-words text-[2rem] font-black leading-none tracking-tight text-foreground sm:text-[2.4rem]">
                   {formatARS(effectivePrice)}
                 </span>
               </div>
@@ -955,7 +955,7 @@ export function ProductDetailPage() {
               </h2>
               <div className="flex-1 h-px bg-border/60" />
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
               {related.map((p) => (
                 <ProductCard key={p.id} product={p} viewMode="grid-sm" />
               ))}

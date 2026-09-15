@@ -2,6 +2,30 @@
 @import './tailwind.css';
 @import './theme.css';
 
+html,
+body,
+#root {
+  max-width: 100%;
+}
+
+html,
+body {
+  overflow-x: clip;
+}
+
+input,
+select,
+textarea {
+  min-width: 0;
+  max-width: 100%;
+}
+
+img,
+video,
+iframe {
+  max-width: 100%;
+}
+
 .menu-scrollbar {
   scrollbar-color: var(--border) transparent;
   scrollbar-width: thin;

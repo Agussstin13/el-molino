@@ -252,7 +252,7 @@ function OrderCard({
     <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
       {/* Header */}
       <button
-        className="w-full text-left p-5 flex flex-col sm:flex-row sm:items-center gap-3"
+        className="flex w-full min-w-0 flex-col gap-3 p-4 text-left sm:flex-row sm:items-center sm:p-5"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex-1 min-w-0">
@@ -311,7 +311,7 @@ function OrderCard({
 
       {/* Expanded detail */}
       {expanded && (
-        <div className="border-t border-border bg-secondary/20 px-5 py-6 space-y-6 animate-in fade-in slide-in-from-top-1 duration-200">
+        <div className="min-w-0 space-y-6 border-t border-border bg-secondary/20 px-3 py-5 animate-in fade-in slide-in-from-top-1 duration-200 sm:px-5 sm:py-6">
           {/* Products */}
           <div>
             <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
@@ -323,14 +323,14 @@ function OrderCard({
                 {order.items.map((item: any, idx: number) => (
                   <div
                     key={idx}
-                    className="flex items-center justify-between text-sm p-2 rounded-lg hover:bg-secondary/40 transition-colors"
+                    className="flex min-w-0 items-start justify-between gap-2 rounded-lg p-2 text-sm transition-colors hover:bg-secondary/40"
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 text-primary font-bold text-xs">
                         {item.quantity}x
                       </div>
-                      <div>
-                        <span className="font-medium text-foreground block">
+                      <div className="min-w-0">
+                        <span className="block break-words font-medium text-foreground">
                           {item.productName}
                         </span>
                         {item.gramageGrams && (
@@ -340,7 +340,7 @@ function OrderCard({
                         )}
                       </div>
                     </div>
-                    <span className="font-semibold text-foreground whitespace-nowrap ml-4">
+                    <span className="ml-2 flex-shrink-0 whitespace-nowrap font-semibold text-foreground sm:ml-4">
                       {formatARS(item.price * item.quantity)}
                     </span>
                   </div>
@@ -368,11 +368,11 @@ function OrderCard({
                   <Banknote className="w-4 h-4" />
                 )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
                   Método de pago
                 </p>
-                <p className="text-sm font-medium text-foreground">
+                <p className="break-words text-sm font-medium text-foreground">
                   {getPaymentMethodLabel(order.paymentMethod)}
                 </p>
               </div>
@@ -383,11 +383,11 @@ function OrderCard({
               <div className="mt-0.5 p-2 bg-primary/10 rounded-lg text-primary flex-shrink-0">
                 <MapPin className="w-4 h-4" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
                   {order.shippingAddress ? "Dirección de envío" : "Modalidad"}
                 </p>
-                <p className="text-sm font-medium text-foreground">
+                <p className="break-words text-sm font-medium text-foreground">
                   {order.shippingAddress ?? "Retiro en el local"}
                 </p>
                 {order.shippingCost > 0 && (

@@ -50,9 +50,9 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 bg-[#f0e0cb]/80 backdrop-blur-md border-b-2 border-border shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-4">
+        <div className="flex h-16 min-w-0 items-center justify-between gap-1 sm:gap-4">
           {/* Hamburger + Logo */}
-          <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex flex-shrink-0 items-center gap-1 sm:gap-3">
             <button
               onClick={() => setIsMenuOpen(true)}
               className="p-2 -ml-2 rounded-lg hover:bg-secondary text-foreground transition-colors"
@@ -60,13 +60,13 @@ export function Header() {
             >
               <Menu className="w-6 h-6" />
             </button>
-            <Link to="/" className="flex items-center gap-3">
+            <Link to="/" className="hidden items-center gap-3 min-[400px]:flex">
               <img
                 src="/logo.svg"
                 alt="El Molino"
                 width="48"
                 height="48"
-                className="h-12 w-12 object-contain"
+              className="h-10 w-10 object-contain sm:h-12 sm:w-12"
               />
               <span
                 className="hidden sm:block text-2xl text-primary font-bold italic tracking-wide"
@@ -80,7 +80,7 @@ export function Header() {
           {/* Search */}
           <form
             onSubmit={handleSearch}
-            className="flex-1 max-w-md"
+            className="min-w-0 flex-1 max-w-md"
           >
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -91,13 +91,13 @@ export function Header() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar productos..."
-                className="w-full pl-10 pr-4 py-2 bg-input-background rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-ring transition-shadow text-sm"
+                className="w-full min-w-0 py-2 pl-9 pr-2 text-sm bg-input-background rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-ring transition-shadow sm:pl-10 sm:pr-4"
               />
             </div>
           </form>
 
           {/* User and Cart Group */}
-          <div className="flex items-center gap-1 sm:gap-2">
+          <div className="flex flex-shrink-0 items-center gap-0 sm:gap-2">
             {/* Mis Pedidos (Desktop prominent) */}
             {hasOrdersAccess && (
               <Link
