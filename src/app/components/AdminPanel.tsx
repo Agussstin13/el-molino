@@ -90,6 +90,23 @@ const STATUS_COLORS: Record<Order["status"], string> = {
   cancelado: "bg-red-100 text-red-500",
 };
 
+type OrdersFilter =
+  | "todos"
+  | "pendientes"
+  | "en_preparacion"
+  | "enviados"
+  | "entregados"
+  | "cancelados";
+
+const ORDER_FILTER_ACTIVE_COLORS: Record<OrdersFilter, string> = {
+  pendientes: STATUS_COLORS.pendiente,
+  en_preparacion: STATUS_COLORS.en_preparacion,
+  enviados: STATUS_COLORS.enviado,
+  entregados: STATUS_COLORS.entregado,
+  cancelados: STATUS_COLORS.cancelado,
+  todos: "bg-foreground text-background",
+};
+
 const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   pendiente: "Pendiente",
   aprobado: "Pagado",
@@ -341,14 +358,8 @@ export function AdminPanel() {
   const [editingCarouselId, setEditingCarouselId] = useState<number | null>(
     null,
   );
-  const [ordersFilter, setOrdersFilter] = useState<
-    | "todos"
-    | "pendientes"
-    | "en_preparacion"
-    | "enviados"
-    | "entregados"
-    | "cancelados"
-  >("pendientes");
+  const [ordersFilter, setOrdersFilter] =
+    useState<OrdersFilter>("pendientes");
 
   // Category state
   const [categories, setCategories] = useState<Category[]>([]);
@@ -2372,7 +2383,7 @@ export function AdminPanel() {
     <div className="h-screen bg-background flex overflow-hidden">
       {/* Sidebar */}
       <aside
-        className={`${isSidebarExpanded ? "w-20 md:w-60" : "w-20"} transition-all duration-300 bg-sidebar border-r border-sidebar-border p-4 flex flex-col flex-shrink-0 relative`}
+        className={`${isSidebarExpanded ? "w-16 sm:w-20 md:w-60" : "w-16 sm:w-20"} relative flex flex-shrink-0 flex-col border-r border-sidebar-border bg-sidebar p-2 transition-all duration-300 sm:p-4`}
       >
         <button
           onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
@@ -2473,8 +2484,11 @@ export function AdminPanel() {
       </aside>
 
       {/* Main */}
-      <main id="admin-main-content" className="flex-1 p-8 overflow-auto">
-        <div className="max-w-5xl mx-auto">
+      <main
+        id="admin-main-content"
+        className="min-w-0 flex-1 overflow-auto p-3 sm:p-5 lg:p-8"
+      >
+        <div className="mx-auto min-w-0 max-w-5xl">
           {/* PRODUCTOS */}
           {currentView === "products" && (
             <div>
@@ -3688,10 +3702,12 @@ export function AdminPanel() {
 
           {/* PEDIDOS */}
           {currentView === "orders" && (
-            <div>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-6">
-                <h1 className="text-2xl font-bold">Historial de Pedidos</h1>
-                <div className="flex bg-secondary/40 p-1 border border-border rounded-lg self-start sm:self-auto">
+            <div className="min-w-0">
+              <div className="mb-6 flex min-w-0 flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-center">
+                <h1 className="text-xl font-bold sm:text-2xl">
+                  Historial de Pedidos
+                </h1>
+                <div className="flex w-full max-w-full flex-wrap self-start rounded-lg border border-border bg-secondary/40 p-1 sm:w-auto sm:self-auto">
                   {(
                     [
                       ["pendientes", "Pendientes"],
@@ -3705,9 +3721,9 @@ export function AdminPanel() {
                     <button
                       key={val}
                       onClick={() => setOrdersFilter(val)}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                      className={`flex-none whitespace-nowrap px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
                         ordersFilter === val
-                          ? "bg-card text-foreground shadow-sm"
+                          ? `${ORDER_FILTER_ACTIVE_COLORS[val]} shadow-sm`
                           : "text-muted-foreground hover:text-foreground"
                       }`}
                     >
@@ -3716,9 +3732,9 @@ export function AdminPanel() {
                   ))}
                 </div>
               </div>
-              <div className="bg-card rounded-xl border border-border overflow-x-auto shadow-sm">
-                <table className="w-full min-w-[800px]">
-                  <thead className="bg-secondary/50">
+              <div className="min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-sm xl:overflow-x-auto">
+                <table className="block w-full min-w-0 xl:table xl:min-w-[800px]">
+                  <thead className="hidden bg-secondary/50 xl:table-header-group">
                     <tr>
                       <th className="text-left p-4 text-sm font-medium">
                         Pedido
@@ -3741,7 +3757,7 @@ export function AdminPanel() {
                       <th className="p-4 w-10"></th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="block xl:table-row-group">
                     {orders
                       .filter(
                         (o) =>
@@ -3760,39 +3776,83 @@ export function AdminPanel() {
                       .map((order) => (
                         <React.Fragment key={order.id}>
                           <tr
-                            className="border-t border-border hover:bg-secondary/20 transition-colors cursor-pointer"
+                            className={`relative mx-3 mt-3 grid min-w-0 cursor-pointer grid-cols-2 gap-3 rounded-xl border border-border bg-card p-3 transition-colors hover:bg-secondary/20 sm:p-4 xl:mx-0 xl:mt-0 xl:table-row xl:rounded-none xl:border-x-0 xl:border-b-0 xl:bg-transparent xl:p-0 ${
+                              expandedOrderId === order.id
+                                ? "rounded-b-none border-b-0"
+                                : ""
+                            }`}
                             onClick={() =>
                               setExpandedOrderId(
                                 expandedOrderId === order.id ? null : order.id,
                               )
                             }
                           >
-                            <td className="p-4 text-sm font-mono">
-                              {order.id}
+                            <td className="order-1 col-span-2 flex min-w-0 flex-col border-b border-border/60 pb-3 pr-10 text-sm xl:table-cell xl:border-0 xl:p-4 xl:font-mono">
+                              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground xl:hidden">
+                                Pedido
+                              </span>
+                              <span className="break-all font-mono text-base font-bold text-foreground xl:text-sm xl:font-normal">
+                                <span className="xl:hidden">#</span>{order.id}
+                              </span>
+                              <span className="mt-1 text-xs font-normal text-muted-foreground xl:hidden">
+                                Realizado el {order.date}
+                              </span>
                             </td>
-                            <td className="p-4 text-sm">{order.customer}</td>
-                            <td className="p-4 text-sm font-medium">
-                              {formatARS(order.total)}
+                            <td className="order-2 col-span-2 min-w-0 rounded-lg bg-secondary/40 p-3 text-sm xl:table-cell xl:rounded-none xl:bg-transparent xl:p-4">
+                              <span className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground xl:hidden">
+                                <User size={13} />
+                                Cliente
+                              </span>
+                              <span className="break-words text-base font-semibold text-foreground xl:text-sm xl:font-normal">
+                                {order.customer}
+                              </span>
                             </td>
-                            <td className="p-4 text-sm text-muted-foreground">
-                              {getPaymentMethodLabel(order.metodo_pago)}
+                            <td className="order-3 min-w-0 rounded-lg border border-border/60 bg-background p-3 text-sm font-medium xl:table-cell xl:rounded-none xl:border-0 xl:bg-transparent xl:p-4">
+                              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground xl:hidden">
+                                Total
+                              </span>
+                              <span className="text-base font-bold text-foreground xl:text-sm xl:font-medium">
+                                {formatARS(order.total)}
+                              </span>
+                            </td>
+                            <td className="order-5 col-span-2 min-w-0 border-t border-border/60 pt-3 text-sm text-muted-foreground xl:table-cell xl:border-0 xl:p-4">
+                              <span className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground xl:hidden">
+                                <CreditCard size={13} />
+                                Forma de pago
+                              </span>
+                              <span className="break-words font-medium text-foreground xl:font-normal xl:text-muted-foreground">
+                                {getPaymentMethodLabel(order.metodo_pago)}
+                              </span>
                               {order.informacion && (
-                                <div className="text-xs text-primary font-medium mt-1 normal-case">
-                                  {order.informacion}
-                                </div>
+                                <>
+                                  <div className="mt-3 rounded-lg bg-primary/5 p-2.5 text-xs font-medium normal-case text-primary xl:hidden">
+                                    <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                      Aclaraciones
+                                    </span>
+                                    <span className="break-words">
+                                      {order.informacion}
+                                    </span>
+                                  </div>
+                                  <div className="mt-1 hidden text-xs font-medium normal-case text-primary xl:block">
+                                    {order.informacion}
+                                  </div>
+                                </>
                               )}
                             </td>
-                            <td className="p-4">
+                            <td className="order-4 min-w-0 rounded-lg border border-border/60 bg-background p-3 xl:table-cell xl:rounded-none xl:border-0 xl:bg-transparent xl:p-4">
+                              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground xl:hidden">
+                                Estado
+                              </span>
                               <span
-                                className={`px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[order.status]}`}
+                                className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[order.status]}`}
                               >
                                 {STATUS_LABELS[order.status]}
                               </span>
                             </td>
-                            <td className="p-4 text-sm text-muted-foreground">
+                            <td className="hidden min-w-0 text-sm text-muted-foreground xl:table-cell xl:p-4">
                               {order.date}
                             </td>
-                            <td className="p-4 text-muted-foreground">
+                            <td className="absolute right-3 top-3 rounded-full bg-secondary p-1.5 text-muted-foreground xl:static xl:table-cell xl:rounded-none xl:bg-transparent xl:p-4">
                               {expandedOrderId === order.id ? (
                                 <ChevronUp size={18} />
                               ) : (
@@ -3801,20 +3861,20 @@ export function AdminPanel() {
                             </td>
                           </tr>
                           {expandedOrderId === order.id && (
-                            <tr className="bg-secondary/10">
+                            <tr className="mx-3 mb-3 block min-w-0 overflow-hidden rounded-b-xl border border-t-0 border-border bg-secondary/10 xl:mx-0 xl:mb-0 xl:table-row xl:rounded-none xl:border-0">
                               <td
                                 colSpan={7}
-                                className="p-0 border-b border-border"
+                                className="block min-w-0 p-0 xl:table-cell xl:border-b xl:border-border"
                               >
                                 <motion.div
                                   initial={{ opacity: 0, height: 0 }}
                                   animate={{ opacity: 1, height: "auto" }}
                                   exit={{ opacity: 0, height: 0 }}
-                                  className="p-6"
+                                  className="min-w-0 p-3 sm:p-4 md:p-6"
                                 >
-                                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                  <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-3 xl:gap-6">
                                     {/* Columna Cliente y Envío */}
-                                    <div className="bg-card p-5 rounded-xl border border-border/50 shadow-sm space-y-4">
+                                    <div className="min-w-0 space-y-4 rounded-xl border border-border/50 bg-card p-3 shadow-sm sm:p-5">
                                       <div className="flex items-center gap-2 pb-3 border-b border-border/50">
                                         <div className="p-2 bg-primary/10 text-primary rounded-lg">
                                           <User size={18} />
@@ -3886,7 +3946,7 @@ export function AdminPanel() {
                                     </div>
 
                                     {/* Columna Pago y Detalles */}
-                                    <div className="bg-card p-5 rounded-xl border border-border/50 shadow-sm space-y-4">
+                                    <div className="min-w-0 space-y-4 rounded-xl border border-border/50 bg-card p-3 shadow-sm sm:p-5">
                                       <div className="flex items-center gap-2 pb-3 border-b border-border/50">
                                         <div className="p-2 bg-primary/10 text-primary rounded-lg">
                                           <CreditCard size={18} />
@@ -4015,7 +4075,7 @@ export function AdminPanel() {
                                     </div>
 
                                     {/* Columna Resumen del Pedido */}
-                                    <div className="bg-card p-5 rounded-xl border border-border/50 shadow-sm flex flex-col h-full">
+                                    <div className="flex h-full min-w-0 flex-col rounded-xl border border-border/50 bg-card p-3 shadow-sm sm:p-5">
                                       <div className="flex items-center gap-2 pb-3 border-b border-border/50 mb-4">
                                         <div className="p-2 bg-primary/10 text-primary rounded-lg">
                                           <ShoppingBag size={18} />
@@ -4030,14 +4090,14 @@ export function AdminPanel() {
                                           {order.items?.map((item, idx) => (
                                             <li
                                               key={idx}
-                                              className="flex justify-between items-center text-sm group"
+                                              className="group flex min-w-0 items-center justify-between gap-2 text-sm mb-2"
                                             >
-                                              <div className="flex items-center gap-3">
+                                              <div className="flex min-w-0 items-center gap-2 sm:gap-3">
                                                 <span className="flex min-w-7 shrink-0 items-center justify-center rounded-md bg-secondary/50 px-2 py-1 text-xs font-medium text-secondary-foreground">
                                                   {item.quantity}x
                                                 </span>
-                                                <div>
-                                                  <p className="font-medium text-foreground group-hover:text-primary transition-colors">
+                                                <div className="min-w-0">
+                                                  <p className="break-words font-medium text-foreground transition-colors group-hover:text-primary">
                                                     {item.productName}
                                                   </p>
                                                   {item.gramageGrams && (
@@ -4048,7 +4108,7 @@ export function AdminPanel() {
                                                   )}
                                                 </div>
                                               </div>
-                                              <span className="font-medium whitespace-nowrap text-foreground">
+                                              <span className="shrink-0 whitespace-nowrap font-medium text-foreground">
                                                 {formatARS(
                                                   item.price * item.quantity,
                                                 )}
@@ -4128,7 +4188,7 @@ export function AdminPanel() {
                                                 ),
                                             );
                                           }}
-                                          className="inline-flex items-center justify-center whitespace-nowrap rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:cursor-wait disabled:opacity-60"
+                                          className="inline-flex w-full items-center justify-center rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:cursor-wait disabled:opacity-60 sm:w-auto sm:whitespace-nowrap"
                                         >
                                           {updatingQuickOrderId === order.id
                                             ? "Actualizando..."
