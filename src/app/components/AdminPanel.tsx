@@ -50,6 +50,7 @@ import type {
   Category,
   Coupon,
   Order,
+  PaymentStatus,
   PaymentMethod,
   Product,
 } from "../../lib/types";
@@ -88,6 +89,25 @@ const STATUS_COLORS: Record<Order["status"], string> = {
   entregado: "bg-green-100 text-green-700",
   cancelado: "bg-red-100 text-red-500",
 };
+
+const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  pendiente: "Pendiente",
+  aprobado: "Pagado",
+  rechazado: "Rechazado",
+  cancelado: "Cancelado",
+  reembolsado: "Reembolsado",
+  contracargo: "Contracargo",
+};
+
+function getQuickOrderStatus(order: Order): "enviado" | "entregado" {
+  return order.direccionEnvio ? "enviado" : "entregado";
+}
+
+function hasReachedQuickOrderStatus(order: Order): boolean {
+  const targetStatus = getQuickOrderStatus(order);
+  return order.status === targetStatus
+    || (targetStatus === "enviado" && order.status === "entregado");
+}
 
 const EMPTY_COUPON: Omit<Coupon, "id"> = {
   nombre: "",
@@ -260,6 +280,7 @@ export function AdminPanel() {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [visibleCouponCodes, setVisibleCouponCodes] = useState<Set<string>>(new Set());
   const [orders, setOrders] = useState<Order[]>([]);
+  const [updatingQuickOrderId, setUpdatingQuickOrderId] = useState<string | null>(null);
   const [showCouponForm, setShowCouponForm] = useState(false);
   const [editingCouponId, setEditingCouponId] = useState<string | null>(null);
   const [couponForm, setCouponForm] =
@@ -1091,6 +1112,98 @@ export function AdminPanel() {
       }
     } catch (e) {
       showError("Error", "Error de conexión al actualizar estado.");
+    }
+  };
+
+  const handleUpdatePaymentStatus = async (
+    orderId: string,
+    newStatus: PaymentStatus,
+  ) => {
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/orders/${orderId}/payment-status`,
+        {
+          method: "PUT",
+          headers: getAuthHeaders(),
+          body: JSON.stringify(newStatus),
+        },
+      );
+
+      if (res.ok) {
+        setOrders((currentOrders) =>
+          currentOrders.map((order) =>
+            order.id === orderId
+              ? { ...order, estadoPago: newStatus }
+              : order,
+          ),
+        );
+        showSuccess(
+          "Estado de pago actualizado",
+          `El pago ahora figura como: ${PAYMENT_STATUS_LABELS[newStatus]}`,
+        );
+      } else {
+        showError(
+          "Error",
+          await getApiErrorMessage(
+            res,
+            "No se pudo actualizar el estado del pago.",
+          ),
+        );
+      }
+    } catch {
+      showError("Error", "No se pudo conectar con el servidor.");
+    }
+  };
+
+  const handleMarkPaidAndAdvance = async (order: Order) => {
+    setUpdatingQuickOrderId(order.id);
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/orders/${order.id}/paid-and-advance`,
+        {
+          method: "PUT",
+          headers: getAuthHeaders(null),
+        },
+      );
+
+      if (!res.ok) {
+        showError(
+          "No se pudo completar el pedido",
+          await getApiErrorMessage(
+            res,
+            "No se pudo actualizar el pago y el estado del pedido.",
+          ),
+        );
+        return;
+      }
+
+      const targetStatus = getQuickOrderStatus(order);
+      const nextStatus = targetStatus === "enviado" && order.status === "entregado"
+        ? "entregado"
+        : targetStatus;
+
+      setOrders((currentOrders) =>
+        currentOrders.map((currentOrder) =>
+          currentOrder.id === order.id
+            ? {
+                ...currentOrder,
+                estadoPago: "aprobado",
+                status: nextStatus,
+              }
+            : currentOrder,
+        ),
+      );
+      showSuccess(
+        "Pedido actualizado",
+        targetStatus === "entregado"
+          ? "El pedido quedó marcado como pagado y entregado."
+          : "El pedido quedó marcado como pagado y enviado.",
+      );
+    } catch {
+      showError("Error", "No se pudo conectar con el servidor.");
+    } finally {
+      setUpdatingQuickOrderId(null);
     }
   };
 
@@ -3809,7 +3922,9 @@ export function AdminPanel() {
                                               Estado del cobro
                                             </p>
                                             <span className="inline-block mt-0.5 px-2 py-0.5 bg-secondary text-secondary-foreground text-xs font-medium rounded-full capitalize">
-                                              {order.estadoPago || "Pendiente"}
+                                              {PAYMENT_STATUS_LABELS[
+                                                order.estadoPago ?? "pendiente"
+                                              ]}
                                             </span>
                                           </div>
                                         </div>
@@ -3857,6 +3972,45 @@ export function AdminPanel() {
                                             ))}
                                           </select>
                                         </div>
+                                        <div className="pt-3 mt-1 border-t border-border/50">
+                                          <p className="text-muted-foreground text-xs mb-2">
+                                            Cambiar estado del pago
+                                          </p>
+                                          <select
+                                            className="w-full py-2 px-3 rounded-md text-sm font-medium border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                                            value={
+                                              order.estadoPago ?? "pendiente"
+                                            }
+                                            onClick={(e) =>
+                                              e.stopPropagation()
+                                            }
+                                            onChange={(e) => {
+                                              e.stopPropagation();
+                                              handleUpdatePaymentStatus(
+                                                order.id,
+                                                e.target
+                                                  .value as PaymentStatus,
+                                              );
+                                            }}
+                                          >
+                                            {(
+                                              Object.entries(
+                                                PAYMENT_STATUS_LABELS,
+                                              ) as [PaymentStatus, string][]
+                                            ).map(([value, label]) => (
+                                              <option
+                                                key={value}
+                                                value={value}
+                                              >
+                                                {label}
+                                              </option>
+                                            ))}
+                                          </select>
+                                          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                                            Solo actualiza el registro del pedido;
+                                            no realiza cobros ni reembolsos.
+                                          </p>
+                                        </div>
                                       </div>
                                     </div>
 
@@ -3879,7 +4033,7 @@ export function AdminPanel() {
                                               className="flex justify-between items-center text-sm group"
                                             >
                                               <div className="flex items-center gap-3">
-                                                <span className="flex items-center justify-center bg-secondary/50 text-secondary-foreground w-6 h-6 rounded-md font-medium text-xs">
+                                                <span className="flex min-w-7 shrink-0 items-center justify-center rounded-md bg-secondary/50 px-2 py-1 text-xs font-medium text-secondary-foreground">
                                                   {item.quantity}x
                                                 </span>
                                                 <div>
@@ -3947,6 +4101,44 @@ export function AdminPanel() {
                                       </div>
                                     </div>
                                   </div>
+                                  {order.status !== "cancelado" &&
+                                    (order.estadoPago !== "aprobado" ||
+                                      !hasReachedQuickOrderStatus(order)) && (
+                                      <div className="mt-6 flex justify-end">
+                                        <button
+                                          type="button"
+                                          disabled={
+                                            updatingQuickOrderId === order.id
+                                          }
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            const pickupAtStore =
+                                              getQuickOrderStatus(order) ===
+                                              "entregado";
+                                            showConfirm(
+                                              pickupAtStore
+                                                ? "Marcar como pagado y entregado"
+                                                : "Marcar como pagado y enviado",
+                                              pickupAtStore
+                                                ? "¿Confirmás que recibiste el pago y que el pedido fue entregado en el local?"
+                                                : "¿Confirmás que recibiste el pago y que el pedido fue enviado?",
+                                              () =>
+                                                void handleMarkPaidAndAdvance(
+                                                  order,
+                                                ),
+                                            );
+                                          }}
+                                          className="inline-flex items-center justify-center whitespace-nowrap rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:cursor-wait disabled:opacity-60"
+                                        >
+                                          {updatingQuickOrderId === order.id
+                                            ? "Actualizando..."
+                                            : getQuickOrderStatus(order) ===
+                                                "entregado"
+                                              ? "Marcar como pagado y entregado"
+                                              : "Marcar como pagado y enviado"}
+                                        </button>
+                                      </div>
+                                    )}
                                 </motion.div>
                               </td>
                             </tr>

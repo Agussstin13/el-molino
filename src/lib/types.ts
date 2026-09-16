@@ -73,6 +73,14 @@ export interface OrderItem {
   gramageGrams?: number;
 }
 
+export type PaymentStatus =
+  | "pendiente"
+  | "aprobado"
+  | "rechazado"
+  | "cancelado"
+  | "reembolsado"
+  | "contracargo";
+
 export interface Order {
   id: string;
   customer: string;
@@ -84,7 +92,7 @@ export interface Order {
   telefono?: string;
   dni?: string;
   direccionEnvio?: string;
-  estadoPago?: string;
+  estadoPago?: PaymentStatus;
   shippingCost?: number;
   couponDiscount?: number;
   couponId?: number;

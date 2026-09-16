@@ -37,6 +37,9 @@ const PAYMENT_STATUS_CONFIG: Record<string, { label: string; color: string; bg: 
   aprobado: { label: 'Pagado', color: 'text-green-700', bg: 'bg-green-100' },
   pendiente: { label: 'No pagado', color: 'text-amber-700', bg: 'bg-amber-100' },
   rechazado: { label: 'Rechazado', color: 'text-red-600', bg: 'bg-red-100' },
+  cancelado: { label: 'Cancelado', color: 'text-red-600', bg: 'bg-red-100' },
+  reembolsado: { label: 'Reembolsado', color: 'text-purple-600', bg: 'bg-purple-100' },
+  contracargo: { label: 'Contracargo', color: 'text-red-700', bg: 'bg-red-100' },
 };
 
 export function GuestOrderPage() {

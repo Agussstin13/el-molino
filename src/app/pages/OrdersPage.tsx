@@ -89,6 +89,11 @@ const PAYMENT_STATUS_CONFIG: Record<
     color: "text-purple-600",
     bg: "bg-purple-100",
   },
+  contracargo: {
+    label: "Contracargo",
+    color: "text-red-700",
+    bg: "bg-red-100",
+  },
 };
 
 function getPaymentStatus(status?: string) {
