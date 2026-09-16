@@ -2225,6 +2225,9 @@ export function AdminPanel() {
     { id: "categories" as AdminView, icon: Layers, label: "Categorías" },
     { id: "shipping" as AdminView, icon: Truck, label: "Envíos" },
   ];
+  const pendingOrdersCount = orders.filter(
+    (order) => order.status === "pendiente",
+  ).length;
 
   const handleProductsPageChange = (nextPage: number) => {
     if (editingProductId || editingPriceProductId) {
@@ -2296,7 +2299,7 @@ export function AdminPanel() {
               key={item.id}
               id={`admin-nav-${item.id}`}
               onClick={() => handleAdminViewChange(item.id)}
-              className={`w-full flex items-center ${isSidebarExpanded ? "justify-center px-0 md:justify-start md:gap-3 md:px-3" : "justify-center px-0"} py-2.5 rounded-lg transition-colors text-sm ${
+              className={`relative w-full flex items-center ${isSidebarExpanded ? "justify-center px-0 md:justify-start md:gap-3 md:px-3" : "justify-center px-0"} py-2.5 rounded-lg transition-colors text-sm ${
                 currentView === item.id
                   ? "bg-sidebar-primary text-sidebar-primary-foreground"
                   : "text-sidebar-foreground hover:bg-sidebar-accent"
@@ -2307,6 +2310,19 @@ export function AdminPanel() {
               {isSidebarExpanded && (
                 <span className="hidden md:inline whitespace-nowrap">
                   {item.label}
+                </span>
+              )}
+              {item.id === "orders" && pendingOrdersCount > 0 && (
+                <span
+                  className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[11px] font-bold leading-none text-white ${
+                    isSidebarExpanded
+                      ? "absolute right-0 top-0 md:static md:ml-auto"
+                      : "absolute right-0 top-0"
+                  }`}
+                  aria-label={`${pendingOrdersCount} pedidos pendientes`}
+                  title={`${pendingOrdersCount} pedidos pendientes`}
+                >
+                  {pendingOrdersCount}
                 </span>
               )}
             </button>
